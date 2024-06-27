@@ -12,8 +12,6 @@ import toolz as tz
 import toolz.curried as curried
 from toolz import curry as _curry
 
-T = TypeVar("T")
-R = TypeVar("R")
 
 
 def curry(func: Callable) -> Callable:
@@ -28,7 +26,7 @@ def curry(func: Callable) -> Callable:
     return curried
 
 
-def yield_val(func: Callable[..., T], *args, **kwargs) -> Generator[T, None, None]:
+def yield_val[T](func: Callable[..., T], *args, **kwargs) -> Generator[T, None, None]:
     """
     Yield the result of a function, delaying execution until the generator is iterated over
     """
@@ -63,7 +61,7 @@ def generate_full_paths(
     return (os.path.join(root, path) for path in path_generator(root))
 
 
-def unpack_args(func: Callable[..., T]) -> Callable[..., T]:
+def unpack_args[T](func: Callable[..., T]) -> Callable[..., T]:
     """
     Unpack args from a tuple and pass them to func
     """
@@ -71,7 +69,7 @@ def unpack_args(func: Callable[..., T]) -> Callable[..., T]:
 
 
 @curry
-def apply_if_truthy_else_None(func: Callable[[T], R], arg: T) -> Optional[R]:
+def apply_if_truthy_else_None[T, R](func: Callable[[T], R], arg: T) -> Optional[R]:
     """
     Apply unary func to arg if arg is truthy (e.g. not None, [], ...), otherwise return None
     """
@@ -202,7 +200,7 @@ def placeholder_matches(
 
 
 @curry
-def iterate_while(
+def iterate_while[T, R](
     func: Callable[[T], R], condition: Callable[[T], bool], initial: T
 ) -> R | T:
     """
