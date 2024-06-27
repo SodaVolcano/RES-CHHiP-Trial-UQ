@@ -3,8 +3,9 @@ Set of methods to load and save DICOM files
 """
 
 import itertools
+from optparse import Option
 import os
-from typing import Any, Generator, Iterable
+from typing import Any, Generator, Iterable, Optional
 import warnings
 
 import numpy as np
@@ -49,7 +50,7 @@ def _dicom_slice_order(dicom_file: dicom.Dataset) -> np.ndarray:
 
 def _most_common_shape(
     dicom_files: Iterable[dicom.Dataset],
-) -> tuple[int, int] | None:
+) -> Optional[tuple[int, int]]:
     """
     Most common shape of DICOM files in dicom_files
 
@@ -94,7 +95,7 @@ def _filter_by_most_common_shape(
 
 def _get_uniform_spacing(
     dicom_files: Iterable[dicom.Dataset],
-) -> tuple[float, float, float] | None:
+) -> Optional[tuple[float, float, float]]:
     """
     Return spacings from dicom files if they are uniform, else None
     """
@@ -138,7 +139,7 @@ def _get_dicom_slices(dicom_path: str) -> Iterable[dicom.Dataset]:
 def _load_roi_name(
     rt_struct: rt_utils.RTStructBuilder,
     name: str,
-) -> tuple[str, Generator[c.MaskType, None, None]] | None:
+) -> Optional[tuple[str, Generator[c.MaskType, None, None]]]:
     """
     Wrapper to get_roi_mask_by_name, delay execution and return None if exception is raised
     """
@@ -158,7 +159,7 @@ def _load_roi_name(
         return None
 
 
-def _load_rt_struct(dicom_path: str) -> rt_utils.RTStructBuilder | None:
+def _load_rt_struct(dicom_path: str) -> Optional[rt_utils.RTStructBuilder]:
     """
     Create RTStructBuilder from DICOM RT struct file in dicom_path
 
@@ -201,7 +202,7 @@ def _preprocess_volume(
 @curry
 def _preprocess_mask(
     name_mask_pairs: tuple[str, c.MaskType], dicom_path: str
-) -> tuple[str, c.MaskType] | None:
+) -> Optional[tuple[str, c.MaskType]]:
     _make_mask_isotropic = unpack_args(
         lambda name, mask, spacings: (
             name,
@@ -229,7 +230,7 @@ def _preprocess_mask(
 @curry
 def load_patient_scan(
     dicom_path: str, method: str = "linear", preprocess: bool = True
-) -> PatientScan | None:
+) -> Optional[PatientScan]:
     """
     Load PatientScan from directory of DICOM files in dicom_path
 
@@ -342,7 +343,7 @@ def load_all_volumes(
 
 
 @curry
-def load_mask(dicom_path: str, preprocess: bool = True) -> Mask | None:
+def load_mask(dicom_path: str, preprocess: bool = True) -> Optional[Mask]:
     """
     Load organ-Mask pair from one observer from a folder of DICOM files in dicom_path
 

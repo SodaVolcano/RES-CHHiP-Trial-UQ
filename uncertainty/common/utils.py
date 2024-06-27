@@ -3,7 +3,7 @@ Collection of misc utility functions
 """
 
 import pickle
-from typing import Any, Callable, Iterable, List, Generator, TypeVar
+from typing import Any, Callable, Iterable, List, Generator, Optional, TypeVar
 import os
 from functools import reduce, wraps
 import re
@@ -12,6 +12,9 @@ import toolz as tz
 import toolz.curried as curried
 from toolz import curry as _curry
 
+T = TypeVar("T")
+R = TypeVar("R")
+
 
 def curry(func: Callable) -> Callable:
     """
@@ -19,14 +22,10 @@ def curry(func: Callable) -> Callable:
     """
 
     @wraps(func)
-    def curried(*args, **kwargs):
+    def curried(*args, **kwargs) -> Callable:
         return _curry(func)(*args, **kwargs)
 
     return curried
-
-
-T = TypeVar("T")
-R = TypeVar("R")
 
 
 def yield_val(func: Callable[..., T], *args, **kwargs) -> Generator[T, None, None]:
@@ -72,7 +71,7 @@ def unpack_args(func: Callable[..., T]) -> Callable[..., T]:
 
 
 @curry
-def apply_if_truthy_else_None(func: Callable[[T], R], arg: T) -> R | None:
+def apply_if_truthy_else_None(func: Callable[[T], R], arg: T) -> Optional[R]:
     """
     Apply unary func to arg if arg is truthy (e.g. not None, [], ...), otherwise return None
     """
@@ -115,7 +114,6 @@ def capture_placeholders(
     str
         String with placeholders replaced by the specified `re_pattern`.
     """
-
     return tz.pipe(
         [s] + placeholders,
         # Replace placeholders to avoid them being escaped
@@ -128,6 +126,7 @@ def capture_placeholders(
         # Encase provided placeholders in parentheses to create capturing groups
         lambda string: string.replace("\x00", f"({re_pattern})"),
         lambda string: string.replace("\x01", re_pattern),
+        str,
     )
 
 
@@ -203,14 +202,16 @@ def placeholder_matches(
 
 
 @curry
-def iterate_while(func: Callable, condition: Callable, initial: any) -> any:
+def iterate_while(
+    func: Callable[[T], R], condition: Callable[[T], bool], initial: T
+) -> R | T:
     """
-    Iterate over func until condition is met
+    Repeatedly apply func to a value until condition is met
 
     Parameters
     ----------
     func: Callable
-        Function to be iterated over
+        Function to be called repeatedly
     condition: Callable
         Function that takes the output of func and returns a boolean
     initial: any
@@ -229,9 +230,7 @@ def iterate_while(func: Callable, condition: Callable, initial: any) -> any:
 
 
 @curry
-def resolve_path_placeholders(
-    path_pattern: str, placeholders: list[str]
-) -> Generator[str, None, None]:
+def resolve_path_placeholders(path_pattern: str, placeholders: list[str]) -> list[str]:
     """
     Search directory using path_pattern and resolve placeholders with actual values
 

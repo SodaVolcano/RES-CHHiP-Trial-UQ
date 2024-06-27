@@ -111,4 +111,4 @@ def make_isotropic(
             _isotropic_grid(anisotropic_coords),
             method=method,
         ),
-    )  # type: ignore (doesn't recognise interpn)
+    )
