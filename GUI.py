@@ -22,7 +22,7 @@ from typing import Union
 import numpy.typing as npt
 
 
-from src.data_operations.load_dicom import load_patient_scan
+from uncertainty.data.dicom import load_patient_scan
 
 
 # Main application window
