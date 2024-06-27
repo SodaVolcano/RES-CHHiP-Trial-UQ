@@ -1,3 +1,5 @@
+.vscode/
+
 # prevent leaking sensitive image in ipynb and image output
 *.png
 demo.ipynb
