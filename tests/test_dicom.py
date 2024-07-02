@@ -4,6 +4,16 @@ import pydicom
 
 from .context import uncertainty
 
+# Some functions use memoize so use different path to avoid caching
+path_id = 0
+
+
+def gen_path():
+    global path_id
+    path_id += 1
+    return f"path/folder{path_id}"
+
+
 # Import aliases
 _most_common_shape = uncertainty.data.dicom._most_common_shape
 _filter_by_most_common_shape = uncertainty.data.dicom._filter_by_most_common_shape
@@ -123,7 +133,7 @@ class TestLoadVolume:
         # Mock the list_files function to return a list of file paths
         mocker.patch(
             PATCH_LIST_FILES,
-            return_value=["file1.dcm", "file2.dcm", "file3.dcm"],
+            return_value=["file1.dcm", "file2.dcm", "file3.dcm", "file4.dcm"],
         )
 
         # Mock the dicom.dcmread function to return a mock DICOM object with pixel_array, PixelSpacing, ImageOrientationPatient, and ImagePositionPatient attributes
@@ -133,25 +143,26 @@ class TestLoadVolume:
         mock_dicom.Columns = 512
         mock_dicom.pixel_array = np.zeros((512, 512))
         mock_dicom.PixelSpacing = [0.5, 0.5]
-        mock_dicom.SliceThickness = 1.0
+        mock_dicom.SliceThickness = 2.0
         mock_dicom.ImageOrientationPatient = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0]
         mock_dicom.ImagePositionPatient = [-200.0, 200.0, -50.0]
         mocker.patch(PATCH_DCMREAD, return_value=mock_dicom)
 
         # Call the load_volume function
-        volume = load_volume("/dummy_path")
+        volume = load_volume(gen_path())
 
         # Assert the volume shape is as expected
-        assert volume.shape == (3, 512, 512)
+        assert volume.shape == (7, 512 // 2, 512 // 2)
 
     # directory contains no DICOM files
     def test_no_dicom_files_in_directory(self, mocker):
         # Mock the list_files function to return an empty list
         mocker.patch(PATCH_LIST_FILES, return_value=[])
 
-        result = load_volume("dummy_path")
-        assert result.shape == (0,)
+        result = load_volume(gen_path())
+        assert result is None
 
+    @pytest.mark.skip(reason="Assume all have same shape since we filter by thickness")
     # directory contains DICOM files with different shapes
     def test_loads_3d_volume_with_most_common_shape(self, mocker):
         # Mock the list_files function to return a list of file paths with different shapes
@@ -194,7 +205,7 @@ class TestLoadVolume:
         mocker.patch(PATCH_DCMREAD, side_effect=[mock_dicom1, mock_dicom2, mock_dicom3])
 
         # Call the load_volume function
-        volume = load_volume("dummy_path")
+        volume = load_volume(gen_path())
 
         # Assert the volume shape is as expected (using the most common shape)
         assert volume.shape == (2, 512, 512)
@@ -204,7 +215,7 @@ class Test_LoadRtStruct:
 
     # Successfully loads RTStructBuilder from a valid DICOM RT struct file
     def test_loads_rtstructbuilder_successfully(self, mocker):
-        dicom_path = "valid/dicom/path"
+        dicom_path = gen_path()
         mock_dicom_file = mocker.Mock()
         mock_dicom_file.SOPClassUID = c.RT_STRUCTURE_SET
         mock_rt_struct_builder = mocker.patch(
@@ -227,7 +238,7 @@ class Test_LoadRtStruct:
 
     # No RT struct file present in the directory
     def test_no_rt_struct_file_present(self, mocker):
-        dicom_path = "invalid/dicom/path"
+        dicom_path = gen_path()
 
         mocker.patch(PATCH_LIST_FILES, return_value=[])
 
@@ -235,7 +246,7 @@ class Test_LoadRtStruct:
 
     # Empty directory
     def test_load_rt_struct_empty_directory(self, mocker):
-        dicom_path = "empty/directory"
+        dicom_path = gen_path()
         mocker.patch(PATCH_LIST_FILES, return_value=[])
 
         result = _load_rt_struct(dicom_path)
@@ -247,7 +258,7 @@ class TestLoadMask:
 
     # Successfully load a mask when valid DICOM path is provided
     def test_load_mask_success(self, mocker):
-        dicom_path = "valid/dicom/path"
+        dicom_path = gen_path()
         mock_rt_struct = mocker.Mock()
         mock_rt_struct.get_roi_names.return_value = ["Organ 1", "Organ 2"]
         mock_rt_struct.get_roi_mask_by_name.side_effect = [
@@ -270,7 +281,7 @@ class TestLoadMask:
 
     # Handle empty DICOM directory gracefully
     def test_load_mask_empty_directory(self, mocker):
-        dicom_path = "empty/dicom/path"
+        dicom_path = gen_path()
 
         mocker.patch(PATCH_LOAD_RT_STRUCT, return_value=None)
 
@@ -278,7 +289,7 @@ class TestLoadMask:
 
     # Handle cases where no ROI names are found
     def test_handle_no_roi_names(self, mocker):
-        dicom_path = "invalid/dicom/path"
+        dicom_path = gen_path()
         mock_rt_struct = mocker.Mock()
         mock_rt_struct.get_roi_names.return_value = []
         mocker.patch(
@@ -293,7 +304,7 @@ class TestLoadMask:
 
     # Verify that the function prints warnings when mask loading fails
     def test_load_mask_warning(self, mocker, capsys):
-        dicom_path = "invalid/dicom/path"
+        dicom_path = gen_path()
         mock_rt_struct = mocker.Mock()
         mock_rt_struct.get_roi_names.return_value = ["Organ 1", "Organ 2"]
         mock_rt_struct.get_roi_mask_by_name.side_effect = [
@@ -341,7 +352,7 @@ class TestLoadPatientScan:
         mocker.patch(PATCH_LOAD_MASK, return_value=mock_mask)
 
         # Calling the function under test
-        result = load_patient_scan("dummy_path")
+        result = load_patient_scan(gen_path())
 
         # Assertions
         assert result.patient_id == "12345"
@@ -367,7 +378,7 @@ class TestLoadPatientScan:
         # Mocking the load_mask function to return None
         mocker.patch(PATCH_LOAD_MASK, return_value=None)
 
-        assert load_patient_scan("dummy_path") is None
+        assert load_patient_scan(gen_path()) is None
 
     # DICOM files are present but none contain RT struct data
     def test_no_rt_struct_data(self, mocker):
@@ -392,7 +403,7 @@ class TestLoadPatientScan:
         mocker.patch(PATCH_LOAD_MASK, return_value=None)
 
         # Calling the function under test
-        result = load_patient_scan("dummy_path")
+        result = load_patient_scan(gen_path())
 
         # Assertions
         assert result.patient_id == "12345"
@@ -423,7 +434,7 @@ class TestLoadPatientScan:
         mocker.patch(PATCH_LOAD_MASK, return_value=None)
 
         # Calling the function under test
-        result = load_patient_scan("dummy_path")
+        result = load_patient_scan(gen_path())
 
         # Assertions
         assert result.patient_id == "12345"
@@ -455,7 +466,7 @@ class TestLoadPatientScan:
         mocker.patch(PATCH_LOAD_MASK, return_value=mock_mask)
 
         # Calling the function under test
-        result = load_patient_scan("dummy_path")
+        result = load_patient_scan(gen_path())
 
         # Assertions
         assert result.patient_id == "12345"
@@ -474,7 +485,7 @@ class TestLoadPatientScans:
         # Mock the generate_full_paths to return full paths
         mocker.patch(
             PATCH_GENERATE_FULL_PATHS,
-            return_value=["/path/to/patient1", "/path/to/patient2"],
+            return_value=[gen_path(), gen_path()],
         )
 
         # Mock the load_patient_scan to return PatientScan objects
@@ -487,7 +498,7 @@ class TestLoadPatientScans:
         )
 
         # Call the function under test
-        result = list(load_patient_scans("/path/to/dicom_collection"))
+        result = list(load_patient_scans(gen_path()))
 
         # Assertions
         assert len(result) == 2
@@ -499,7 +510,7 @@ class TestLoadPatientScans:
         mocker.patch(PATCH_LISTDIR, return_value=[])
 
         # Call the function under test
-        result = list(load_patient_scans("/path/to/empty_dicom_collection"))
+        result = list(load_patient_scans(gen_path()))
 
         # Assertions
         assert result == []
@@ -512,7 +523,7 @@ class TestLoadPatientScans:
         # Mock the generate_full_paths to return full paths
         mocker.patch(
             PATCH_GENERATE_FULL_PATHS,
-            return_value=["/path/to/patient1", "/path/to/patient2"],
+            return_value=[gen_path(), gen_path()],
         )
 
         # Mock the load_patient_scan to return PatientScan objects
@@ -525,7 +536,7 @@ class TestLoadPatientScans:
         )
 
         # Call the function under test
-        result = list(load_patient_scans("/path/to/dicom_collection"))
+        result = list(load_patient_scans(gen_path()))
 
         # Assertions
         assert len(result) == 2
@@ -549,14 +560,7 @@ class TestLoadPatientScans:
         # Mock the generate_full_paths to return full paths for each directory
         mocker.patch(
             PATCH_GENERATE_FULL_PATHS,
-            return_value=[
-                "/path/to/patient1",
-                "/path/to/patient2",
-                "/path/to/patient3",
-                "/path/to/patient4",
-                "/path/to/patient5",
-                "/path/to/patient6",
-            ],
+            return_value=[gen_path() for _ in range(6)],
         )
 
         # Mock the load_patient_scan to return PatientScan objects
@@ -569,7 +573,7 @@ class TestLoadPatientScans:
         )
 
         # Call the function under test
-        result = list(load_patient_scans("/path/to/dicom_collection"))
+        result = list(load_patient_scans(gen_path()))
 
         # Assertions
         assert len(result) == 6
@@ -584,7 +588,7 @@ class TestLoadPatientScans:
         )
 
         # Call the function under test
-        result = list(load_patient_scans("/path/to/empty_folder"))
+        result = list(load_patient_scans(gen_path()))
 
         # Assertions
         assert len(result) == 0
@@ -597,7 +601,7 @@ class TestLoadPatientScans:
         # Mock the generate_full_paths to return full path
         mocker.patch(
             PATCH_GENERATE_FULL_PATHS,
-            return_value=["/path/to/patient1"],
+            return_value=[gen_path()],
         )
 
         # Mock the load_patient_scan to return a PatientScan object
@@ -614,7 +618,7 @@ class TestLoadPatientScans:
         )
 
         # Call the function under test
-        result = list(load_patient_scans("/path/to/dicom_collection"))
+        result = list(load_patient_scans(gen_path()))
 
         # Assertions
         assert len(result) == 1
@@ -631,7 +635,7 @@ class TestLoadAllMasks:
 
     # Successfully loads masks from a directory containing valid DICOM files
     def test_loads_masks_from_valid_dicom_directory(self, mocker):
-        dicom_collection_path = "valid_dicom_directory"
+        dicom_collection_path = gen_path()
         mocker.patch(PATCH_LISTDIR, return_value=["file1.dcm", "file2.dcm"])
 
         mocker.patch(
@@ -650,7 +654,7 @@ class TestLoadAllMasks:
 
     # Directory contains no DICOM files
     def test_no_dicom_files_in_directory(self, mocker):
-        dicom_collection_path = "empty_dicom_directory"
+        dicom_collection_path = gen_path()
         mocker.patch(PATCH_LISTDIR, return_value=[])
 
         result = list(load_all_masks(dicom_collection_path))

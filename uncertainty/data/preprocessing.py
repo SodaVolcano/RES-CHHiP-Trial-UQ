@@ -11,7 +11,7 @@ import toolz as tz
 import toolz.curried as curried
 from scipy.interpolate import interpn
 
-from ..common.utils import curry
+from ..common.utils import curry, unpack_args
 
 
 @curry
@@ -50,7 +50,10 @@ def _isotropic_grid(coords: tuple[Iterable[npt.Number]]) -> tuple[Iterable[npt.N
     """
     return tz.pipe(
         coords,
-        tz.curried.map(lambda coord: np.arange(min(coord), max(coord), 1)),
+        tz.curried.map(
+            # +1 because arange does not include the stop value
+            lambda coord: np.arange(min(np.ceil(coord)), max(np.floor(coord) + 1), 1)
+        ),
         tuple,
         lambda coords: np.meshgrid(*coords, indexing="ij"),
         tuple,
@@ -101,7 +104,7 @@ def make_isotropic(
     return tz.pipe(
         zip(spacings, array.shape),
         tz.curried.map(
-            lambda spacing_len: _get_spaced_coords(spacing_len[0], spacing_len[1])
+            unpack_args(lambda spacing, length: _get_spaced_coords(spacing, length))
         ),
         tuple,
         # Resample array using isotropic grid

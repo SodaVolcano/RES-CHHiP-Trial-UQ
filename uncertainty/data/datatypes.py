@@ -27,9 +27,9 @@ class Mask:
         """
         Return mask array for given organ
         """
-        if (self.__organs[organ], Generator):
-            self.__organs[organ] = next(self.__organs[organ])  # type: ignore
-        return self.__organs[organ]  # type: ignore
+        if isinstance(self.__organs[organ], Generator):
+            self.__organs[organ] = next(self.__organs[organ])
+        return self.__organs[organ]
 
     def __getitem__(self, idx: str) -> MaskType:
         """

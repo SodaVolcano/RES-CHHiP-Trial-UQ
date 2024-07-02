@@ -114,7 +114,7 @@ def _get_uniform_spacing(
         ),
         list,
         lambda spacings: (
-            tuple(spacings[0]) if is_uniform(np.array(spacings)) else None
+            tuple(spacings[0]) if spacings and is_uniform(np.array(spacings)) else None
         ),
     )
 
@@ -290,7 +290,7 @@ def load_patient_scans(
 @curry
 def load_volume(
     dicom_path: str, method: str = "linear", preprocess: bool = True
-) -> np.ndarray:
+) -> npt.NDArray[npt.Shape["3 dimensions"], npt.Number] | None:
     """
     Load 3D isotropic volume in range (0, 1) from DICOM files in dicom_path
 
@@ -310,7 +310,9 @@ def load_volume(
         itertools.tee,
         unpack_args(
             lambda it1, it2: (
-                np.stack([dicom_file.pixel_array for dicom_file in it1]),
+                apply_if_truthy_else_None(
+                    np.stack, [dicom_file.pixel_array for dicom_file in it1]
+                ),
                 _get_uniform_spacing(it2),
             )
         ),
