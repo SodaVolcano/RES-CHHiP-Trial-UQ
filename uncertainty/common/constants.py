@@ -21,6 +21,3 @@ CT_RANGE: Final[tuple[int, int]] = (-1000, 30)
 
 VolumeType: Final = npt.NDArray[npt.Shape["* z, * x, * y"], npt.Float]
 MaskType: Final = npt.NDArray[npt.Shape["* z, * x, * y"], npt.Bool]
-
-# Prevent polluting the namespace
-del npt

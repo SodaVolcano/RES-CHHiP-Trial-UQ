@@ -3,7 +3,7 @@ Set of methods to load and save NIfTI files
 """
 
 import itertools
-from typing import Generator, List, 
+from typing import Generator, List
 import re
 
 import toolz as tz

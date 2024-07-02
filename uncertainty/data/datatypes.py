@@ -4,7 +4,6 @@ Collection of class encapsulating volume data, supporting lazy evaluation
 
 from typing import TypeVar
 from typing import Any, Generator, Iterable, Iterator, List
-from dataclasses import dataclass
 
 from uncertainty.common.constants import MaskType, VolumeType
 

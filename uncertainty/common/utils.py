@@ -287,22 +287,3 @@ def resolve_path_placeholders(path_pattern: str, placeholders: list[str]) -> lis
         ),
         list,
     )
-
-
-# Prevent polluting the namespace
-del (
-    pickle,
-    Any,
-    Callable,
-    Iterable,
-    List,
-    Generator,
-    TypeVar,
-    os,
-    reduce,
-    wraps,
-    re,
-    tz,
-    curried,
-    _curry,
-)
