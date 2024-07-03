@@ -2,6 +2,8 @@ import pytest
 import numpy as np
 import pydicom
 
+from uncertainty.data import preprocessing
+
 from .context import uncertainty
 
 # Some functions use memoize so use different path to avoid caching
@@ -154,6 +156,33 @@ class TestLoadVolume:
         # Assert the volume shape is as expected
         assert volume.shape == (7, 512 // 2, 512 // 2)
 
+    # correctly loads a 3D volume from a directory of DICOM files
+    def test_loads_3d_volume_correctly_no_preprocessing(self, mocker):
+        # Mock the list_files function to return a list of file paths
+        mocker.patch(
+            PATCH_LIST_FILES,
+            return_value=["file1.dcm", "file2.dcm", "file3.dcm", "file4.dcm"],
+        )
+
+        # Mock the dicom.dcmread function to return a mock DICOM object with pixel_array, PixelSpacing, ImageOrientationPatient, and ImagePositionPatient attributes
+        mock_dicom = mocker.Mock()
+        mock_dicom.SOPClassUID = c.CT_IMAGE
+        mock_dicom.Rows = 512
+        mock_dicom.Columns = 512
+        mock_dicom.pixel_array = np.zeros((512, 512))
+        mock_dicom.PixelSpacing = [0.5, 0.5]
+        mock_dicom.SliceThickness = 2.0
+        mock_dicom.ImageOrientationPatient = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0]
+        mock_dicom.ImagePositionPatient = [-200.0, 200.0, -50.0]
+        mocker.patch(PATCH_DCMREAD, return_value=mock_dicom)
+
+        # Call the load_volume function
+        volume = load_volume(gen_path(), preprocess=False)
+
+        # Assert the volume shape is as expected
+        assert volume.shape == (4, 512, 512)
+        np.testing.assert_array_equal(volume, np.zeros((4, 512, 512)))
+
     # directory contains no DICOM files
     def test_no_dicom_files_in_directory(self, mocker):
         # Mock the list_files function to return an empty list
@@ -261,10 +290,25 @@ class TestLoadMask:
         dicom_path = gen_path()
         mock_rt_struct = mocker.Mock()
         mock_rt_struct.get_roi_names.return_value = ["Organ 1", "Organ 2"]
-        mock_rt_struct.get_roi_mask_by_name.side_effect = [
-            np.array([1, 2, 3]),
-            np.array([4, 5, 6]),
-        ]
+        mock_mask1 = np.random.randint(0, 2, (4, 512, 512))
+        mock_mask2 = np.random.randint(0, 2, (4, 512, 512))
+        mock_rt_struct.get_roi_mask_by_name.side_effect = [mock_mask1, mock_mask2]
+        mocker.patch(
+            PATCH_LIST_FILES,
+            return_value=["file1.dcm", "file2.dcm", "file3.dcm", "file4.dcm"],
+        )
+
+        # Mock the dicom.dcmread function to return a mock DICOM object with pixel_array, PixelSpacing, ImageOrientationPatient, and ImagePositionPatient attributes
+        mock_dicom = mocker.Mock()
+        mock_dicom.SOPClassUID = c.CT_IMAGE
+        mock_dicom.Rows = 512
+        mock_dicom.Columns = 512
+        mock_dicom.pixel_array = np.zeros((512, 512))
+        mock_dicom.PixelSpacing = [0.5, 0.7]
+        mock_dicom.SliceThickness = 2.0
+        mock_dicom.ImageOrientationPatient = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0]
+        mock_dicom.ImagePositionPatient = [-200.0, 200.0, -50.0]
+        mocker.patch(PATCH_DCMREAD, return_value=mock_dicom)
 
         mocker.patch(
             PATCH_LOAD_RT_STRUCT,
@@ -274,10 +318,33 @@ class TestLoadMask:
         mask = load_mask(dicom_path)
 
         assert isinstance(mask, Mask)
-        assert "organ_1" in mask.get_organs()
-        assert "organ_2" in mask.get_organs()
-        np.testing.assert_array_equal(mask["organ_1"], np.array([1, 2, 3]))
-        np.testing.assert_array_equal(mask["organ_2"], np.array([4, 5, 6]))
+        assert "organ_1" in mask.get_organ_names()
+        assert "organ_2" in mask.get_organ_names()
+        assert mask["organ_1"].shape == (7, np.floor(512 * 0.5), np.floor(512 * 0.7))
+        assert mask["organ_2"].shape == (7, np.floor(512 * 0.5), np.floor(512 * 0.7))
+
+    # Successfully load a mask when valid DICOM path is provided
+    def test_load_mask_success_no_preprocessing(self, mocker):
+        dicom_path = gen_path()
+        mock_rt_struct = mocker.Mock()
+        mock_rt_struct.get_roi_names.return_value = ["Organ 1", "Organ 2"]
+        mock_mask1 = np.random.randint(0, 2, (4, 512, 512))
+        mock_mask2 = np.random.randint(0, 2, (4, 512, 512))
+        mock_rt_struct.get_roi_mask_by_name.side_effect = [mock_mask1, mock_mask2]
+        mocker.patch(
+            PATCH_LOAD_RT_STRUCT,
+            return_value=mock_rt_struct,
+        )
+
+        mask = load_mask(dicom_path, preprocess=False)
+
+        assert isinstance(mask, Mask)
+        assert "organ_1" in mask.get_organ_names()
+        assert "organ_2" in mask.get_organ_names()
+        np.testing.assert_array_equal(mask["organ_1"], mock_mask1)
+        np.testing.assert_array_equal(mask["organ_2"], mock_mask2)
+        assert mask["organ_1"].shape == (4, 512, 512)
+        assert mask["organ_2"].shape == (4, 512, 512)
 
     # Handle empty DICOM directory gracefully
     def test_load_mask_empty_directory(self, mocker):
@@ -300,30 +367,7 @@ class TestLoadMask:
         mask = load_mask(dicom_path)
 
         assert isinstance(mask, Mask)
-        assert len(mask.get_organs()) == 0
-
-    # Verify that the function prints warnings when mask loading fails
-    def test_load_mask_warning(self, mocker, capsys):
-        dicom_path = gen_path()
-        mock_rt_struct = mocker.Mock()
-        mock_rt_struct.get_roi_names.return_value = ["Organ 1", "Organ 2"]
-        mock_rt_struct.get_roi_mask_by_name.side_effect = [
-            Exception("Failed to load mask"),
-            np.array([4, 5, 6]),
-        ]
-
-        mocker.patch(
-            PATCH_LOAD_RT_STRUCT,
-            return_value=mock_rt_struct,
-        )
-
-        with capsys.disabled():
-            with pytest.warns(UserWarning):
-                mask = load_mask(dicom_path)
-
-        assert isinstance(mask, Mask)
-        assert "organ_2" in mask.get_organs()
-        np.testing.assert_array_equal(mask["organ_2"], np.array([4, 5, 6]))
+        assert len(mask.get_organ_names()) == 0
 
 
 class TestLoadPatientScan:
@@ -349,6 +393,7 @@ class TestLoadPatientScan:
 
         # Mocking the load_mask function to return a list of Mask objects
         mock_mask = mocker.Mock()
+        mock_mask.observer = "observer1"
         mocker.patch(PATCH_LOAD_MASK, return_value=mock_mask)
 
         # Calling the function under test
@@ -359,7 +404,8 @@ class TestLoadPatientScan:
         assert isinstance(result.volume, np.ndarray)
         assert isinstance(result, PatientScan)
         assert result.volume.shape == (1, 2, 2)
-        assert result.mask == mock_mask
+        assert result.masks == {mock_mask.observer: mock_mask}
+        assert result.get_mask(mock_mask.observer) == mock_mask
 
     # Directory contains no DICOM files
     def test_no_dicom_files_in_directory(self, mocker):
@@ -409,38 +455,9 @@ class TestLoadPatientScan:
         assert result.patient_id == "12345"
         assert isinstance(result.volume, np.ndarray)
         assert result.volume.shape == (1, 2, 2)
-        assert result.mask == None
-
-    # DICOM files have inconsistent shapes, resulting in an empty volume
-    def test_dicom_files_with_inconsistent_shapes(self, mocker):
-        # Mocking the list_files function to return a list of DICOM file paths
-        mocker.patch(
-            PATCH_LIST_FILES,
-            return_value=["file1.dcm", "file2.dcm"],
-        )
-
-        # Mocking the dicom.dcmread function to return a mock object with a PatientID attribute
-        mock_dicom = mocker.Mock()
-        mock_dicom.PatientID = "12345"
-        mocker.patch(PATCH_DCMREAD, return_value=mock_dicom)
-
-        # Mocking the load_volume function to return an empty numpy array
-        mocker.patch(
-            PATCH_LOAD_VOLUME,
-            return_value=np.array([]),
-        )
-
-        # Mocking the load_mask function to return None
-        mocker.patch(PATCH_LOAD_MASK, return_value=None)
-
-        # Calling the function under test
-        result = load_patient_scan(gen_path())
-
-        # Assertions
-        assert result.patient_id == "12345"
-        assert isinstance(result.volume, np.ndarray)
-        assert result.volume.size == 0
-        assert result.mask == None
+        assert result.masks == {}
+        assert result.mask_observers == []
+        assert result.n_masks == 0
 
     # Handles directories with hidden files correctly
     def test_handles_hidden_files_correctly(self, mocker):
@@ -463,6 +480,7 @@ class TestLoadPatientScan:
 
         # Mocking the load_mask function to return a list of Mask objects
         mock_mask = mocker.Mock()
+        mock_mask.observer = "observer1"
         mocker.patch(PATCH_LOAD_MASK, return_value=mock_mask)
 
         # Calling the function under test
@@ -472,7 +490,8 @@ class TestLoadPatientScan:
         assert result.patient_id == "12345"
         assert isinstance(result.volume, np.ndarray)
         assert result.volume.shape == (1, 2, 2)
-        assert result.mask == mock_mask
+        assert result.masks == {mock_mask.observer: mock_mask}
+        assert result.get_mask(mock_mask.observer) == mock_mask
 
 
 class TestLoadPatientScans:
@@ -481,21 +500,25 @@ class TestLoadPatientScans:
     def test_loads_multiple_patient_scans_successfully(self, mocker):
         # Mock the os.listdir to return a list of directories
         mocker.patch(PATCH_LISTDIR, return_value=["patient1", "patient2"])
-
-        # Mock the generate_full_paths to return full paths
+        # Mocking the list_files function to return a list of DICOM file paths
         mocker.patch(
-            PATCH_GENERATE_FULL_PATHS,
-            return_value=[gen_path(), gen_path()],
+            PATCH_LIST_FILES,
+            return_value=["file1.dcm", "file2.dcm"],
         )
 
-        # Mock the load_patient_scan to return PatientScan objects
-        mock_patient_scan = PatientScan(
-            patient_id="123", volume=np.array([]), mask=Mask({})
-        )
+        # Mocking the dicom.dcmread function to return a mock object with a PatientID attribute
+        mock_dicom = mocker.Mock()
+        mock_dicom.PatientID = "12345"
+        mocker.patch(PATCH_DCMREAD, return_value=mock_dicom)
+
+        # Mocking the load_volume function to return a numpy array
         mocker.patch(
-            PATCH_LOAD_PATIENT_SCAN,
-            return_value=mock_patient_scan,
+            PATCH_LOAD_VOLUME,
+            return_value=np.array([[[1, 2], [3, 4]]]),
         )
+
+        # Mocking the load_mask function to return None since no RT struct data is found
+        mocker.patch(PATCH_LOAD_MASK, return_value=None)
 
         # Call the function under test
         result = list(load_patient_scans(gen_path()))
@@ -503,6 +526,9 @@ class TestLoadPatientScans:
         # Assertions
         assert len(result) == 2
         assert all(isinstance(scan, PatientScan) for scan in result)
+        assert all(scan.patient_id == "12345" for scan in result)
+        assert all(scan.volume.shape == (1, 2, 2) for scan in result)
+        assert all(scan.masks == {} for scan in result)
 
     # Handles an empty directory gracefully
     def test_handles_empty_directory_gracefully(self, mocker):
@@ -625,10 +651,10 @@ class TestLoadPatientScans:
         assert isinstance(result[0], PatientScan)
         assert result[0].patient_id == "123"
         assert result[0].volume.shape == (512, 512)
-        assert "organ_1" in result[0].mask.get_organs()
-        assert "organ_2" in result[0].mask.get_organs()
-        np.testing.assert_array_equal(result[0].mask["organ_1"], np.zeros((512, 512)))
-        np.testing.assert_array_equal(result[0].mask["organ_2"], np.zeros((512, 512)))
+        assert "organ_1" in result[0].masks.get_organ_names()
+        assert "organ_2" in result[0].masks.get_organ_names()
+        np.testing.assert_array_equal(result[0].masks["organ_1"], np.zeros((512, 512)))
+        np.testing.assert_array_equal(result[0].masks["organ_2"], np.zeros((512, 512)))
 
 
 class TestLoadAllMasks:

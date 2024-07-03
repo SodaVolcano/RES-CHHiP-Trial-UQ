@@ -216,11 +216,13 @@ def _preprocess_mask(
         _get_dicom_slices,
         _get_uniform_spacing,
         # (name, mask_generator, spacings)
-        lambda spacings: [name_mask + (spacings,) for name_mask in name_mask_pairs],
+        apply_if_truthy_else_None(
+            lambda spacings: [name_mask + (spacings,) for name_mask in name_mask_pairs]
+        ),
         # If spacings is None, return None
         lambda name_mask_spacing_lst: (
             map(_make_mask_isotropic, name_mask_spacing_lst)
-            if name_mask_spacing_lst[0][2] is not None
+            if name_mask_spacing_lst and name_mask_spacing_lst[0][2] is not None
             else None
         ),
     )
@@ -246,17 +248,20 @@ def load_patient_scan(
         Whether to preprocess the volume and mask, by default True. WARNING: will
         take significantly longer to load if set to True
     """
+    empty_lst_if_none = lambda val: [] if val == [None] else val
+
     return tz.pipe(
         dicom_path,
         list_files,
         curried.map(dicom.dcmread),
+        # Get one dicom file to extract PatientID
         lambda dicom_files: next(dicom_files, None),
         apply_if_truthy_else_None(
             lambda dicom_file: (
                 PatientScan(
                     dicom_file.PatientID,
                     yield_val(load_volume, dicom_path, method, preprocess),
-                    [load_mask(dicom_path, preprocess)],
+                    empty_lst_if_none([load_mask(dicom_path, preprocess)]),
                 )
             )
         ),
@@ -374,7 +379,7 @@ def load_mask(dicom_path: str, preprocess: bool = True) -> Optional[Mask]:
             )
         ),
         _preprocess_mask(dicom_path=dicom_path) if preprocess else tz.identity,
-        lambda name_mask_lst: Mask(apply_if_truthy_else_None(dict, name_mask_lst)),
+        lambda name_mask_lst: Mask(dict(name_mask_lst) if name_mask_lst else {}),
     )
 
 
