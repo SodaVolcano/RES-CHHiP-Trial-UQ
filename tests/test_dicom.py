@@ -575,9 +575,8 @@ class TestLoadAllMasks:
         mocker.patch(PATCH_LISTDIR, return_value=["file1.dcm", "file2.dcm"])
         mock_rt_struct = mocker.Mock()
         mock_rt_struct.get_roi_names.return_value = ["Organ 1", "Organ 2"]
-        mock_mask1 = np.random.randint(0, 2, (4, 512, 512))
-        mock_mask2 = np.random.randint(0, 2, (4, 512, 512))
-        mock_rt_struct.get_roi_mask_by_name.side_effect = [mock_mask1, mock_mask2]
+        mock_mask = np.random.randint(0, 2, (4, 512, 512))
+        mock_rt_struct.get_roi_mask_by_name.return_value = mock_mask
         mocker.patch(
             PATCH_LOAD_RT_STRUCT,
             return_value=mock_rt_struct,
@@ -588,6 +587,13 @@ class TestLoadAllMasks:
         assert len(result) == 2
         assert isinstance(result[0], Mask)
         assert isinstance(result[1], Mask)
+        assert ["organ_1", "organ_2"] == result[0].get_organ_names()
+        assert ["organ_1", "organ_2"] == result[1].get_organ_names()
+        [
+            np.testing.assert_array_equal(mask[organ], mock_mask)
+            for mask in result
+            for organ in mask.get_organ_names()
+        ]
 
     # Directory contains no DICOM files
     def test_no_dicom_files_in_directory(self, mocker):
