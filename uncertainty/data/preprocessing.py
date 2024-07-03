@@ -52,7 +52,11 @@ def _isotropic_grid(coords: tuple[Iterable[npt.Number]]) -> tuple[Iterable[npt.N
         coords,
         tz.curried.map(
             # +1 because arange does not include the stop value
-            lambda coord: np.arange(min(np.ceil(coord)), max(np.floor(coord) + 1), 1)
+            lambda coord: (
+                np.arange(min(np.ceil(coord)), max(np.floor(coord) + 1), 1)
+                if len(coord) != 0
+                else []
+            )
         ),
         tuple,
         lambda coords: np.meshgrid(*coords, indexing="ij"),

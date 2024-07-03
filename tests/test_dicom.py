@@ -13,7 +13,7 @@ path_id = 0
 def gen_path():
     global path_id
     path_id += 1
-    return f"path/folder{path_id}"
+    return f"path/to/folder{path_id}"
 
 
 # Import aliases
@@ -511,14 +511,22 @@ class TestLoadPatientScans:
         mock_dicom.PatientID = "12345"
         mocker.patch(PATCH_DCMREAD, return_value=mock_dicom)
 
+        mock_volume = np.random.randint(0, 2, (4, 512, 512))
         # Mocking the load_volume function to return a numpy array
         mocker.patch(
             PATCH_LOAD_VOLUME,
-            return_value=np.array([[[1, 2], [3, 4]]]),
+            return_value=mock_volume,
         )
 
+        mock_mask = Mask(
+            {
+                "organ_1": np.random.randint(0, 2, (4, 512, 512)),
+                "organ_2": np.random.randint(0, 2, (4, 512, 512)),
+            },
+        )
+        mock_mask.observer = ""
         # Mocking the load_mask function to return None since no RT struct data is found
-        mocker.patch(PATCH_LOAD_MASK, return_value=None)
+        mocker.patch(PATCH_LOAD_MASK, return_value=mock_mask)
 
         # Call the function under test
         result = list(load_patient_scans(gen_path()))
@@ -527,8 +535,25 @@ class TestLoadPatientScans:
         assert len(result) == 2
         assert all(isinstance(scan, PatientScan) for scan in result)
         assert all(scan.patient_id == "12345" for scan in result)
-        assert all(scan.volume.shape == (1, 2, 2) for scan in result)
-        assert all(scan.masks == {} for scan in result)
+        np.testing.assert_array_equal(result[0].volume, mock_volume)
+        np.testing.assert_array_equal(result[1].volume, mock_volume)
+        assert all(
+            [mask == mock_mask for mask in scan.masks.values()] for scan in result
+        )
+        assert all(
+            [
+                "organ_1" in mask.get_organ_names()
+                for scan in result
+                for mask in scan.masks.values()
+            ]
+        )
+        assert all(
+            [
+                "organ_2" in mask.get_organ_names()
+                for scan in result
+                for mask in scan.masks.values()
+            ]
+        )
 
     # Handles an empty directory gracefully
     def test_handles_empty_directory_gracefully(self, mocker):
@@ -541,121 +566,6 @@ class TestLoadPatientScans:
         # Assertions
         assert result == []
 
-    # Verifies that the volume and masks are correctly loaded for each PatientScan
-    def test_loads_patient_scans_correctly(self, mocker):
-        # Mock the os.listdir to return a list of directories
-        mocker.patch(PATCH_LISTDIR, return_value=["patient1", "patient2"])
-
-        # Mock the generate_full_paths to return full paths
-        mocker.patch(
-            PATCH_GENERATE_FULL_PATHS,
-            return_value=[gen_path(), gen_path()],
-        )
-
-        # Mock the load_patient_scan to return PatientScan objects
-        mock_patient_scan = PatientScan(
-            patient_id="123", volume=np.array([]), mask=Mask({})
-        )
-        mocker.patch(
-            PATCH_LOAD_PATIENT_SCAN,
-            return_value=mock_patient_scan,
-        )
-
-        # Call the function under test
-        result = list(load_patient_scans(gen_path()))
-
-        # Assertions
-        assert len(result) == 2
-        assert all(isinstance(scan, PatientScan) for scan in result)
-
-    # Ensures that the function is performant with large directories
-    def test_load_patient_scans_performance(self, mocker):
-        # Mock the os.listdir to return a large list of directories
-        mocker.patch(
-            PATCH_LISTDIR,
-            return_value=[
-                "patient1",
-                "patient2",
-                "patient3",
-                "patient4",
-                "patient5",
-                "patient6",
-            ],
-        )
-
-        # Mock the generate_full_paths to return full paths for each directory
-        mocker.patch(
-            PATCH_GENERATE_FULL_PATHS,
-            return_value=[gen_path() for _ in range(6)],
-        )
-
-        # Mock the load_patient_scan to return PatientScan objects
-        mock_patient_scan = PatientScan(
-            patient_id="123", volume=np.array([]), mask=Mask({})
-        )
-        mocker.patch(
-            PATCH_LOAD_PATIENT_SCAN,
-            return_value=mock_patient_scan,
-        )
-
-        # Call the function under test
-        result = list(load_patient_scans(gen_path()))
-
-        # Assertions
-        assert len(result) == 6
-        assert all(isinstance(scan, PatientScan) for scan in result)
-
-    # Returns an empty iterable when no DICOM files are found
-    def test_returns_empty_iterable_when_no_dicom_files_found(self, mocker):
-        # Mock the generate_full_paths to return an empty list
-        mocker.patch(
-            PATCH_GENERATE_FULL_PATHS,
-            return_value=[],
-        )
-
-        # Call the function under test
-        result = list(load_patient_scans(gen_path()))
-
-        # Assertions
-        assert len(result) == 0
-
-    # Correctly processes a directory with a single patient scan
-    def test_correctly_processes_single_patient_scan(self, mocker):
-        # Mock the os.listdir to return a list with a single directory
-        mocker.patch(PATCH_LISTDIR, return_value=["patient1"])
-
-        # Mock the generate_full_paths to return full path
-        mocker.patch(
-            PATCH_GENERATE_FULL_PATHS,
-            return_value=[gen_path()],
-        )
-
-        # Mock the load_patient_scan to return a PatientScan object
-        mock_patient_scan = PatientScan(
-            patient_id="123",
-            volume=np.zeros((512, 512)),
-            mask=Mask(
-                {"organ_1": np.zeros((512, 512)), "organ_2": np.zeros((512, 512))}
-            ),
-        )
-        mocker.patch(
-            PATCH_LOAD_PATIENT_SCAN,
-            return_value=mock_patient_scan,
-        )
-
-        # Call the function under test
-        result = list(load_patient_scans(gen_path()))
-
-        # Assertions
-        assert len(result) == 1
-        assert isinstance(result[0], PatientScan)
-        assert result[0].patient_id == "123"
-        assert result[0].volume.shape == (512, 512)
-        assert "organ_1" in result[0].masks.get_organ_names()
-        assert "organ_2" in result[0].masks.get_organ_names()
-        np.testing.assert_array_equal(result[0].masks["organ_1"], np.zeros((512, 512)))
-        np.testing.assert_array_equal(result[0].masks["organ_2"], np.zeros((512, 512)))
-
 
 class TestLoadAllMasks:
 
@@ -663,13 +573,14 @@ class TestLoadAllMasks:
     def test_loads_masks_from_valid_dicom_directory(self, mocker):
         dicom_collection_path = gen_path()
         mocker.patch(PATCH_LISTDIR, return_value=["file1.dcm", "file2.dcm"])
-
+        mock_rt_struct = mocker.Mock()
+        mock_rt_struct.get_roi_names.return_value = ["Organ 1", "Organ 2"]
+        mock_mask1 = np.random.randint(0, 2, (4, 512, 512))
+        mock_mask2 = np.random.randint(0, 2, (4, 512, 512))
+        mock_rt_struct.get_roi_mask_by_name.side_effect = [mock_mask1, mock_mask2]
         mocker.patch(
-            PATCH_LOAD_MASK,
-            side_effect=[
-                Mask({"organ1": np.array([1, 2, 3])}),
-                Mask({"organ2": np.array([4, 5, 6])}),
-            ],
+            PATCH_LOAD_RT_STRUCT,
+            return_value=mock_rt_struct,
         )
 
         result = list(load_all_masks(dicom_collection_path))

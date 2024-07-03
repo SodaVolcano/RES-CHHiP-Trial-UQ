@@ -94,7 +94,15 @@ class Test_IsotropicGrid:
     # Generates isotropic grid for 1D coordinate arrays
     def test_generates_isotropic_grid_for_1d_coordinate_arrays(self):
         coords = (np.array([0, 2, 4]),)
-        expected_output = (np.array([0, 1, 2, 3]),)
+        expected_output = (np.array([0, 1, 2, 3, 4]),)
+
+        result = _isotropic_grid(coords)
+        assert all(np.array_equal(r, e) for r, e in zip(result, expected_output))
+
+    # Generates isotropic grid for 1D coordinate arrays
+    def test_generates_isotropic_grid_for_1d_coordinate_arrays_float(self):
+        coords = (np.array([0.3, 1.0, 1.7, 2.4, 3.1, 3.8, 4.5, 5.2]),)
+        expected_output = (np.array([1, 2, 3, 4, 5]),)
 
         result = _isotropic_grid(coords)
         assert all(np.array_equal(r, e) for r, e in zip(result, expected_output))
@@ -118,33 +126,13 @@ class Test_IsotropicGrid:
     # Generates isotropic grid for 3D coordinate arrays
     def test_generates_isotropic_grid_for_3d_coordinate_arrays(self):
         coords = (np.array([0, 2, 4]), np.array([1, 3, 5]), np.array([10, 20, 30]))
-        expected_output = (
-            np.array([0, 1, 2, 3]),
-            np.array([1, 2, 3, 4]),
-            np.array(
-                [
-                    10,
-                    11,
-                    12,
-                    13,
-                    14,
-                    15,
-                    16,
-                    17,
-                    18,
-                    19,
-                    20,
-                    21,
-                    22,
-                    23,
-                    24,
-                    25,
-                    26,
-                    27,
-                    28,
-                    29,
-                ]
-            ),
+        expected_output = tuple(
+            np.meshgrid(
+                np.arange(0, 5, dtype=float),
+                np.arange(1, 6, dtype=float),
+                np.arange(10, 31, dtype=float),
+                indexing="ij",
+            )
         )
 
         result = _isotropic_grid(coords)
@@ -161,7 +149,7 @@ class Test_IsotropicGrid:
     # Coordinate arrays with repeating values
     def test_coordinate_arrays_with_repeating_values(self):
         coords = (np.array([0, 1, 1, 2, 2, 3]),)
-        expected_output = (np.array([0, 1, 2]),)
+        expected_output = (np.array([0, 1, 2, 3]),)
 
         result = _isotropic_grid(coords)
         assert all(np.array_equal(r, e) for r, e in zip(result, expected_output))
@@ -169,9 +157,12 @@ class Test_IsotropicGrid:
     # Handles mixed positive and negative coordinate values
     def test_handles_mixed_positive_and_negative_coordinates(self):
         coords = (np.array([-3, -1, 0, 2, 4]), np.array([-2, 0, 1, 3]))
-        expected_output = (
-            np.array([-3, -2, -1, 0, 1, 2, 3]),
-            np.array([-2, -1, 0, 1, 2, 3]),
+        expected_output = tuple(
+            np.meshgrid(
+                np.arange(-3, 5, dtype=float),
+                np.arange(-2, 4, dtype=float),
+                indexing="ij",
+            )
         )
 
         result = _isotropic_grid(coords)
