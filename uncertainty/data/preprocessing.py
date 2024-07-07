@@ -2,24 +2,24 @@
 Collection of functions to preprocess numpy arrays
 """
 
-from operator import add
+from operator import add, not_
 from typing import Any, Generator, Iterable
 
 import numpy as np
-import nptyping as npt
 import toolz as tz
 import toolz.curried as curried
 from scipy.interpolate import interpn
 
 from ..common.utils import curry, unpack_args
+from ..common import constants as c
 
 
 @curry
 def map_interval(
-    from_range: tuple[npt.Number, npt.Number],
-    to_range: tuple[npt.Number, npt.Number],
-    array: npt.NDArray[Any, npt.Number],
-) -> npt.NDArray[Any, npt.Float]:
+    from_range: tuple[np.number, np.number],
+    to_range: tuple[np.number, np.number],
+    array: np.ndarray,
+) -> np.ndarray:
     """
     Map values in an array in range from_range to to_range
     """
@@ -32,7 +32,7 @@ def map_interval(
     )
 
 
-def z_score_scale(array: npt.NDArray[Any, npt.Number]) -> npt.NDArray[Any, npt.Float]:
+def z_score_scale(array: np.ndarray) -> np.ndarray:
     """
     Z-score normalise array to have mean 0 and standard deviation 1
 
@@ -42,7 +42,7 @@ def z_score_scale(array: npt.NDArray[Any, npt.Number]) -> npt.NDArray[Any, npt.F
 
 
 @curry
-def _isotropic_grid(coords: tuple[Iterable[npt.Number]]) -> tuple[Iterable[npt.Number]]:
+def _isotropic_grid(coords: tuple[Iterable[np.number]]) -> tuple[Iterable[np.number]]:
     """
     Create an isotropic grid (1 unit spacing) from a list of coordinate arrays
 
@@ -65,7 +65,7 @@ def _isotropic_grid(coords: tuple[Iterable[npt.Number]]) -> tuple[Iterable[npt.N
 
 
 @curry
-def _get_spaced_coords(spacing: npt.Number, length: int) -> list[npt.Number]:
+def _get_spaced_coords(spacing: np.number, length: int) -> list[np.number]:
     """
     Return list of coordinates with specified length spaced by spacing
     """
@@ -78,10 +78,10 @@ def _get_spaced_coords(spacing: npt.Number, length: int) -> list[npt.Number]:
 
 @curry
 def make_isotropic(
-    spacings: Iterable[npt.Number],
-    array: npt.NDArray[Any, npt.Number],
+    spacings: Iterable[np.number],
+    array: np.ndarray,
     method: str = "linear",
-) -> npt.NDArray[Any, npt.Number]:
+) -> np.ndarray:
     """
     Return an isotropic array with uniformly 1 unit of spacing between coordinates
 
@@ -118,4 +118,48 @@ def make_isotropic(
             _isotropic_grid(anisotropic_coords),
             method=method,
         ),
+    )
+
+
+@curry
+def filter_roi(
+    roi_names: list[str],
+    keep_list: list[str] = c.ROI_KEEP_LIST,
+    exclusion_list: list[str] = c.ROI_EXCLUSION_LIST,
+) -> list[str]:
+    """
+    Filter out ROIs based on keep and exclusion lists
+
+    Parameters
+    ----------
+    roi_names : list[str]
+        Array of ROI names
+    keep_list : list[str]
+        List of substrings to keep
+    exclusion_list : list[str]
+        List of substrings to exclude
+
+    Returns
+    -------
+    list[str]
+        Array of ROI names not in exclusion list and containing any substring in keep list
+    """
+
+    def is_numeric(name):
+        try:
+            float(name)
+            return True
+        except ValueError:
+            return False
+
+    def not_excluded(name):
+        return not any(
+            exclude in name for exclude in exclusion_list
+        ) and not is_numeric(name)
+
+    return tz.pipe(
+        roi_names,
+        curried.filter(not_excluded),
+        curried.filter(lambda name: any(keep in name for keep in keep_list)),
+        list,
     )

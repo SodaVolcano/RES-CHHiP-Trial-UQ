@@ -109,7 +109,7 @@ def load_patient_scans(
     )
 
 
-def load_volume(nifti_path: str) -> g.VolumeType:
+def load_volume(nifti_path: str) -> np.ndarray:
     """
     Load 3D volume from NIfTI file, return generator of 2D slices (lazy loading)
     """

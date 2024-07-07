@@ -5,7 +5,7 @@ Collection of class encapsulating volume data, supporting lazy evaluation
 from typing import TypeVar
 from typing import Any, Generator, Iterable, Iterator, List
 
-from uncertainty.common.constants import MaskType, VolumeType
+import numpy as np
 
 T = TypeVar("T")
 GeneratorOrConcrete = Generator[T, None, None] | T
@@ -17,13 +17,13 @@ class Mask:
     """
 
     def __init__(
-        self, organs: dict[str, GeneratorOrConcrete[MaskType]], observer: str = ""
+        self, organs: dict[str, GeneratorOrConcrete[np.ndarray]], observer: str = ""
     ):
         # dictionary of organ-mask pairs
         self.__organs = organs
         self.observer = observer
 
-    def get_organ_mask(self, organ: str) -> MaskType:
+    def get_organ_mask(self, organ: str) -> np.ndarray:
         """
         Return mask array for given organ
         """
@@ -31,7 +31,7 @@ class Mask:
             self.__organs[organ] = next(self.__organs[organ])
         return self.__organs[organ]
 
-    def __getitem__(self, idx: str) -> MaskType:
+    def __getitem__(self, idx: str) -> np.ndarray:
         """
         Return mask array for given organ
         """
@@ -55,14 +55,14 @@ class PatientScan:
     patient_id: str
 
     # 3D array of the CT/MRI scan
-    __volume: Generator[VolumeType, None, None] | VolumeType
+    __volume: Generator[np.array, None, None] | np.array
     # One or multiple masks
     __masks: List[Mask]
 
     def __init__(
         self,
         patient_id: str,
-        volume: GeneratorOrConcrete[VolumeType],
+        volume: GeneratorOrConcrete[np.array],
         masks: List[Mask],
     ):
         self.patient_id = patient_id
@@ -70,7 +70,7 @@ class PatientScan:
         self.__masks = masks
 
     @property
-    def volume(self) -> VolumeType:
+    def volume(self) -> np.array:
         """
         Return volume attribute
         """

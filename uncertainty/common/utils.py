@@ -7,6 +7,7 @@ from typing import Any, Callable, Iterable, List, Generator, Optional, TypeVar
 import os
 from functools import reduce, wraps
 import re
+from warnings import warn
 
 import toolz as tz
 import toolz.curried as curried

@@ -5,11 +5,11 @@ Set of methods to load and save DICOM files
 import itertools
 from optparse import Option
 import os
+import pickle
 from typing import Any, Generator, Iterable, Optional
 import warnings
 
 import numpy as np
-import nptyping as npt
 import rt_utils
 import pydicom as dicom
 import toolz as tz
@@ -139,7 +139,7 @@ def _get_dicom_slices(dicom_path: str) -> Iterable[dicom.Dataset]:
 def _load_roi_name(
     rt_struct: rt_utils.RTStructBuilder,
     name: str,
-) -> Optional[tuple[str, Generator[c.MaskType, None, None]]]:
+) -> Optional[tuple[str, Generator[np.ndarray, None, None]]]:
     """
     Wrapper to get_roi_mask_by_name, delay execution and return None if exception is raised
     """
@@ -185,7 +185,7 @@ def _load_rt_struct(dicom_path: str) -> Optional[rt_utils.RTStructBuilder]:
 
 @curry
 def _preprocess_volume(
-    array: npt.NDArray[npt.Shape["3 dimensions"], npt.Number],
+    array: np.array,
     spacings: tuple[float, float, float],
     method: str,
 ):
@@ -201,8 +201,8 @@ def _preprocess_volume(
 
 @curry
 def _preprocess_mask(
-    name_mask_pairs: tuple[str, c.MaskType], dicom_path: str
-) -> Optional[tuple[str, c.MaskType]]:
+    name_mask_pairs: tuple[str, np.ndarray], dicom_path: str
+) -> Optional[tuple[str, np.ndarray]]:
     _make_mask_isotropic = unpack_args(
         lambda name, mask, spacings: (
             name,
@@ -295,7 +295,7 @@ def load_patient_scans(
 @curry
 def load_volume(
     dicom_path: str, method: str = "linear", preprocess: bool = True
-) -> npt.NDArray[npt.Shape["3 dimensions"], npt.Number] | None:
+) -> Optional[np.array]:
     """
     Load 3D isotropic volume in range (0, 1) from DICOM files in dicom_path
 
@@ -392,5 +392,33 @@ def load_all_masks(
     """
     return tz.pipe(
         generate_full_paths(dicom_collection_path, os.listdir),
-        curried.map(load_mask(preprocess=False)),
+        curried.map(load_mask(preprocess=preprocess)),
+    )
+
+
+@curry
+def save_dicom_scans_to_pickle(dicom_path: str, save_dir: str) -> None:
+    """
+    Save PatientScans to pickle files in save_dir from folders of DICOM files in dicom_path
+    """
+
+    @curry
+    def save_pickle(path: str, data: Any) -> None:
+        """
+        Save data to a pickle file
+        """
+        # side-effect: execute generators
+        data.volume, [
+            mask[organ]
+            for mask in data.masks.values()
+            for organ in mask.get_organ_names()
+        ]
+        with open(os.path.join(path, f"{data.patient_id}.pkl"), "wb") as f:
+            pickle.dump(data, f)
+
+    return tz.pipe(
+        dicom_path,
+        load_patient_scans,
+        curried.map(lambda scan: save_pickle(save_dir, scan)),
+        list,
     )
