@@ -4,7 +4,7 @@ Utility functions for model training, from model construction, data loading, and
 
 from typing import Callable
 from tensorflow.python.keras import Model
-import tensorflow.python.keras as keras
+import tensorflow.keras as keras
 
 from uncertainty.common.constants import (
     model_config,
@@ -33,6 +33,9 @@ def construct_model(
         optimizer=keras.optimizers.Adam(learning_rate=lr_schedule),
         metrics=config["metrics"],
     )
+
+    keras.plot_model(model, to_file="unet.png")
+    model.summary()
 
     model._name = model.__class__.__name__
     return model

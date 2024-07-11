@@ -314,3 +314,27 @@ def grow_seq[T, R](
         Sequence constructed by repeatedly applying f, `[init, f(init), f(f(init)), ...]`
     """
     return islice(tz.iterate(f, init), length)
+
+
+def grow_seq_accum[T, R](fs: Callable[[T|R], R], init: T) -> Generator[T | R, None, None]:
+    """
+    Make a sequence by applying list of functions to the last element of the current sequence
+    
+    Parameters
+    ----------
+    fs: Callable
+        List of functions to be called on the last element of the sequence
+    init: any
+        Initial value of the sequence
+    
+    Returns
+    -------
+    Generator[T | R, None, None]
+        Sequence constructed by repeatedly applying each f in fs, 
+        `[init, f1(init), f2(f1(init)), ...]`
+    """
+    return tz.pipe(
+        fs,
+        curried.cons(init), # [init, f1, f2, ...]
+        curried.accumulate(lambda x, f: f(x)),
+    )

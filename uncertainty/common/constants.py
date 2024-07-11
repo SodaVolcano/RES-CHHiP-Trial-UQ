@@ -3,7 +3,7 @@ Collection of global constants
 """
 
 from typing import Final
-import keras
+import tensorflow.keras as keras
 from toolz import memoize
 
 # SOP Class UIDs for different types of DICOM files
@@ -111,11 +111,10 @@ def model_config() -> dict:
         # If None, loss will use from_logits=True
         "final_layer_activation": "sigmoid",
         # ------- Overall U-Net settings -----------------
-        "model_checkpoint_path": "/content/gdrive/MyDrive/checkpoint.model.keras",
+        "model_checkpoint_path": "./checkpoints/checkpoint.model.keras",
         "n_epochs": 1,
         "batch_size": 32,
         "metrics": ["accuracy"],
-        # Must be str to avoid get_config() error
         "initializer": "he_normal",  # For kernel initialisation
         "optimizer": keras.optimizers.Adam,
         "loss": keras.losses.BinaryCrossentropy,

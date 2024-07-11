@@ -1,13 +1,20 @@
+"""
+Define a U-Net model using Keras functional API
+
+Reference: https://github.com/christianversloot/machine-learning-articles/blob/main/how-to-build-a-u-net-for-image-segmentation-with-tensorflow-and-keras.md
+"""
+
 from functools import reduce
 from ..common.constants import model_config
-from ..common.utils import curry, grow_seq, unpack_args
+from ..common.utils import curry, grow_seq, grow_seq_accum, unpack_args
 
 from typing import Callable
 import toolz as tz
 from toolz import curried
-from tensorflow.python.keras import layers, Model  # TODO: replace with tensorflow.keras
+from tensorflow.keras import layers, Model
 
 
+@curry
 def conv_layer(x, n_kernels, kernel_size, initializer, use_batch_norm, activation):
     """Convolution followed by (optionally) BN and activation"""
     return tz.pipe(
@@ -23,13 +30,14 @@ def conv_layer(x, n_kernels, kernel_size, initializer, use_batch_norm, activatio
     )
 
 
-def conv_block(x, config: dict = model_config()):
+@curry
+def conv_block(x, n_kernels, config: dict = model_config()):
     """Pass input through n convolution layers"""
     return tz.pipe(
         x,
         *[
             conv_layer(
-                config["n_kernels"],
+                n_kernels,
                 config["kernel_size"],
                 config["initializer"],
                 config["use_batch_norm"],
@@ -40,20 +48,23 @@ def conv_block(x, config: dict = model_config()):
     )
 
 
+@curry
 def unet_encoder(x, config: dict = model_config()):
     """
     Pass input through encoder and return (output, skip_connections)
     """
     downsample = layers.MaxPool2D((2, 2), strides=(2, 2))
+    layers = [
+        lambda x: conv_block(config["n_kernels_per_block"][level], config=config)(
+            downsample(x)
+        )
+        for level in range(1, config["n_levels"])  # Exclude first block
+    ]
     return tz.pipe(
         x,
-        # skip_inputs = [conv(x),], level 1 of encoder
-        conv_block(config=config),
-        # Repeatedly downsample and apply conv_block [conv(x), conv(down(conv(x))), ...]
-        grow_seq(
-            f=lambda x: conv_block(downsample(x), config=config),
-            length=config["n_levels"] - 1,
-        ),
+        conv_block(config["n_kernels_init"], config=config),
+        # Repeatedly apply downsample and conv_block to input to get skip connection list
+        grow_seq_accum(layers),
         list,
         # last element is from bottleneck so exclude from skip connections
         lambda skip_inputs: (skip_inputs[-1], skip_inputs[:-1]),
@@ -106,6 +117,7 @@ def unet_decoder(x, skips, config: dict = model_config()):
     )
 
 
+@curry
 def unet(config: dict = model_config()) -> Model:
     """
     Construct a U-Net model
