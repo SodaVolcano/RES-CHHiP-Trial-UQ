@@ -3,6 +3,7 @@ Collection of global constants
 """
 
 from typing import Final
+
 import tensorflow.keras as keras
 from toolz import memoize
 

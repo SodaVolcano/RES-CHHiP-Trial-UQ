@@ -8,12 +8,14 @@ import os
 import pickle
 from typing import Any, Generator, Iterable, Optional
 import warnings
+import logging
 
 import numpy as np
 import rt_utils
 import pydicom as dicom
 import toolz as tz
 import toolz.curried as curried
+from tqdm import tqdm
 
 from .preprocessing import make_isotropic, map_interval
 from .datatypes import Mask, PatientScan
@@ -31,6 +33,7 @@ from ..common import constants as c
 
 # Anonymous functions for readability
 _dicom_type_is = lambda uid: lambda d: d.SOPClassUID == uid
+_standardise_roi_name = lambda name: name.strip().lower().replace(" ", "_")
 
 
 def _dicom_slice_order(dicom_file: dicom.Dataset) -> np.ndarray:
@@ -187,15 +190,21 @@ def _load_rt_struct(dicom_path: str) -> Optional[rt_utils.RTStructBuilder]:
 def _preprocess_volume(
     array: np.array,
     spacings: tuple[float, float, float],
+    intercept_slopes: Iterable[tuple[float, float]],
     method: str,
 ):
     """
-    Preprocess volume to have isotropic spacing and (0, 1) range
+    Preprocess volume to have isotropic spacing and HU scale
     """
     return tz.pipe(
         array,
+        lambda arr: np.array(
+            [
+                arr_slice * intercept_slope[1] + intercept_slope[0]
+                for arr_slice, intercept_slope in zip(arr, intercept_slopes)
+            ]
+        ),
         make_isotropic(spacings, method=method),
-        map_interval(c.CT_RANGE, (0, 1)),  # TODO: What's the range???
     )
 
 
@@ -215,9 +224,16 @@ def _preprocess_mask(
         dicom_path,
         _get_dicom_slices,
         _get_uniform_spacing,
-        # (name, mask_generator, spacings)
+        # (name, mask, spacings)
         apply_if_truthy_else_None(
-            lambda spacings: [name_mask + (spacings,) for name_mask in name_mask_pairs]
+            lambda spacings: [
+                (
+                    name,
+                    mask,
+                    spacings,
+                )
+                for name, mask in name_mask_pairs
+            ]
         ),
         # If spacings is None, return None
         lambda name_mask_spacing_lst: (
@@ -225,6 +241,50 @@ def _preprocess_mask(
             if name_mask_spacing_lst and name_mask_spacing_lst[0][2] is not None
             else None
         ),
+    )
+
+
+@curry
+def _filter_roi(
+    roi_names: list[str],
+    keep_list: list[str] = c.ROI_KEEP_LIST,
+    exclusion_list: list[str] = c.ROI_EXCLUSION_LIST,
+) -> list[str]:
+    """
+    Filter out ROIs based on keep and exclusion lists
+
+    Parameters
+    ----------
+    roi_names : list[str]
+        Array of ROI names
+    keep_list : list[str]
+        List of substrings to keep
+    exclusion_list : list[str]
+        List of substrings to exclude
+
+    Returns
+    -------
+    list[str]
+        Array of ROI names not in exclusion list and containing any substring in keep list
+    """
+
+    def is_numeric(name):
+        try:
+            float(name)
+            return True
+        except ValueError:
+            return False
+
+    def not_excluded(name):
+        return not any(
+            exclude in name for exclude in exclusion_list
+        ) and not is_numeric(name)
+
+    return tz.pipe(
+        roi_names,
+        curried.filter(not_excluded),
+        curried.filter(lambda name: any(keep in name for keep in keep_list)),
+        list,
     )
 
 
@@ -312,19 +372,28 @@ def load_volume(
     return tz.pipe(
         dicom_path,
         _get_dicom_slices,
-        itertools.tee,
+        lambda slices: itertools.tee(slices, 3),
         unpack_args(
-            lambda it1, it2: (
+            lambda it1, it2, it3: (
                 apply_if_truthy_else_None(
                     np.stack, [dicom_file.pixel_array for dicom_file in it1]
                 ),
                 _get_uniform_spacing(it2),
+                map(
+                    lambda d_slice: (
+                        float(d_slice.RescaleIntercept),
+                        float(d_slice.RescaleSlope),
+                    ),
+                    it3,
+                ),
             )
         ),
         unpack_args(
-            lambda volume, spacings: (
+            lambda volume, spacings, intercept_slopes: (
                 (
-                    _preprocess_volume(volume, spacings, method=method)
+                    _preprocess_volume(
+                        volume, spacings, intercept_slopes, method=method
+                    )
                     if preprocess
                     else volume
                 )
@@ -365,17 +434,27 @@ def load_mask(dicom_path: str, preprocess: bool = True) -> Optional[Mask]:
         take significantly longer to load if set to True
     """
     rt_struct = _load_rt_struct(dicom_path)
+
     if rt_struct is None:
         return None
+
+    keep_lst = _filter_roi(list(map(_standardise_roi_name, rt_struct.get_roi_names())))
+
     return tz.pipe(
         rt_struct.get_roi_names(),
+        curried.filter(lambda name: _standardise_roi_name(name) in keep_lst),
         curried.map(_load_roi_name(rt_struct)),
         # (roi_name, mask_generator) pairs, only successful masks are kept
         curried.filter(lambda name_mask_pair: name_mask_pair is not None),
-        # set all naming convention to snake_case
+        curried.map(
+            unpack_args(lambda name, mask: (_standardise_roi_name(name), mask))
+        ),
         curried.map(
             unpack_args(
-                lambda name, mask: (name.strip().lower().replace(" ", "_"), mask)
+                lambda name, mask: (
+                    name,
+                    np.moveaxis(mask, -1, 0),
+                )
             )
         ),
         _preprocess_mask(dicom_path=dicom_path) if preprocess else tz.identity,
@@ -397,28 +476,42 @@ def load_all_masks(
 
 
 @curry
-def save_dicom_scans_to_pickle(dicom_path: str, save_dir: str) -> None:
+def save_dicom_scans_to_h5py(
+    dicom_path: str, save_dir: str, logfile: str = "./warnings.log"
+) -> None:
     """
-    Save PatientScans to pickle files in save_dir from folders of DICOM files in dicom_path
-    """
+    Save PatientScans to .h5 files in save_dir from folders of DICOM files in dicom_path
 
-    @curry
-    def save_pickle(path: str, data: Any) -> None:
-        """
-        Save data to a pickle file
-        """
-        # side-effect: execute generators
-        data.volume, [
-            mask[organ]
-            for mask in data.masks.values()
-            for organ in mask.get_organ_names()
-        ]
-        with open(os.path.join(path, f"{data.patient_id}.pkl"), "wb") as f:
-            pickle.dump(data, f)
+    Warnings and exceptions are logged to logfile ('./warnings.log` by default)
+    """
+    # Redirect all warnings and exceptions to logfile
+    logging.basicConfig(
+        level=logging.WARNING,
+        filename={logfile},
+        filemode="a",
+        format="%(asctime)s - %(levelname)s - %(message)s",
+    )
+
+    def warning_handler(message, category, filename, lineno, file=None, line=None):
+        logging.warning(f"{filename}:{lineno}: {category.__name__}: {message}")
+
+    warnings.showwarning = warning_handler
+
+    def save_scans(scans):
+        with tqdm() as pbar:
+            while True:
+                try:
+                    scan = next(scans)
+                    pbar.update(1)
+                except StopIteration:
+                    return
+                except Exception as e:
+                    warnings.warn(f"Exception occured: {e}", Warning)
+                    continue
 
     return tz.pipe(
         dicom_path,
         load_patient_scans,
-        curried.map(lambda scan: save_pickle(save_dir, scan)),
-        list,
+        curried.map(lambda scan: scan.save_h5py(save_dir)),
+        save_scans,
     )
