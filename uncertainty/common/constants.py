@@ -3,7 +3,8 @@ Collection of global constants
 """
 
 from typing import Final
-import numpy as np
+import keras
+from toolz import memoize
 
 # SOP Class UIDs for different types of DICOM files
 # https://dicom.nema.org/dicom/2013/output/chtml/part04/sect_B.5.html
@@ -16,10 +17,9 @@ RT_PLAN: Final[str] = "1.2.840.10008.5.1.4.1.1.481.5"
 VALID_IDENTIFIER: Final[str] = "[a-zA-Z_][a-zA-Z0-9_]*"
 
 # Hounsfield Units (HU), intensity range for CT images
-# wrONG
-CT_RANGE: Final[tuple[int, int]] = (-1000, 30)
+HU_RANGE: Final[tuple[int, int]] = (-1000, 3000)
 
-# ROI keep lists, all names containing these as substring will be kept
+# ROI keep list, all names containing these as substring will be kept
 ROI_KEEP_LIST: Final[list[str]] = [
     "bladder",
     "rectum",
@@ -32,6 +32,7 @@ ROI_KEEP_LIST: Final[list[str]] = [
     "ctv",
 ]
 
+# ROI exclusion list, remove ROI name before matching keep list
 ROI_EXCLUSION_LIST: Final[list[str]] = [
     "ptv",
     "gtv",
@@ -83,3 +84,52 @@ ROI_EXCLUSION_LIST: Final[list[str]] = [
     "s3",
     "anal_canal",
 ]
+
+
+@memoize
+def model_config() -> dict:
+    config = {
+        # --------- Data settings ---------
+        "data_dir": "/content/gdrive/MyDrive/dataset/Data",
+        "width": 200,
+        "height": 200,
+        "dim": 3,
+        # ------- ConvolutionBlock settings  --------
+        "kernel_size": (3, 3),
+        "n_convolutions_per_block": 2,
+        "use_batch_norm": True,
+        "activation": "relu",
+        # ------- Encoder/Decoder settings -------
+        # Number of kernels in first level of Encoder, doubles/halves at each level in Encoder/Decoder
+        "n_kernels_init": 64,
+        # Number of resolutions/blocks; height of U-Net
+        "n_levels": 4,
+        # Number of class to predict
+        "n_kernels_last": 1,
+        # Use sigmoid if using binary crossentropy, softmax if using categorical crossentropy
+        # Note if using softmax, n_kernels_last should be equal to number of classes (e.g. 2 for binary segmentation)
+        # If None, loss will use from_logits=True
+        "final_layer_activation": "sigmoid",
+        # ------- Overall U-Net settings -----------------
+        "model_checkpoint_path": "/content/gdrive/MyDrive/checkpoint.model.keras",
+        "n_epochs": 1,
+        "batch_size": 32,
+        "metrics": ["accuracy"],
+        # Must be str to avoid get_config() error
+        "initializer": "he_normal",  # For kernel initialisation
+        "optimizer": keras.optimizers.Adam,
+        "loss": keras.losses.BinaryCrossentropy,
+        # Learning rate scheduler, decrease learning rate at certain epochs
+        "lr_scheduler": keras.optimizers.schedules.PiecewiseConstantDecay,
+        # Percentage of training where learning rate is decreased
+        "lr_schedule_percentages": [0.2, 0.5, 0.8],
+        # Gradually decrease learning rate, starting at first value
+        "lr_schedule_values": [3e-4, 1e-4, 1e-5, 1e-6],
+    }
+    # Explicitly calculate number of kernels per block (for Encoder)
+    config["n_kernels_per_block"] = [
+        config["n_kernels_init"] * (2**block_level)
+        for block_level in range(config["n_levels"])
+    ]
+
+    return config
