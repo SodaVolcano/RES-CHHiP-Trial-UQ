@@ -58,13 +58,15 @@ def unet_encoder(x, config: dict = model_config()):
     """
     Pass input through encoder and return (output, skip_connections)
     """
-    downsample = layers.MaxPool2D((2, 2), strides=(2, 2))
     levels = [
-        lambda x: conv_block(
-            n_kernels=config["n_kernels_per_block"][level], config=config
-        )(downsample(x))
+        lambda x: tz.pipe(
+            x,
+            layers.MaxPool2D((2, 2), strides=(2, 2)),
+            conv_block(n_kernels=config["n_kernels_per_block"][level], config=config),
+        )
         for level in range(1, config["n_levels"])  # Exclude first block
     ]
+
     return tz.pipe(
         x,
         conv_block(n_kernels=config["n_kernels_init"], config=config),
