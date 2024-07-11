@@ -72,7 +72,7 @@ def unet_encoder(x, config: dict = model_config()):
 
 
 @curry
-def decoder_level(x, skip, config: dict = model_config()):
+def decoder_level(x, skip, n_kernels: int, config: dict = model_config()):
     """
     One level of decoder path: upsample, crop, concat with skip, and convolve the input
     """
@@ -80,7 +80,7 @@ def decoder_level(x, skip, config: dict = model_config()):
     return tz.pipe(
         x,
         layers.Conv2DTranspose(
-            config["n_kernels"] // 2,  # Halve dimensions because we are concatenating
+            n_kernels // 2,  # Halve dimensions because we are concatenating
             config["kernel_size"],
             strides=(2, 2),
             kernel_initializer=config["initializer"],
@@ -89,7 +89,7 @@ def decoder_level(x, skip, config: dict = model_config()):
             height=skip.shape[1], width=skip.shape[2]
         ),
         lambda cropped_x: layers.Concatenate(axis=-1)(skip, cropped_x),
-        conv_block(config=config),
+        conv_block(n_kernels, config=config),
     )
 
 
@@ -98,12 +98,17 @@ def unet_decoder(x, skips, config: dict = model_config()):
     """
     Pass input through decoder consisting of upsampling and return output
     """
+    levels = [
+        decoder_level(skip=skip, n_kernels=n_kernels)
+        # Ignore first block (bottleneck)
+        # skips and config is in descending order, reverse to ascending
+        for skip, n_kernels in reversed(zip(skips, config["n_kernels_per_block"][1:]))
+    ]
+
     return tz.pipe(
-        # skips is in descending order, reverse to ascending
-        tz.concat([[x], reversed(skips)]),
-        # Run x and corresponding skip connection through each decoder_level
-        curried.reduce(function=decoder_level(config=config)),
-        layers.Conv2D(
+        x,
+        curried.pipe(funcs=levels),  # Run x through each decoder level
+        layers.Conv2D(  # Final 1x1 convolution
             config["n_kernels_last"],
             (1, 1),
             kernel_initializer=config["initializer"],

@@ -297,7 +297,7 @@ def grow_seq[T, R](
     length: int | None = None,
 ) -> Generator[T | R, None, None]:
     """ 
-    Construct a sequence by repeatedly applying f to last item in sequence
+    Grow a sequence by repeatedly applying f to last item in sequence
     
     Parameters
     ----------
@@ -318,7 +318,7 @@ def grow_seq[T, R](
 
 def grow_seq_accum[T, R](fs: Callable[[T|R], R], init: T) -> Generator[T | R, None, None]:
     """
-    Make a sequence by applying list of functions to the last element of the current sequence
+    Grow a sequence by applying list of functions to the last element of the current sequence
     
     Parameters
     ----------
