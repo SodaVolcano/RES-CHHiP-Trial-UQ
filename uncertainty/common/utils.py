@@ -292,8 +292,8 @@ def iterate_while[T, R](
 
 @curry
 def grow_seq[T, R](
-    f: Callable[[T | R], R],
     init: T,
+    f: Callable[[T | R], R],
     length: int | None = None,
 ) -> Generator[T | R, None, None]:
     """ 
@@ -316,7 +316,8 @@ def grow_seq[T, R](
     return islice(tz.iterate(f, init), length)
 
 
-def grow_seq_accum[T, R](fs: Callable[[T|R], R], init: T) -> Generator[T | R, None, None]:
+@curry
+def grow_seq_accum[T, R](init: T, fs: Callable[[T|R], R]) -> Generator[T | R, None, None]:
     """
     Grow a sequence by applying list of functions to the last element of the current sequence
     

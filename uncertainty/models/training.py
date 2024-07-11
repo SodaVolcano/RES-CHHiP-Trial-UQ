@@ -34,7 +34,7 @@ def construct_model(
         metrics=config["metrics"],
     )
 
-    keras.plot_model(model, to_file="unet.png")
+    keras.utils.plot_model(model, to_file="unet.png")
     model.summary()
 
     model._name = model.__class__.__name__
