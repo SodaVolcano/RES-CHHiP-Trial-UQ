@@ -91,9 +91,9 @@ def model_config() -> dict:
     config = {
         # --------- Data settings ---------
         "data_dir": "/content/gdrive/MyDrive/dataset/Data",
-        "width": 200,
-        "height": 200,
-        "dim": 3,
+        "input_width": 200,
+        "input_height": 200,
+        "input_dim": 3,
         # ------- ConvolutionBlock settings  --------
         "kernel_size": (3, 3),
         "n_convolutions_per_block": 2,

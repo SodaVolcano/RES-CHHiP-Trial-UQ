@@ -2,6 +2,7 @@
 Collection of misc utility functions
 """
 
+from itertools import islice
 import pickle
 from typing import Any, Callable, Iterable, List, Generator, Optional, TypeVar
 import os
@@ -200,33 +201,6 @@ def placeholder_matches(
     )
 
 
-@curry
-def iterate_while[T, R](
-    func: Callable[[T], R], condition: Callable[[T], bool], initial: T
-) -> R | T:
-    """
-    Repeatedly apply func to a value until condition is met
-
-    Parameters
-    ----------
-    func: Callable
-        Function to be called repeatedly
-    condition: Callable
-        Function that takes the output of func and returns a boolean
-    initial: any
-        Initial value to be passed to func
-
-    Returns
-    -------
-    any
-        Output of func when condition is met
-    """
-    return (
-        iterate_while(func, condition, func(initial))
-        if not condition(initial)
-        else initial
-    )
-
 
 @curry
 def resolve_path_placeholders(path_pattern: str, placeholders: list[str]) -> list[str]:
@@ -288,3 +262,55 @@ def resolve_path_placeholders(path_pattern: str, placeholders: list[str]) -> lis
         ),
         list,
     )
+
+@curry
+def iterate_while[T, R](
+    func: Callable[[T], R], condition: Callable[[T], bool], initial: T
+) -> R | T:
+    """
+    Repeatedly apply func to a value until condition is met
+
+    Parameters
+    ----------
+    func: Callable
+        Function to be called repeatedly
+    condition: Callable
+        Function that takes the output of func and returns a boolean
+    initial: any
+        Initial value to be passed to func
+
+    Returns
+    -------
+    any
+        Output of func when condition is met
+    """
+    return (
+        iterate_while(func, condition, func(initial))
+        if not condition(initial)
+        else initial
+    )
+
+@curry
+def grow_seq[T, R](
+    f: Callable[[T | R], R],
+    init: T,
+    length: int | None = None,
+) -> Generator[T | R, None, None]:
+    """ 
+    Construct a sequence by repeatedly applying f to last item in sequence
+    
+    Parameters
+    ----------
+    f: Callable
+        Function to be called repeatedly on the last element of the sequence
+    init: any
+        Initial value of the sequence
+    length: int | None
+        Length of the sequence to be generated, if None, sequence is infinite
+
+    Returns
+    -------
+    Generator[T | R, None, None]
+        Sequence constructed by repeatedly applying f, `[init, f(init), f(f(init)), ...]`
+    """
+    return islice(tz.iterate(f, init), length)
