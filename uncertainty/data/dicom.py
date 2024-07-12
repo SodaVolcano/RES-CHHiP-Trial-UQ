@@ -3,10 +3,8 @@ Set of methods to load and save DICOM files
 """
 
 import itertools
-from optparse import Option
 import os
-import pickle
-from typing import Any, Generator, Iterable, Optional
+from typing import Generator, Iterable, Optional
 import warnings
 import logging
 
@@ -19,7 +17,7 @@ from tqdm import tqdm
 
 from .preprocessing import make_isotropic, map_interval
 from .datatypes import Mask, PatientScan
-from ..common.utils import (
+from ..utils.utils import (
     apply_if_truthy_else_None,
     list_files,
     generate_full_paths,
@@ -28,6 +26,7 @@ from ..common.utils import (
     yield_val,
 )
 from ..common import constants as c
+from ..logging_utils import logger_wraps
 
 # ============ Helper functions ============
 
@@ -36,6 +35,7 @@ _dicom_type_is = lambda uid: lambda d: d.SOPClassUID == uid
 _standardise_roi_name = lambda name: name.strip().lower().replace(" ", "_")
 
 
+@logger_wraps
 def _dicom_slice_order(dicom_file: dicom.Dataset) -> np.ndarray:
     """
     Return slice order of input DICOM slice within its volume
@@ -51,6 +51,7 @@ def _dicom_slice_order(dicom_file: dicom.Dataset) -> np.ndarray:
     )
 
 
+@logger_wraps
 def _most_common_shape(
     dicom_files: Iterable[dicom.Dataset],
 ) -> Optional[tuple[int, int]]:
@@ -73,6 +74,7 @@ def _most_common_shape(
 
 
 @curry
+@logger_wraps
 def _filter_by_most_common_shape(
     dicom_files: Iterable[dicom.Dataset],
 ) -> Iterable[dicom.Dataset]:
@@ -96,6 +98,7 @@ def _filter_by_most_common_shape(
     )
 
 
+@logger_wraps
 def _get_uniform_spacing(
     dicom_files: Iterable[dicom.Dataset],
 ) -> Optional[tuple[float, float, float]]:
@@ -123,6 +126,7 @@ def _get_uniform_spacing(
 
 
 @tz.memoize
+@logger_wraps
 def _get_dicom_slices(dicom_path: str) -> Iterable[dicom.Dataset]:
     """
     Return all DICOM files in dicom_path in slice order, filter by type and thickness
@@ -138,6 +142,7 @@ def _get_dicom_slices(dicom_path: str) -> Iterable[dicom.Dataset]:
     )
 
 
+@logger_wraps
 @curry
 def _load_roi_name(
     rt_struct: rt_utils.RTStructBuilder,
@@ -162,6 +167,7 @@ def _load_roi_name(
         return None
 
 
+@logger_wraps
 def _load_rt_struct(dicom_path: str) -> Optional[rt_utils.RTStructBuilder]:
     """
     Create RTStructBuilder from DICOM RT struct file in dicom_path
@@ -186,6 +192,7 @@ def _load_rt_struct(dicom_path: str) -> Optional[rt_utils.RTStructBuilder]:
     )
 
 
+@logger_wraps
 @curry
 def _preprocess_volume(
     array: np.array,
@@ -208,6 +215,7 @@ def _preprocess_volume(
     )
 
 
+@logger_wraps
 @curry
 def _preprocess_mask(
     name_mask_pairs: tuple[str, np.ndarray], dicom_path: str
@@ -244,6 +252,7 @@ def _preprocess_mask(
     )
 
 
+@logger_wraps
 @curry
 def _filter_roi(
     roi_names: list[str],
@@ -289,6 +298,7 @@ def _filter_roi(
 
 
 # ============ Main functions ============
+@logger_wraps(level="INFO")
 @curry
 def load_patient_scan(
     dicom_path: str, method: str = "linear", preprocess: bool = True
@@ -328,6 +338,7 @@ def load_patient_scan(
     )
 
 
+@logger_wraps(level="INFO")
 @curry
 def load_patient_scans(
     dicom_collection_path: str, method: str = "linear", preprocess: bool = True
@@ -352,6 +363,7 @@ def load_patient_scans(
     )
 
 
+@logger_wraps(level="INFO")
 @curry
 def load_volume(
     dicom_path: str, method: str = "linear", preprocess: bool = True
@@ -404,6 +416,7 @@ def load_volume(
     )
 
 
+@logger_wraps(level="INFO")
 @curry
 def load_all_volumes(
     dicom_collection_path: str, method: str = "linear", preprocess: bool = True
@@ -418,6 +431,7 @@ def load_all_volumes(
     )
 
 
+@logger_wraps(level="INFO")
 @curry
 def load_mask(dicom_path: str, preprocess: bool = True) -> Optional[Mask]:
     """
@@ -462,6 +476,7 @@ def load_mask(dicom_path: str, preprocess: bool = True) -> Optional[Mask]:
     )
 
 
+@logger_wraps(level="INFO")
 @curry
 def load_all_masks(
     dicom_collection_path: str, preprocess: bool = True
@@ -475,33 +490,20 @@ def load_all_masks(
     )
 
 
+@logger_wraps(level="INFO")
 @curry
-def save_dicom_scans_to_h5py(
-    dicom_path: str, save_dir: str, logfile: str = "./warnings.log"
-) -> None:
+def save_dicom_scans_to_h5py(dicom_path: str, save_dir: str) -> None:
     """
     Save PatientScans to .h5 files in save_dir from folders of DICOM files in dicom_path
 
     Warnings and exceptions are logged to logfile ('./warnings.log` by default)
     """
-    # Redirect all warnings and exceptions to logfile
-    logging.basicConfig(
-        level=logging.WARNING,
-        filename={logfile},
-        filemode="a",
-        format="%(asctime)s - %(levelname)s - %(message)s",
-    )
-
-    def warning_handler(message, category, filename, lineno, file=None, line=None):
-        logging.warning(f"{filename}:{lineno}: {category.__name__}: {message}")
-
-    warnings.showwarning = warning_handler
 
     def save_scans(scans):
         with tqdm() as pbar:
             while True:
                 try:
-                    scan = next(scans)
+                    next(scans)
                     pbar.update(1)
                 except StopIteration:
                     return

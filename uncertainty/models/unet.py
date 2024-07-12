@@ -105,11 +105,11 @@ def unet_decoder(x, skips, config: dict = model_config()):
     """
     Pass input through decoder consisting of upsampling and return output
     """
+    # skips and config is in descending order, reverse to ascending
     levels = reversed(
         [
             decoder_level(skip=skip, n_kernels=n_kernels)
             # Ignore first block (bottleneck)
-            # skips and config is in descending order, reverse to ascending
             for skip, n_kernels in (zip(skips, config["n_kernels_per_block"][1:]))
         ]
     )

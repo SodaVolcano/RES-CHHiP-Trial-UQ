@@ -3,7 +3,9 @@ Utility functions for model training, from model construction, data loading, and
 """
 
 import numpy as np
-from ..common.utils import curry
+
+from uncertainty.logging_utils import logger_wraps
+from ..utils.utils import curry
 from ..common.constants import model_config
 
 from typing import Callable, Iterable
@@ -14,6 +16,7 @@ import toolz as tz
 import toolz.curried as curried
 
 
+@logger_wraps
 @curry
 def construct_model(
     model_constructor: Callable[[dict], Model],
@@ -64,4 +67,11 @@ def preprocess_data(
     # clip first to HU range, then
     # normalise pixel values to [0, 1]
     # cast to float32
+
+    # class weight?
+    # intensity norm?
+    pass
+
+
+def augment_data():
     pass
