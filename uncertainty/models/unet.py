@@ -4,14 +4,18 @@ Define a U-Net model using Keras functional API
 Reference: https://github.com/christianversloot/machine-learning-articles/blob/main/how-to-build-a-u-net-for-image-segmentation-with-tensorflow-and-keras.md
 """
 
+from uncertainty.utils.logging import logger_wraps
 from ..common.constants import model_config
-from ..common.utils import curry, grow_seq_accum, unpack_args
+from ..utils.wrappers import curry
+from ..utils.sequence import grow_seq_accum
+from ..utils.common import unpack_args
 
 import toolz as tz
 from toolz import curried
 from tensorflow.keras import layers, Model
 
 
+@logger_wraps(level="INFO")
 @curry
 def conv_layer(
     x,
@@ -35,6 +39,7 @@ def conv_layer(
     )
 
 
+@logger_wraps(level="INFO")
 @curry
 def conv_block(x, n_kernels, config: dict = model_config()):
     """Pass input through n convolution layers"""
@@ -53,6 +58,7 @@ def conv_block(x, n_kernels, config: dict = model_config()):
     )
 
 
+@logger_wraps(level="INFO")
 @curry
 def unet_encoder(x, config: dict = model_config()):
     """
@@ -78,6 +84,7 @@ def unet_encoder(x, config: dict = model_config()):
     )
 
 
+@logger_wraps(level="INFO")
 @curry
 def decoder_level(x, skip, n_kernels: int, config: dict = model_config()):
     """
@@ -100,6 +107,7 @@ def decoder_level(x, skip, n_kernels: int, config: dict = model_config()):
     )
 
 
+@logger_wraps(level="INFO")
 @curry
 def unet_decoder(x, skips, config: dict = model_config()):
     """
@@ -131,6 +139,7 @@ def unet_decoder(x, skips, config: dict = model_config()):
     )
 
 
+@logger_wraps(level="INFO")
 @curry
 def unet(config: dict = model_config()) -> Model:
     """

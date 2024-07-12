@@ -2,18 +2,20 @@
 Collection of functions to preprocess numpy arrays
 """
 
-from operator import add, not_
-from typing import Any, Generator, Iterable
+from operator import add
+from typing import Iterable
 
 import numpy as np
 import toolz as tz
-import toolz.curried as curried
 from scipy.interpolate import interpn
 
-from ..common.utils import curry, unpack_args
-from ..common import constants as c
+from uncertainty.utils.logging import logger_wraps
+
+from ..utils.wrappers import curry
+from ..utils.common import unpack_args
 
 
+@logger_wraps()
 @curry
 def map_interval(
     from_range: tuple[np.number, np.number],
@@ -32,6 +34,7 @@ def map_interval(
     )
 
 
+@logger_wraps()
 def z_score_scale(array: np.ndarray) -> np.ndarray:
     """
     Z-score normalise array to have mean 0 and standard deviation 1
@@ -41,6 +44,7 @@ def z_score_scale(array: np.ndarray) -> np.ndarray:
     return (array - array.mean()) / array.std()
 
 
+@logger_wraps()
 @curry
 def _isotropic_grid(coords: tuple[Iterable[np.number]]) -> tuple[Iterable[np.number]]:
     """
@@ -64,6 +68,7 @@ def _isotropic_grid(coords: tuple[Iterable[np.number]]) -> tuple[Iterable[np.num
     )
 
 
+@logger_wraps()
 @curry
 def _get_spaced_coords(spacing: np.number, length: int) -> list[np.number]:
     """
@@ -76,6 +81,7 @@ def _get_spaced_coords(spacing: np.number, length: int) -> list[np.number]:
     )
 
 
+@logger_wraps()
 @curry
 def make_isotropic(
     spacings: Iterable[np.number],

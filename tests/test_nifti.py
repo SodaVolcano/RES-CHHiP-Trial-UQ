@@ -32,7 +32,7 @@ PATCH_RESOLVE_PATH_PLACEHOLDERS = "uncertainty.data.nifti.resolve_path_placehold
 PATCH_PLACEHOLDER_MATCHES = "uncertainty.data.nifti.placeholder_matches"
 PATCH_LOAD_PATIENT_SCAN = "uncertainty.data.nifti.load_patient_scan"
 PATCH_NIBABEL_LOAD = "nibabel.load"
-PATCH_LIST_FILES = "uncertainty.common.utils.list_files"
+PATCH_LIST_FILES = "uncertainty.utils.path.list_files"
 
 
 class TestLoadPatientScan:

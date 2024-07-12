@@ -2,21 +2,20 @@
 Utility functions for model training, from model construction, data loading, and training loop
 """
 
-import numpy as np
-
-from uncertainty.logging_utils import logger_wraps
-from ..utils.utils import curry
+from ..utils.logging import logger_wraps
+from ..utils.wrappers import curry
 from ..common.constants import model_config
 
 from typing import Callable, Iterable
 
+import numpy as np
 from tensorflow.python.keras import Model
 import tensorflow.keras as keras
 import toolz as tz
 import toolz.curried as curried
 
 
-@logger_wraps
+@logger_wraps(level="INFO")
 @curry
 def construct_model(
     model_constructor: Callable[[dict], Model],
@@ -52,6 +51,8 @@ def construct_model(
     return model
 
 
+@logger_wraps(level="INFO")
+@curry
 def preprocess_data(
     dataset: Iterable[tuple[np.ndarray, np.ndarray]], config: dict = model_config()
 ):
@@ -73,5 +74,7 @@ def preprocess_data(
     pass
 
 
+@logger_wraps(level="INFO")
+@curry
 def augment_data():
     pass

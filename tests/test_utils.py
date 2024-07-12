@@ -1,16 +1,18 @@
 from typing import Generator
 
+import uncertainty.utils
+
 from .context import uncertainty
 
 # Import aliases
-list_files = uncertainty.common.utils.list_files
-generate_full_paths = uncertainty.common.utils.generate_full_paths
-capture_placeholders = uncertainty.common.utils.capture_placeholders
-placeholder_matches = uncertainty.common.utils.placeholder_matches
-resolve_path_placeholders = uncertainty.common.utils.resolve_path_placeholders
+list_files = uncertainty.utils.path.list_files
+generate_full_paths = uncertainty.utils.path.generate_full_paths
+capture_placeholders = uncertainty.utils.string.capture_placeholders
+placeholder_matches = uncertainty.utils.string.placeholder_matches
+resolve_path_placeholders = uncertainty.utils.path.resolve_path_placeholders
 
 PATCH_OS_WALK = "os.walk"
-PATCH_LIST_FILES = "uncertainty.common.utils.list_files"
+PATCH_LIST_FILES = "uncertainty.utils.path.list_files"
 
 
 class TestListFiles:

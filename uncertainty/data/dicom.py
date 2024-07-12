@@ -6,7 +6,6 @@ import itertools
 import os
 from typing import Generator, Iterable, Optional
 import warnings
-import logging
 
 import numpy as np
 import rt_utils
@@ -15,18 +14,13 @@ import toolz as tz
 import toolz.curried as curried
 from tqdm import tqdm
 
-from .preprocessing import make_isotropic, map_interval
+from .preprocessing import make_isotropic
 from .datatypes import Mask, PatientScan
-from ..utils.utils import (
-    apply_if_truthy_else_None,
-    list_files,
-    generate_full_paths,
-    curry,
-    unpack_args,
-    yield_val,
-)
+from ..utils.common import apply_if_truthy_else_none, unpack_args, yield_val
+from ..utils.path import list_files, generate_full_paths
+from ..utils.wrappers import curry
+from ..utils.logging import logger_wraps
 from ..common import constants as c
-from ..logging_utils import logger_wraps
 
 # ============ Helper functions ============
 
@@ -35,7 +29,7 @@ _dicom_type_is = lambda uid: lambda d: d.SOPClassUID == uid
 _standardise_roi_name = lambda name: name.strip().lower().replace(" ", "_")
 
 
-@logger_wraps
+@logger_wraps()
 def _dicom_slice_order(dicom_file: dicom.Dataset) -> np.ndarray:
     """
     Return slice order of input DICOM slice within its volume
@@ -51,7 +45,7 @@ def _dicom_slice_order(dicom_file: dicom.Dataset) -> np.ndarray:
     )
 
 
-@logger_wraps
+@logger_wraps()
 def _most_common_shape(
     dicom_files: Iterable[dicom.Dataset],
 ) -> Optional[tuple[int, int]]:
@@ -74,7 +68,7 @@ def _most_common_shape(
 
 
 @curry
-@logger_wraps
+@logger_wraps()
 def _filter_by_most_common_shape(
     dicom_files: Iterable[dicom.Dataset],
 ) -> Iterable[dicom.Dataset]:
@@ -98,7 +92,7 @@ def _filter_by_most_common_shape(
     )
 
 
-@logger_wraps
+@logger_wraps()
 def _get_uniform_spacing(
     dicom_files: Iterable[dicom.Dataset],
 ) -> Optional[tuple[float, float, float]]:
@@ -126,7 +120,7 @@ def _get_uniform_spacing(
 
 
 @tz.memoize
-@logger_wraps
+@logger_wraps()
 def _get_dicom_slices(dicom_path: str) -> Iterable[dicom.Dataset]:
     """
     Return all DICOM files in dicom_path in slice order, filter by type and thickness
@@ -142,7 +136,7 @@ def _get_dicom_slices(dicom_path: str) -> Iterable[dicom.Dataset]:
     )
 
 
-@logger_wraps
+@logger_wraps()
 @curry
 def _load_roi_name(
     rt_struct: rt_utils.RTStructBuilder,
@@ -167,7 +161,7 @@ def _load_roi_name(
         return None
 
 
-@logger_wraps
+@logger_wraps()
 def _load_rt_struct(dicom_path: str) -> Optional[rt_utils.RTStructBuilder]:
     """
     Create RTStructBuilder from DICOM RT struct file in dicom_path
@@ -181,7 +175,7 @@ def _load_rt_struct(dicom_path: str) -> Optional[rt_utils.RTStructBuilder]:
             lambda path: _dicom_type_is(c.RT_STRUCTURE_SET)(dicom.dcmread(path))
         ),
         list,
-        apply_if_truthy_else_None(
+        apply_if_truthy_else_none(
             lambda rt_struct_paths: (
                 rt_utils.RTStructBuilder.create_from(
                     dicom_series_path=dicom_path,
@@ -192,7 +186,7 @@ def _load_rt_struct(dicom_path: str) -> Optional[rt_utils.RTStructBuilder]:
     )
 
 
-@logger_wraps
+@logger_wraps()
 @curry
 def _preprocess_volume(
     array: np.array,
@@ -215,7 +209,7 @@ def _preprocess_volume(
     )
 
 
-@logger_wraps
+@logger_wraps()
 @curry
 def _preprocess_mask(
     name_mask_pairs: tuple[str, np.ndarray], dicom_path: str
@@ -233,7 +227,7 @@ def _preprocess_mask(
         _get_dicom_slices,
         _get_uniform_spacing,
         # (name, mask, spacings)
-        apply_if_truthy_else_None(
+        apply_if_truthy_else_none(
             lambda spacings: [
                 (
                     name,
@@ -252,7 +246,7 @@ def _preprocess_mask(
     )
 
 
-@logger_wraps
+@logger_wraps()
 @curry
 def _filter_roi(
     roi_names: list[str],
@@ -326,7 +320,7 @@ def load_patient_scan(
         curried.map(dicom.dcmread),
         # Get one dicom file to extract PatientID
         lambda dicom_files: next(dicom_files, None),
-        apply_if_truthy_else_None(
+        apply_if_truthy_else_none(
             lambda dicom_file: (
                 PatientScan(
                     dicom_file.PatientID,
@@ -387,7 +381,7 @@ def load_volume(
         lambda slices: itertools.tee(slices, 3),
         unpack_args(
             lambda it1, it2, it3: (
-                apply_if_truthy_else_None(
+                apply_if_truthy_else_none(
                     np.stack, [dicom_file.pixel_array for dicom_file in it1]
                 ),
                 _get_uniform_spacing(it2),

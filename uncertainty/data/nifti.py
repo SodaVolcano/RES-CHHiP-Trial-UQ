@@ -11,18 +11,16 @@ import toolz.curried as curried
 import numpy as np
 import nibabel as nib
 
+from uncertainty.utils.logging import logger_wraps
+
 from .datatypes import Mask, PatientScan
-from ..common import constants as g
-from ..common.utils import (
-    curry,
-    placeholder_matches,
-    resolve_path_placeholders,
-    unpack_args,
-    yield_val,
-)
+from ..utils.common import unpack_args, yield_val
+from ..utils.wrappers import curry
+from ..utils.path import resolve_path_placeholders
+from ..utils.string import placeholder_matches
 
 
-def assert_placeholders(path: str, placeholders: list[str] | str, path_name: str):
+def __assert_placeholders(path: str, placeholders: list[str] | str, path_name: str):
     if isinstance(placeholders, str):
         placeholders = [placeholders]
     assert all(
@@ -30,12 +28,13 @@ def assert_placeholders(path: str, placeholders: list[str] | str, path_name: str
     ), f"{path_name} must contain " + ", ".join(placeholders)
 
 
+@logger_wraps(level="INFO")
 @curry
 def load_patient_scan(
     volume_path_pattern: str, mask_path_pattern: str, patient_id: str
 ) -> PatientScan:
-    assert_placeholders(volume_path_pattern, "{patient_id}", "volume_path_pattern")
-    assert_placeholders(
+    __assert_placeholders(volume_path_pattern, "{patient_id}", "volume_path_pattern")
+    __assert_placeholders(
         mask_path_pattern,
         ["{patient_id}", "{organ}", "{observer}"],
         "mask_path_pattern",
@@ -78,6 +77,7 @@ def load_patient_scan(
     )
 
 
+@logger_wraps(level="INFO")
 def load_patient_scans(
     volume_path_pattern: str, mask_path_pattern: str
 ) -> Generator[PatientScan, None, None]:
@@ -90,8 +90,8 @@ def load_patient_scans(
         contain placeholders {patient_id}, {organ}, and {observer}, e.g.
         "/path/to/{patient_id}_CT_{organ}_{observer}.nii.gz"
     """
-    assert_placeholders(volume_path_pattern, "{patient_id}", "volume_path_pattern")
-    assert_placeholders(
+    __assert_placeholders(volume_path_pattern, "{patient_id}", "volume_path_pattern")
+    __assert_placeholders(
         mask_path_pattern,
         ["{patient_id}", "{organ}", "{observer}"],
         "mask_path_pattern",
@@ -109,6 +109,7 @@ def load_patient_scans(
     )
 
 
+@logger_wraps(level="INFO")
 def load_volume(nifti_path: str) -> np.ndarray:
     """
     Load 3D volume from NIfTI file, return generator of 2D slices (lazy loading)
@@ -116,6 +117,7 @@ def load_volume(nifti_path: str) -> np.ndarray:
     return nib.load(nifti_path).get_fdata()
 
 
+@logger_wraps(level="INFO")
 @curry
 def load_mask(mask_path_pattern: str, observer: str = "") -> Mask:
     """
@@ -125,7 +127,7 @@ def load_mask(mask_path_pattern: str, observer: str = "") -> Mask:
         {organ}
     @param observer: observer name
     """
-    assert_placeholders(mask_path_pattern, "{organ}", "mask_path_pattern")
+    __assert_placeholders(mask_path_pattern, "{organ}", "mask_path_pattern")
 
     return tz.pipe(
         mask_path_pattern,
@@ -147,6 +149,7 @@ def load_mask(mask_path_pattern: str, observer: str = "") -> Mask:
     )
 
 
+@logger_wraps(level="INFO")
 def load_mask_multiple_observers(mask_path_pattern: str) -> Generator[Mask, None, None]:
     """
     Extract Mask of different organs from multiple observers for a single patient
@@ -154,7 +157,7 @@ def load_mask_multiple_observers(mask_path_pattern: str) -> Generator[Mask, None
     @param mask_path_pattern: pattern to match NIfTI files containing placeholder
         {observer} and {organ}
     """
-    assert_placeholders(
+    __assert_placeholders(
         mask_path_pattern, ["{organ}", "{observer}"], "mask_path_pattern"
     )
     return tz.pipe(

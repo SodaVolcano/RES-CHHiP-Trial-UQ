@@ -2,8 +2,6 @@ import pytest
 import numpy as np
 import pydicom
 
-from uncertainty.data import preprocessing
-
 from .context import uncertainty
 
 # Some functions use memoize so use different path to avoid caching

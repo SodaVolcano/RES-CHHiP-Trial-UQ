@@ -3,13 +3,13 @@ Collection of class encapsulating volume data, supporting lazy evaluation
 """
 
 from typing import TypeVar
-from typing import Any, Generator, Iterable, Iterator, List
+from typing import Generator, List
 import os
 
 import numpy as np
 import h5py
 
-from uncertainty.logging_utils import logger_wraps
+from uncertainty.utils.logging import logger_wraps
 
 T = TypeVar("T")
 GeneratorOrConcrete = Generator[T, None, None] | T
@@ -20,7 +20,6 @@ class Mask:
     Organ mask for a single observer, allow multiple organs
     """
 
-    @logger_wraps(level="TRACE")
     def __init__(
         self, organs: dict[str, GeneratorOrConcrete[np.ndarray]], observer: str = ""
     ):
@@ -71,7 +70,6 @@ class PatientScan:
     # One or multiple masks
     __masks: List[Mask]
 
-    @logger_wraps(level="TRACE")
     def __init__(
         self,
         patient_id: str,
@@ -118,7 +116,7 @@ class PatientScan:
         """
         return next(mask for mask in self.__masks if mask.observer == observer)
 
-    @logger_wraps
+    @logger_wraps()
     def save_h5py(self, save_dir: str):
         """
         Save the current object in a file at save_dir/patient_id.h5
@@ -137,7 +135,7 @@ class PatientScan:
             f.attrs["patient_id"] = self.patient_id
             f.attrs["mask_observers"] = self.mask_observers
 
-    @logger_wraps
+    @logger_wraps()
     @classmethod
     def load_h5py(cls, file_path: str):
         with h5py.File(file_path, "r") as f:
