@@ -37,6 +37,7 @@ PATCH_LOAD_MASK = "uncertainty.data.dicom.load_mask"
 PATCH_GENERATE_FULL_PATHS = "uncertainty.data.dicom.generate_full_paths"
 PATCH_LOAD_PATIENT_SCAN = "uncertainty.data.dicom.load_patient_scan"
 PATCH_LISTDIR = "os.listdir"
+PATCH_FILTER_ROI = "uncertainty.data.dicom._filter_roi"
 
 
 class Test_MostCommonShape:
@@ -146,6 +147,8 @@ class TestLoadVolume:
         mock_dicom.SliceThickness = 2.0
         mock_dicom.ImageOrientationPatient = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0]
         mock_dicom.ImagePositionPatient = [-200.0, 200.0, -50.0]
+        mock_dicom.RescaleSlope = 1.0
+        mock_dicom.RescaleIntercept = 0.0
         mocker.patch(PATCH_DCMREAD, return_value=mock_dicom)
 
         # Call the load_volume function
@@ -172,6 +175,8 @@ class TestLoadVolume:
         mock_dicom.SliceThickness = 2.0
         mock_dicom.ImageOrientationPatient = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0]
         mock_dicom.ImagePositionPatient = [-200.0, 200.0, -50.0]
+        mock_dicom.RescaleSlope = 1.0
+        mock_dicom.RescaleIntercept = 0.0
         mocker.patch(PATCH_DCMREAD, return_value=mock_dicom)
 
         # Call the load_volume function
@@ -208,6 +213,8 @@ class TestLoadVolume:
         mock_dicom1.SliceThickness = 1.0
         mock_dicom1.ImageOrientationPatient = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0]
         mock_dicom1.ImagePositionPatient = [-200.0, 200.0, -50.0]
+        mock_dicom1.RescaleSlope = 1.0
+        mock_dicom1.RescaleIntercept = 0.0
 
         mock_dicom2 = mocker.Mock()
         mock_dicom2.SOPClassUID = c.CT_IMAGE
@@ -218,6 +225,8 @@ class TestLoadVolume:
         mock_dicom2.SliceThickness = 1.0
         mock_dicom2.ImageOrientationPatient = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0]
         mock_dicom2.ImagePositionPatient = [-200.0, 200.0, -48.0]
+        mock_dicom2.RescaleSlope = 1.0
+        mock_dicom2.RescaleIntercept = 0.0
 
         mock_dicom3 = mocker.Mock()
         mock_dicom3.SOPClassUID = c.CT_IMAGE
@@ -228,6 +237,8 @@ class TestLoadVolume:
         mock_dicom3.SliceThickness = 1.0
         mock_dicom3.ImageOrientationPatient = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0]
         mock_dicom3.ImagePositionPatient = [-200.0, 200.0, -49.0]
+        mock_dicom3.RescaleSlope = 1.0
+        mock_dicom3.RescaleIntercept = 0.0
 
         mocker.patch(PATCH_DCMREAD, side_effect=[mock_dicom1, mock_dicom2, mock_dicom3])
 
@@ -306,12 +317,15 @@ class TestLoadMask:
         mock_dicom.SliceThickness = 2.0
         mock_dicom.ImageOrientationPatient = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0]
         mock_dicom.ImagePositionPatient = [-200.0, 200.0, -50.0]
+        mock_dicom.RescaleSlope = 1.0
+        mock_dicom.RescaleIntercept = 0.0
         mocker.patch(PATCH_DCMREAD, return_value=mock_dicom)
 
         mocker.patch(
             PATCH_LOAD_RT_STRUCT,
             return_value=mock_rt_struct,
         )
+        mocker.patch(PATCH_FILTER_ROI, return_value=["organ_1", "organ_2"])
 
         mask = load_mask(dicom_path)
 
@@ -333,6 +347,7 @@ class TestLoadMask:
             PATCH_LOAD_RT_STRUCT,
             return_value=mock_rt_struct,
         )
+        mocker.patch(PATCH_FILTER_ROI, return_value=["organ_1", "organ_2"])
 
         mask = load_mask(dicom_path, preprocess=False)
 
@@ -578,6 +593,10 @@ class TestLoadAllMasks:
         mocker.patch(
             PATCH_LOAD_RT_STRUCT,
             return_value=mock_rt_struct,
+        )
+        mocker.patch(
+            PATCH_FILTER_ROI,
+            return_value=["organ_1", "organ_2"],
         )
 
         result = list(load_all_masks(dicom_collection_path))

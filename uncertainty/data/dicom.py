@@ -486,28 +486,17 @@ def load_all_masks(
 
 @logger_wraps(level="INFO")
 @curry
-def save_dicom_scans_to_h5py(dicom_path: str, save_dir: str) -> None:
+def save_dicom_scans_to_h5py(dicom_path: str, save_dir: str, preprocess=True) -> None:
     """
     Save PatientScans to .h5 files in save_dir from folders of DICOM files in dicom_path
 
     Warnings and exceptions are logged to logfile ('./warnings.log` by default)
     """
 
-    def save_scans(scans):
-        with tqdm() as pbar:
-            while True:
-                try:
-                    next(scans)
-                    pbar.update(1)
-                except StopIteration:
-                    return
-                except Exception as e:
-                    warnings.warn(f"Exception occured: {e}", Warning)
-                    continue
-
     return tz.pipe(
         dicom_path,
-        load_patient_scans,
+        load_patient_scans(preprocess=preprocess),
         curried.map(lambda scan: scan.save_h5py(save_dir)),
-        save_scans,
+        tqdm,
+        list,
     )

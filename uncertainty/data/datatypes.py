@@ -2,10 +2,13 @@
 Collection of class encapsulating volume data, supporting lazy evaluation
 """
 
+import shutil
 from typing import TypeVar
 from typing import Generator, List
 import os
+import tempfile
 
+from loguru import logger
 import numpy as np
 import h5py
 
@@ -116,26 +119,7 @@ class PatientScan:
         """
         return next(mask for mask in self.__masks if mask.observer == observer)
 
-    @logger_wraps()
-    def save_h5py(self, save_dir: str):
-        """
-        Save the current object in a file at save_dir/patient_id.h5
-        """
-        file_path = os.path.join(save_dir, f"{self.patient_id}.h5")
-        with h5py.File(file_path, "w") as f:
-            f.create_dataset("volume", data=self.volume, compression="gzip")
-
-            for mask in self.masks.values():
-                group = f.create_group(f"mask_{mask.observer}")
-                for organ_name in mask.get_organ_names():
-                    group.create_dataset(
-                        organ_name, data=mask[organ_name], compression="gzip"
-                    )
-
-            f.attrs["patient_id"] = self.patient_id
-            f.attrs["mask_observers"] = self.mask_observers
-
-    @logger_wraps()
+    @logger.catch
     @classmethod
     def load_h5py(cls, file_path: str):
         with h5py.File(file_path, "r") as f:
@@ -148,6 +132,36 @@ class PatientScan:
             return PatientScan(
                 patient_id=f.attrs["patient_id"], volume=f["volume"][:], masks=masks
             )
+
+    @logger.catch
+    def save_h5py(self, save_dir: str):
+        """
+        Save the current object in a file at save_dir/patient_id.h5
+
+        No file is created if exception occurs
+        """
+        temp_path = tempfile.NamedTemporaryFile(delete=False).name
+        file_path = os.path.join(save_dir, f"{self.patient_id}.h5")
+
+        try:
+            with h5py.File(temp_path, "w") as f:
+                f.create_dataset("volume", data=self.volume, compression="gzip")
+
+                for mask in self.masks.values():
+                    group = f.create_group(f"mask_{mask.observer}")
+                    for organ_name in mask.get_organ_names():
+                        group.create_dataset(
+                            organ_name, data=mask[organ_name], compression="gzip"
+                        )
+
+                f.attrs["patient_id"] = self.patient_id
+                f.attrs["mask_observers"] = self.mask_observers
+
+            self.load_h5py(temp_path)  # Check if loading works
+            shutil.move(temp_path, file_path)
+        except Exception as e:
+            os.remove(temp_path)
+            logger.error(f"Error saving PatientScan {self.patient_id}: {e}")
 
     def __repr__(self) -> str:
         return f"PatientScan(patient_id='{self.patient_id}', mask_observers={self.mask_observers})"

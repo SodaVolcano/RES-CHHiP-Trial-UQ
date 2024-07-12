@@ -2,6 +2,7 @@
 Utility functions for generating sequences
 """
 
+from tqdm import tqdm
 from .wrappers import curry
 
 from typing import Callable, Generator

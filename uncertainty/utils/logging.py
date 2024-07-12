@@ -40,12 +40,13 @@ def config_logger():
     """
     logger.remove()
     logger.add(
-        "out_{time}.log",
+        "./logs/out_{time}.log",
         format="{time:YYYY-MM-DD at HH:mm:ss} {level} {message}",
         compression="zip",
         backtrace=True,
         diagnose=True,
-        level="INFO",
+        level="DEBUG",
+        retention="7 days",
     )
 
     logging.basicConfig(handlers=[__InterceptHandler()], level=0, force=True)
@@ -64,10 +65,13 @@ def logger_wraps(*, entry=True, exit=True, level="DEBUG"):
         def wrapped(*args, **kwargs):
             logger_ = logger.opt(depth=1)
             if entry:
-                logger_.log(level, f"Entering '{name}' (args={args}, kwargs={kwargs})")
+                logger.log(
+                    level,
+                    f"Entering '{name}' (args={args}, kwargs={kwargs})",
+                )
                 result = func(*args, **kwargs)
             if exit:
-                logger_.log(level, f"Exiting '{name}' (result={result}")
+                logger.log(level, f"Exiting '{name}' (result={result}")
             return result
 
         return wrapped
