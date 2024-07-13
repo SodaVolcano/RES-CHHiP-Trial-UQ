@@ -42,7 +42,6 @@ def config_logger():
     logger.add(
         "./logs/out_{time}.log",
         format="{time:YYYY-MM-DD at HH:mm:ss} {level} {message}",
-        compression="zip",
         backtrace=True,
         diagnose=True,
         level="DEBUG",

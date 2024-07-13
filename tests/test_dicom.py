@@ -38,6 +38,7 @@ PATCH_GENERATE_FULL_PATHS = "uncertainty.data.dicom.generate_full_paths"
 PATCH_LOAD_PATIENT_SCAN = "uncertainty.data.dicom.load_patient_scan"
 PATCH_LISTDIR = "os.listdir"
 PATCH_FILTER_ROI = "uncertainty.data.dicom._filter_roi"
+PATCH_GET_DICOM_SLICES = "uncertainty.data.dicom._get_dicom_slices"
 
 
 class Test_MostCommonShape:
@@ -155,7 +156,7 @@ class TestLoadVolume:
         volume = load_volume(gen_path())
 
         # Assert the volume shape is as expected
-        assert volume.shape == (7, 512 // 2, 512 // 2)
+        assert volume.shape == (512 // 2, 512 // 2, 7)
 
     # correctly loads a 3D volume from a directory of DICOM files
     def test_loads_3d_volume_correctly_no_preprocessing(self, mocker):
@@ -183,8 +184,8 @@ class TestLoadVolume:
         volume = load_volume(gen_path(), preprocess=False)
 
         # Assert the volume shape is as expected
-        assert volume.shape == (4, 512, 512)
-        np.testing.assert_array_equal(volume, np.zeros((4, 512, 512)))
+        assert volume.shape == (512, 512, 4)
+        np.testing.assert_array_equal(volume, np.zeros((512, 512, 4)))
 
     # directory contains no DICOM files
     def test_no_dicom_files_in_directory(self, mocker):
@@ -246,7 +247,7 @@ class TestLoadVolume:
         volume = load_volume(gen_path())
 
         # Assert the volume shape is as expected (using the most common shape)
-        assert volume.shape == (2, 512, 512)
+        assert volume.shape == (512, 512, 2)
 
 
 class Test_LoadRtStruct:
@@ -299,8 +300,8 @@ class TestLoadMask:
         dicom_path = gen_path()
         mock_rt_struct = mocker.Mock()
         mock_rt_struct.get_roi_names.return_value = ["Organ 1", "Organ 2"]
-        mock_mask1 = np.random.randint(0, 2, (4, 512, 512))
-        mock_mask2 = np.random.randint(0, 2, (4, 512, 512))
+        mock_mask1 = np.random.randint(0, 2, (512, 512, 4))
+        mock_mask2 = np.random.randint(0, 2, (512, 512, 4))
         mock_rt_struct.get_roi_mask_by_name.side_effect = [mock_mask1, mock_mask2]
         mocker.patch(
             PATCH_LIST_FILES,
@@ -332,16 +333,24 @@ class TestLoadMask:
         assert isinstance(mask, Mask)
         assert "organ_1" in mask.get_organ_names()
         assert "organ_2" in mask.get_organ_names()
-        assert mask["organ_1"].shape == (7, np.floor(512 * 0.5), np.floor(512 * 0.7))
-        assert mask["organ_2"].shape == (7, np.floor(512 * 0.5), np.floor(512 * 0.7))
+        assert mask["organ_1"].shape == (
+            np.floor(int(512 * 0.5)),
+            np.floor(int(512 * 0.7)),
+            7,
+        )
+        assert mask["organ_2"].shape == (
+            np.floor(int(512 * 0.5)),
+            np.floor(int(512 * 0.7)),
+            7,
+        )
 
     # Successfully load a mask when valid DICOM path is provided
     def test_load_mask_success_no_preprocessing(self, mocker):
         dicom_path = gen_path()
         mock_rt_struct = mocker.Mock()
         mock_rt_struct.get_roi_names.return_value = ["Organ 1", "Organ 2"]
-        mock_mask1 = np.random.randint(0, 2, (4, 512, 512))
-        mock_mask2 = np.random.randint(0, 2, (4, 512, 512))
+        mock_mask1 = np.random.randint(0, 2, (512, 512, 4))
+        mock_mask2 = np.random.randint(0, 2, (512, 512, 4))
         mock_rt_struct.get_roi_mask_by_name.side_effect = [mock_mask1, mock_mask2]
         mocker.patch(
             PATCH_LOAD_RT_STRUCT,
@@ -356,8 +365,8 @@ class TestLoadMask:
         assert "organ_2" in mask.get_organ_names()
         np.testing.assert_array_equal(mask["organ_1"], mock_mask1)
         np.testing.assert_array_equal(mask["organ_2"], mock_mask2)
-        assert mask["organ_1"].shape == (4, 512, 512)
-        assert mask["organ_2"].shape == (4, 512, 512)
+        assert mask["organ_1"].shape == (512, 512, 4)
+        assert mask["organ_2"].shape == (512, 512, 4)
 
     # Handle empty DICOM directory gracefully
     def test_load_mask_empty_directory(self, mocker):
@@ -401,7 +410,7 @@ class TestLoadPatientScan:
         # Mocking the load_volume function to return a numpy array
         mocker.patch(
             PATCH_LOAD_VOLUME,
-            return_value=np.array([[[1, 2], [3, 4]]]),
+            return_value=np.moveaxis(np.array([[[1, 2], [3, 4]]]), 0, -1),
         )
 
         # Mocking the load_mask function to return a list of Mask objects
@@ -416,7 +425,7 @@ class TestLoadPatientScan:
         assert result.patient_id == "12345"
         assert isinstance(result.volume, np.ndarray)
         assert isinstance(result, PatientScan)
-        assert result.volume.shape == (1, 2, 2)
+        assert result.volume.shape == (2, 2, 1)
         assert result.masks == {mock_mask.observer: mock_mask}
         assert result.get_mask(mock_mask.observer) == mock_mask
 
@@ -455,7 +464,7 @@ class TestLoadPatientScan:
         # Mocking the load_volume function to return a numpy array
         mocker.patch(
             PATCH_LOAD_VOLUME,
-            return_value=np.array([[[1, 2], [3, 4]]]),
+            return_value=np.moveaxis(np.array([[[1, 2], [3, 4]]]), 0, -1),
         )
 
         # Mocking the load_mask function to return None since no RT struct data is found
@@ -467,7 +476,7 @@ class TestLoadPatientScan:
         # Assertions
         assert result.patient_id == "12345"
         assert isinstance(result.volume, np.ndarray)
-        assert result.volume.shape == (1, 2, 2)
+        assert result.volume.shape == (2, 2, 1)
         assert result.masks == {}
         assert result.mask_observers == []
         assert result.n_masks == 0
@@ -488,7 +497,7 @@ class TestLoadPatientScan:
         # Mocking the load_volume function to return a numpy array
         mocker.patch(
             PATCH_LOAD_VOLUME,
-            return_value=np.array([[[1, 2], [3, 4]]]),
+            return_value=np.moveaxis(np.array([[[1, 2], [3, 4]]]), 0, -1),
         )
 
         # Mocking the load_mask function to return a list of Mask objects
@@ -502,7 +511,7 @@ class TestLoadPatientScan:
         # Assertions
         assert result.patient_id == "12345"
         assert isinstance(result.volume, np.ndarray)
-        assert result.volume.shape == (1, 2, 2)
+        assert result.volume.shape == (2, 2, 1)
         assert result.masks == {mock_mask.observer: mock_mask}
         assert result.get_mask(mock_mask.observer) == mock_mask
 
@@ -524,7 +533,7 @@ class TestLoadPatientScans:
         mock_dicom.PatientID = "12345"
         mocker.patch(PATCH_DCMREAD, return_value=mock_dicom)
 
-        mock_volume = np.random.randint(0, 2, (4, 512, 512))
+        mock_volume = np.random.randint(0, 2, (512, 512, 4))
         # Mocking the load_volume function to return a numpy array
         mocker.patch(
             PATCH_LOAD_VOLUME,
@@ -533,8 +542,8 @@ class TestLoadPatientScans:
 
         mock_mask = Mask(
             {
-                "organ_1": np.random.randint(0, 2, (4, 512, 512)),
-                "organ_2": np.random.randint(0, 2, (4, 512, 512)),
+                "organ_1": np.random.randint(0, 2, (512, 512, 4)),
+                "organ_2": np.random.randint(0, 2, (512, 512, 4)),
             },
         )
         mock_mask.observer = ""
@@ -585,29 +594,42 @@ class TestLoadAllMasks:
     # Successfully loads masks from a directory containing valid DICOM files
     def test_loads_masks_from_valid_dicom_directory(self, mocker):
         dicom_collection_path = gen_path()
-        mocker.patch(PATCH_LISTDIR, return_value=["file1.dcm", "file2.dcm"])
+        mocker.patch(PATCH_LISTDIR, return_value=["patient_1", "patient_2"])
         mock_rt_struct = mocker.Mock()
         mock_rt_struct.get_roi_names.return_value = ["Organ 1", "Organ 2"]
-        mock_mask = np.random.randint(0, 2, (4, 512, 512))
+        mock_mask = np.random.randint(0, 2, (512, 512, 4))
+        mock_dicom = mocker.Mock()
+        mock_dicom.SOPClassUID = c.CT_IMAGE
+        mock_dicom.Rows = 512
+        mock_dicom.Columns = 512
+        mock_dicom.pixel_array = np.zeros((512, 512))
+        mock_dicom.PixelSpacing = [0.5, 0.5]
+        mock_dicom.SliceThickness = 2.0
+        mock_dicom.ImageOrientationPatient = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0]
+        mock_dicom.ImagePositionPatient = [-200.0, 200.0, -50.0]
+        mock_dicom.RescaleSlope = 1.0
+        mock_dicom.RescaleIntercept = 0.0
+        mocker.patch(PATCH_DCMREAD, return_value=mock_dicom)
+
         mock_rt_struct.get_roi_mask_by_name.return_value = mock_mask
         mocker.patch(
             PATCH_LOAD_RT_STRUCT,
             return_value=mock_rt_struct,
         )
-        mocker.patch(
-            PATCH_FILTER_ROI,
-            return_value=["organ_1", "organ_2"],
-        )
+        mocker.patch(PATCH_FILTER_ROI, return_value=["organ_1", "organ_2"])
+        mocker.patch(PATCH_GET_DICOM_SLICES, return_value=[mock_dicom, mock_dicom])
 
         result = list(load_all_masks(dicom_collection_path))
+        from uncertainty.data.preprocessing import make_isotropic
 
+        mock_mask_interp = make_isotropic((0.5, 0.5, 2.0), mock_mask, method="nearest")
         assert len(result) == 2
         assert isinstance(result[0], Mask)
         assert isinstance(result[1], Mask)
         assert ["organ_1", "organ_2"] == result[0].get_organ_names()
         assert ["organ_1", "organ_2"] == result[1].get_organ_names()
         [
-            np.testing.assert_array_equal(mask[organ], mock_mask)
+            np.testing.assert_array_equal(mask[organ], mock_mask_interp)
             for mask in result
             for organ in mask.get_organ_names()
         ]

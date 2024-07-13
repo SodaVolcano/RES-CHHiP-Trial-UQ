@@ -5,7 +5,6 @@ Set of methods to load and save DICOM files
 import itertools
 import os
 from typing import Generator, Iterable, Optional
-import warnings
 
 import numpy as np
 import rt_utils
@@ -13,6 +12,7 @@ import pydicom as dicom
 import toolz as tz
 import toolz.curried as curried
 from tqdm import tqdm
+from loguru import logger
 
 from .preprocessing import make_isotropic
 from .datatypes import Mask, PatientScan
@@ -68,7 +68,6 @@ def _most_common_shape(
 
 
 @curry
-@logger_wraps()
 def _filter_by_most_common_shape(
     dicom_files: Iterable[dicom.Dataset],
 ) -> Iterable[dicom.Dataset]:
@@ -109,8 +108,8 @@ def _get_uniform_spacing(
     return tz.pipe(
         dicom_files,
         curried.map(
-            lambda dicom_file: [float(dicom_file.SliceThickness)]
-            + [float(spacing) for spacing in dicom_file.PixelSpacing],
+            lambda dicom_file: [float(spacing) for spacing in dicom_file.PixelSpacing]
+            + [float(dicom_file.SliceThickness)],
         ),
         list,
         lambda spacings: (
@@ -120,7 +119,6 @@ def _get_uniform_spacing(
 
 
 @tz.memoize
-@logger_wraps()
 def _get_dicom_slices(dicom_path: str) -> Iterable[dicom.Dataset]:
     """
     Return all DICOM files in dicom_path in slice order, filter by type and thickness
@@ -138,7 +136,7 @@ def _get_dicom_slices(dicom_path: str) -> Iterable[dicom.Dataset]:
 
 @logger_wraps()
 @curry
-def _load_roi_name(
+def _load_roi_mask(
     rt_struct: rt_utils.RTStructBuilder,
     name: str,
 ) -> Optional[tuple[str, Generator[np.ndarray, None, None]]]:
@@ -148,15 +146,13 @@ def _load_roi_name(
     try:
         return name, rt_struct.get_roi_mask_by_name(name)
     except AttributeError as e:
-        warnings.warn(
+        logger.warning(
             f"[WARNING]: Failed to load {name} ROI mask for {rt_struct.ds.PatientID}, ROI name present but ContourSequence is missing.",
-            UserWarning,
         )
         return None
     except Exception as e:
-        warnings.warn(
+        logger.warning(
             f"[WARNING]: Failed to load {name} ROI mask for {rt_struct.ds.PatientID}. \t{e}",
-            UserWarning,
         )
         return None
 
@@ -199,12 +195,13 @@ def _preprocess_volume(
     """
     return tz.pipe(
         array,
-        lambda arr: np.array(
-            [
-                arr_slice * intercept_slope[1] + intercept_slope[0]
-                for arr_slice, intercept_slope in zip(arr, intercept_slopes)
-            ]
-        ),
+        lambda arr: np.moveaxis(arr, -1, 0),
+        lambda arr: [
+            arr_slice * intercept_slope[1] + intercept_slope[0]
+            for arr_slice, intercept_slope in zip(arr, intercept_slopes)
+        ],
+        np.stack,
+        lambda arr: np.moveaxis(arr, 0, -1),
         make_isotropic(spacings, method=method),
     )
 
@@ -382,7 +379,8 @@ def load_volume(
         unpack_args(
             lambda it1, it2, it3: (
                 apply_if_truthy_else_none(
-                    np.stack, [dicom_file.pixel_array for dicom_file in it1]
+                    lambda x: np.moveaxis(np.stack(x), 0, -1),
+                    [dicom_file.pixel_array for dicom_file in it1],
                 ),
                 _get_uniform_spacing(it2),
                 map(
@@ -451,19 +449,11 @@ def load_mask(dicom_path: str, preprocess: bool = True) -> Optional[Mask]:
     return tz.pipe(
         rt_struct.get_roi_names(),
         curried.filter(lambda name: _standardise_roi_name(name) in keep_lst),
-        curried.map(_load_roi_name(rt_struct)),
+        curried.map(_load_roi_mask(rt_struct)),
         # (roi_name, mask_generator) pairs, only successful masks are kept
         curried.filter(lambda name_mask_pair: name_mask_pair is not None),
         curried.map(
             unpack_args(lambda name, mask: (_standardise_roi_name(name), mask))
-        ),
-        curried.map(
-            unpack_args(
-                lambda name, mask: (
-                    name,
-                    np.moveaxis(mask, -1, 0),
-                )
-            )
         ),
         _preprocess_mask(dicom_path=dicom_path) if preprocess else tz.identity,
         lambda name_mask_lst: Mask(dict(name_mask_lst) if name_mask_lst else {}),
@@ -489,14 +479,14 @@ def load_all_masks(
 def save_dicom_scans_to_h5py(dicom_path: str, save_dir: str, preprocess=True) -> None:
     """
     Save PatientScans to .h5 files in save_dir from folders of DICOM files in dicom_path
-
-    Warnings and exceptions are logged to logfile ('./warnings.log` by default)
     """
 
     return tz.pipe(
         dicom_path,
         load_patient_scans(preprocess=preprocess),
+        curried.filter(lambda scan: scan.masks.get_organ_names()),
         curried.map(lambda scan: scan.save_h5py(save_dir)),
         tqdm,
         list,
+        lambda x: None,
     )
