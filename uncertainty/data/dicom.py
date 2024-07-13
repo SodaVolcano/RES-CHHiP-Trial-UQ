@@ -24,9 +24,13 @@ from ..common import constants as c
 
 # ============ Helper functions ============
 
-# Anonymous functions for readability
-_dicom_type_is = lambda uid: lambda d: d.SOPClassUID == uid
-_standardise_roi_name = lambda name: name.strip().lower().replace(" ", "_")
+
+def _dicom_type_is(d, uid):
+    return d.SOPClassUID == uid
+
+
+def _standardise_roi_name(name):
+    return name.strip().lower().replace(" ", "_")
 
 
 @logger_wraps()
@@ -56,7 +60,7 @@ def _most_common_shape(
     """
     return tz.pipe(
         dicom_files,
-        curried.map(lambda dicom_file: (dicom_file.Rows, dicom_file.Columns)),
+        curried.map(lambda f: (f.Rows, f.Columns)),
         tz.frequencies,
         lambda freq_dict: (
             max(freq_dict, key=freq_dict.get)
@@ -297,7 +301,9 @@ def load_patient_scan(
     """
     Load PatientScan from directory of DICOM files in dicom_path
 
-    None is returned if no DICOM files are found
+    Preprocessing involves interpolating the volume and masks to have isotropic spacing,
+    mapping the volume pixel values to Hounsfield units (HU), and filtering and standardising
+    the ROI names in the masks. None is returned if no DICOM files are found
 
     Parameters
     ----------
@@ -337,6 +343,10 @@ def load_patient_scans(
     """
     Load PatientScans from folders of DICOM files in dicom_collection_path
 
+    Preprocessing involves interpolating the volume and masks to have isotropic spacing,
+    mapping the volume pixel values to Hounsfield units (HU), and filtering and standardising
+    the ROI names in the masks. None is returned if no DICOM files are found
+
     Parameters
     ----------
     dicom_collection_path : str
@@ -361,6 +371,9 @@ def load_volume(
 ) -> Optional[np.array]:
     """
     Load 3D isotropic volume in range (0, 1) from DICOM files in dicom_path
+
+    Preprocessing involves interpolating the volume to have isotropic spacing and
+    mapping the pixel values to Hounsfield units (HU)
 
     Parameters
     ----------
@@ -429,15 +442,17 @@ def load_mask(dicom_path: str, preprocess: bool = True) -> Optional[Mask]:
     """
     Load organ-Mask pair from one observer from a folder of DICOM files in dicom_path
 
-    None is returned if no RT struct file is found
+    Preprocessing involves interpolating the mask to have isotropic spacing,
+    standardising the ROI names and filtering out unwanted ROIs. `None` is
+    returned if no RT struct file is found.
 
     Parameters
     ----------
     dicom_path : str
         Path to the directory containing DICOM files including the RT struct file
     preprocess : bool, optional
-        Whether to preprocess the mask, by default True. WARNING: will
-        take significantly longer to load if set to True
+        Whether to preprocess the mask using information stored in the DICOM files,
+        by default True. WARNING: will take significantly longer to load if set to True.
     """
     rt_struct = _load_rt_struct(dicom_path)
 

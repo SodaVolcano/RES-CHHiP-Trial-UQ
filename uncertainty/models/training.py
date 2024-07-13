@@ -60,7 +60,7 @@ def preprocess_data(
     Preprocess data for training
     """
     return map()
-    # standardise ROIs?
+    # select ONE ROI if multiple observer is present
     # make sure label one-hot-encoding are in right order
     # resize images to input dimensions
     # ensure mask dimension match image dimensions

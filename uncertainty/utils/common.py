@@ -7,6 +7,7 @@ from typing import Callable, Generator, Optional, TypeVar
 from .wrappers import curry
 
 
+
 def yield_val[T](func: Callable[..., T], *args, **kwargs) -> Generator[T, None, None]:
     """
     Yield the result of a function, delaying execution until the generator is iterated over
