@@ -25,7 +25,8 @@ from ..common import constants as c
 # ============ Helper functions ============
 
 
-def _dicom_type_is(d, uid):
+@curry
+def _dicom_type_is(uid, d):
     return d.SOPClassUID == uid
 
 
