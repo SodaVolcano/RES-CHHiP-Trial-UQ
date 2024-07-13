@@ -2,17 +2,7 @@ import numpy as np
 
 from tests.test_dicom import PATCH_LIST_FILES
 
-from .context import uncertainty
-
-
-# Some functions use memoize so use different path to avoid caching
-path_id = 0
-
-
-def gen_path():
-    global path_id
-    path_id += 1
-    return f"path/to/folder{path_id}"
+from .context import gen_path, uncertainty
 
 
 # Import aliases

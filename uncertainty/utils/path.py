@@ -84,7 +84,8 @@ def resolve_path_placeholders(path_pattern: str, placeholders: list[str]) -> lis
         path_pattern,
         # Longest directory path excluding placeholders, e.g. "/a/{b}/c" -> "/a"
         iterate_while(
-            os.path.dirname, lambda s: re.search(f"{{{VALID_IDENTIFIER}}}", s) is None
+            os.path.dirname,
+            lambda s: re.search(f"{{{VALID_IDENTIFIER}}}", s) is not None,
         ),
         list_files,
         placeholder_matches(pattern=path_pattern, placeholders=placeholders),

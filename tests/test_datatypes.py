@@ -1,9 +1,6 @@
-from .context import uncertainty
+from .context import Mask
 import pytest
 import numpy as np
-
-# Import aliases
-Mask = uncertainty.data.datatypes.Mask
 
 
 class TestMask:

@@ -12,7 +12,7 @@ import toolz as tz
 import toolz.curried as curried
 
 @curry
-def grow_seq[T, R](
+def growby[T, R](
     init: T,
     f: Callable[[T | R], R],
     length: int | None = None,
@@ -38,7 +38,7 @@ def grow_seq[T, R](
 
 
 @curry
-def grow_seq_accum[T, R](init: T, fs: Callable[[T|R], R]) -> Generator[T | R, None, None]:
+def growby_accum[T, R](init: T, fs: Callable[[T|R], R]) -> Generator[T | R, None, None]:
     """
     Grow a sequence by applying list of functions to the last element of the current sequence
     

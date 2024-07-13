@@ -7,7 +7,7 @@ Reference: https://github.com/christianversloot/machine-learning-articles/blob/m
 from uncertainty.utils.logging import logger_wraps
 from ..common.constants import model_config
 from ..utils.wrappers import curry
-from ..utils.sequence import grow_seq_accum
+from ..utils.sequence import growby_accum
 from ..utils.common import unpack_args
 
 import toolz as tz
@@ -77,7 +77,7 @@ def unet_encoder(x, config: dict = model_config()):
         x,
         conv_block(n_kernels=config["n_kernels_init"], config=config),
         # Repeatedly apply downsample and conv_block to input to get skip connection list
-        grow_seq_accum(fs=levels),
+        growby_accum(fs=levels),
         list,
         # last element is from bottleneck so exclude from skip connections
         lambda skip_inputs: (skip_inputs[-1], skip_inputs[:-1]),

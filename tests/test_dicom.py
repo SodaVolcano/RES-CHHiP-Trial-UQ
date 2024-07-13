@@ -2,19 +2,8 @@ import pytest
 import numpy as np
 import pydicom
 
-from .context import uncertainty
+from .context import gen_path, uncertainty
 
-# Some functions use memoize so use different path to avoid caching
-path_id = 0
-
-
-def gen_path():
-    global path_id
-    path_id += 1
-    return f"path/to/folder{path_id}"
-
-
-# Import aliases
 _most_common_shape = uncertainty.data.dicom._most_common_shape
 _filter_by_most_common_shape = uncertainty.data.dicom._filter_by_most_common_shape
 load_volume = uncertainty.data.dicom.load_volume

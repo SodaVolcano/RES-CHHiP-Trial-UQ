@@ -2,11 +2,12 @@
 Collection of common utility functions
 """
 
+from itertools import takewhile
 from typing import Callable, Generator, Optional, TypeVar
 
 from .wrappers import curry
 
-
+import toolz as tz
 
 def yield_val[T](func: Callable[..., T], *args, **kwargs) -> Generator[T, None, None]:
     """
@@ -40,10 +41,10 @@ def apply_if_truthy[T, R](func: Callable[[T], R], arg: T) -> Optional[R]:
 
 @curry
 def iterate_while[T, R](
-    func: Callable[[T], R], condition: Callable[[T], bool], initial: T
+    func: Callable[[T], R], pred: Callable[[T | R], bool], initial: T
 ) -> R | T:
     """
-    Repeatedly apply func to a value until condition is met
+    Repeatedly apply func to a value until predicate(value) is false
 
     Parameters
     ----------
@@ -59,9 +60,10 @@ def iterate_while[T, R](
     any
         Output of func when condition is met
     """
+    
     return (
-        iterate_while(func, condition, func(initial))
-        if not condition(initial)
+        iterate_while(func, pred, func(initial))
+        if pred(initial)
         else initial
     )
 
