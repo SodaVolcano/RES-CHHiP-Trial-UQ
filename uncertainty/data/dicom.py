@@ -16,7 +16,7 @@ from loguru import logger
 
 from .preprocessing import make_isotropic
 from .datatypes import Mask, PatientScan
-from ..utils.common import apply_if_truthy_else_none, unpack_args, yield_val
+from ..utils.common import conditional, unpack_args, yield_val, apply_if_truthy
 from ..utils.path import list_files, generate_full_paths
 from ..utils.wrappers import curry
 from ..utils.logging import logger_wraps
@@ -176,7 +176,7 @@ def _load_rt_struct(dicom_path: str) -> Optional[rt_utils.RTStructBuilder]:
             lambda path: _dicom_type_is(c.RT_STRUCTURE_SET)(dicom.dcmread(path))
         ),
         list,
-        apply_if_truthy_else_none(
+        apply_if_truthy(
             lambda rt_struct_paths: (
                 rt_utils.RTStructBuilder.create_from(
                     dicom_series_path=dicom_path,
@@ -229,15 +229,9 @@ def _preprocess_mask(
         _get_dicom_slices,
         _get_uniform_spacing,
         # (name, mask, spacings)
-        apply_if_truthy_else_none(
-            lambda spacings: [
-                (
-                    name,
-                    mask,
-                    spacings,
-                )
-                for name, mask in name_mask_pairs
-            ]
+        lambda spacings: conditional(
+            spacings is not None,
+            [(name, mask, spacings) for name, mask in name_mask_pairs],
         ),
         # If spacings is None, return None
         lambda name_mask_spacing_lst: (
@@ -316,7 +310,7 @@ def load_patient_scan(
         Whether to preprocess the volume and mask, by default True. WARNING: will
         take significantly longer to load if set to True
     """
-    empty_lst_if_none = lambda val: [] if val == [None] else val
+    empty_lst_if_none = lambda val: conditional(val == [None], [], val)
 
     return tz.pipe(
         dicom_path,
@@ -324,7 +318,7 @@ def load_patient_scan(
         curried.map(dicom.dcmread),
         # Get one dicom file to extract PatientID
         lambda dicom_files: next(dicom_files, None),
-        apply_if_truthy_else_none(
+        apply_if_truthy(
             lambda dicom_file: (
                 PatientScan(
                     dicom_file.PatientID,
@@ -386,24 +380,27 @@ def load_volume(
         Whether to preprocess the volume and mask, by default True. WARNING: will
         take significantly longer to load if set to True
     """
+
+    def stack_volume(files):
+        return tz.pipe(
+            [dicom_file.pixel_array for dicom_file in files],
+            apply_if_truthy(
+                lambda slices: np.moveaxis(np.stack(slices), 0, -1),
+            ),
+        )
+
     return tz.pipe(
         dicom_path,
         _get_dicom_slices,
         lambda slices: itertools.tee(slices, 3),
         unpack_args(
             lambda it1, it2, it3: (
-                apply_if_truthy_else_none(
-                    lambda x: np.moveaxis(np.stack(x), 0, -1),
-                    [dicom_file.pixel_array for dicom_file in it1],
-                ),
+                stack_volume(it1),
                 _get_uniform_spacing(it2),
-                map(
-                    lambda d_slice: (
-                        float(d_slice.RescaleIntercept),
-                        float(d_slice.RescaleSlope),
-                    ),
-                    it3,
-                ),
+                [
+                    (float(d_slice.RescaleIntercept), float(d_slice.RescaleSlope))
+                    for d_slice in it3
+                ],
             )
         ),
         unpack_args(
@@ -471,7 +468,7 @@ def load_mask(dicom_path: str, preprocess: bool = True) -> Optional[Mask]:
         curried.map(
             unpack_args(lambda name, mask: (_standardise_roi_name(name), mask))
         ),
-        _preprocess_mask(dicom_path=dicom_path) if preprocess else tz.identity,
+        conditional(preprocess, _preprocess_mask(dicom_path=dicom_path), tz.identity),
         lambda name_mask_lst: Mask(dict(name_mask_lst) if name_mask_lst else {}),
     )
 

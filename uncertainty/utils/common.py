@@ -23,7 +23,15 @@ def unpack_args[T](func: Callable[..., T]) -> Callable[..., T]:
 
 
 @curry
-def apply_if_truthy_else_none[T, R](func: Callable[[T], R], arg: T) -> Optional[R]:
+def conditional[T, R](cond: bool, val1: T, val2: Optional[R] = None) -> Optional[T | R]:
+    """
+    Return val1 if cond is True, otherwise return val2 (default None)
+    """
+    return val1 if cond else val2
+
+
+@curry
+def apply_if_truthy[T, R](func: Callable[[T], R], arg: T) -> Optional[R]:
     """
     Apply unary func to arg if arg is truthy (e.g. not None, [], ...), otherwise return None
     """
