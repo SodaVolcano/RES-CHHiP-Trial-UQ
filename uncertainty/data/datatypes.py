@@ -12,7 +12,6 @@ from loguru import logger
 import numpy as np
 import h5py
 
-from uncertainty.utils.logging import logger_wraps
 
 T = TypeVar("T")
 GeneratorOrConcrete = Generator[T, None, None] | T
@@ -120,7 +119,7 @@ class PatientScan:
 
     @classmethod
     @logger.catch
-    def load_h5py(cls, file_path: str):
+    def load_h5(cls, file_path: str):
         with h5py.File(file_path, "r") as f:
             masks = []
             for observer in f.attrs["mask_observers"]:
@@ -133,7 +132,7 @@ class PatientScan:
             )
 
     @logger.catch
-    def save_h5py(self, save_dir: str):
+    def save_h5(self, save_dir: str):
         """
         Save the current object in a file at save_dir/patient_id.h5
 
@@ -156,7 +155,7 @@ class PatientScan:
                 f.attrs["patient_id"] = self.patient_id
                 f.attrs["mask_observers"] = self.mask_observers
 
-            self.load_h5py(temp_path)  # Check if loading works
+            self.load_h5(temp_path)  # Check if loading works
             shutil.move(temp_path, file_path)
         except Exception as e:
             os.remove(temp_path)

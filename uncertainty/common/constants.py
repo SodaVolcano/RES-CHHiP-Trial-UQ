@@ -31,14 +31,14 @@ def model_config() -> dict:
         "input_dim": 3,
         # ------- ConvolutionBlock settings  --------
         "kernel_size": (3, 3),
-        "n_convolutions_per_block": 2,
-        "use_batch_norm": True,
-        "activation": "relu",
+        "n_convolutions_per_block": 1,
+        "use_batch_norm": False,
+        "activation": "gelu",
         # ------- Encoder/Decoder settings -------
         # Number of kernels in first level of Encoder, doubles/halves at each level in Encoder/Decoder
         "n_kernels_init": 64,
         # Number of resolutions/blocks; height of U-Net
-        "n_levels": 4,
+        "n_levels": 5,
         # Number of class to predict
         "n_kernels_last": 1,
         # Use sigmoid if using binary crossentropy, softmax if using categorical crossentropy

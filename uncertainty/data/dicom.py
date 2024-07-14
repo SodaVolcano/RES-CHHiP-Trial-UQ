@@ -448,7 +448,7 @@ def load_all_masks(
 
 @logger_wraps(level="INFO")
 @curry
-def save_dicom_scans_to_h5py(dicom_path: str, save_dir: str, preprocess=True) -> None:
+def save_dicom_scans_to_h5(dicom_path: str, save_dir: str, preprocess=True) -> None:
     """
     Save PatientScans to .h5 files in save_dir from folders of DICOM files in dicom_path
     """
@@ -465,7 +465,7 @@ def save_dicom_scans_to_h5py(dicom_path: str, save_dir: str, preprocess=True) ->
 
         tz.pipe(
             valid_scan,
-            curried.map(_.save_h5py(save_dir)),
+            curried.map(_.save_h5(save_dir)),
         )
 
     tz.pipe(
@@ -473,4 +473,5 @@ def save_dicom_scans_to_h5py(dicom_path: str, save_dir: str, preprocess=True) ->
         generate_full_paths(path_generator=os.listdir),
         pmap(save_dicom_scan),
         tqdm,
+        list,
     )
