@@ -20,6 +20,55 @@ VALID_IDENTIFIER: Final[str] = "[a-zA-Z_][a-zA-Z0-9_]*"
 # Hounsfield Units (HU), intensity range for CT images
 HU_RANGE: Final[tuple[int, int]] = (-1000, 3000)
 
+
+@memoize
+def model_config() -> dict:
+    config = {
+        # --------- Data settings ---------
+        "data_dir": "/content/gdrive/MyDrive/dataset/Data",
+        "input_width": 200,
+        "input_height": 200,
+        "input_dim": 3,
+        # ------- ConvolutionBlock settings  --------
+        "kernel_size": (3, 3),
+        "n_convolutions_per_block": 2,
+        "use_batch_norm": True,
+        "activation": "relu",
+        # ------- Encoder/Decoder settings -------
+        # Number of kernels in first level of Encoder, doubles/halves at each level in Encoder/Decoder
+        "n_kernels_init": 64,
+        # Number of resolutions/blocks; height of U-Net
+        "n_levels": 4,
+        # Number of class to predict
+        "n_kernels_last": 1,
+        # Use sigmoid if using binary crossentropy, softmax if using categorical crossentropy
+        # Note if using softmax, n_kernels_last should be equal to number of classes (e.g. 2 for binary segmentation)
+        # If None, loss will use from_logits=True
+        "final_layer_activation": "sigmoid",
+        # ------- Overall U-Net settings -----------------
+        "model_checkpoint_path": "./checkpoints/checkpoint.model.keras",
+        "n_epochs": 1,
+        "batch_size": 32,
+        "metrics": ["accuracy"],
+        "initializer": "he_normal",  # For kernel initialisation
+        "optimizer": keras.optimizers.Adam,
+        "loss": keras.losses.BinaryCrossentropy,
+        # Learning rate scheduler, decrease learning rate at certain epochs
+        "lr_scheduler": keras.optimizers.schedules.PiecewiseConstantDecay,
+        # Percentage of training where learning rate is decreased
+        "lr_schedule_percentages": [0.2, 0.5, 0.8],
+        # Gradually decrease learning rate, starting at first value
+        "lr_schedule_values": [3e-4, 1e-4, 1e-5, 1e-6],
+    }
+    # Explicitly calculate number of kernels per block (for Encoder)
+    config["n_kernels_per_block"] = [
+        config["n_kernels_init"] * (2**block_level)
+        for block_level in range(config["n_levels"])
+    ]
+
+    return config
+
+
 # ROI keep list, all names containing these as substring will be kept
 ROI_KEEP_LIST: Final[list[str]] = [
     "bladder",
@@ -86,117 +135,6 @@ ROI_EXCLUSION_LIST: Final[list[str]] = [
     "anal_canal",
 ]
 
-
-@memoize
-def model_config() -> dict:
-    config = {
-        # --------- Data settings ---------
-        "data_dir": "/content/gdrive/MyDrive/dataset/Data",
-        "input_width": 200,
-        "input_height": 200,
-        "input_dim": 3,
-        # ------- ConvolutionBlock settings  --------
-        "kernel_size": (3, 3),
-        "n_convolutions_per_block": 2,
-        "use_batch_norm": True,
-        "activation": "relu",
-        # ------- Encoder/Decoder settings -------
-        # Number of kernels in first level of Encoder, doubles/halves at each level in Encoder/Decoder
-        "n_kernels_init": 64,
-        # Number of resolutions/blocks; height of U-Net
-        "n_levels": 4,
-        # Number of class to predict
-        "n_kernels_last": 1,
-        # Use sigmoid if using binary crossentropy, softmax if using categorical crossentropy
-        # Note if using softmax, n_kernels_last should be equal to number of classes (e.g. 2 for binary segmentation)
-        # If None, loss will use from_logits=True
-        "final_layer_activation": "sigmoid",
-        # ------- Overall U-Net settings -----------------
-        "model_checkpoint_path": "./checkpoints/checkpoint.model.keras",
-        "n_epochs": 1,
-        "batch_size": 32,
-        "metrics": ["accuracy"],
-        "initializer": "he_normal",  # For kernel initialisation
-        "optimizer": keras.optimizers.Adam,
-        "loss": keras.losses.BinaryCrossentropy,
-        # Learning rate scheduler, decrease learning rate at certain epochs
-        "lr_scheduler": keras.optimizers.schedules.PiecewiseConstantDecay,
-        # Percentage of training where learning rate is decreased
-        "lr_schedule_percentages": [0.2, 0.5, 0.8],
-        # Gradually decrease learning rate, starting at first value
-        "lr_schedule_values": [3e-4, 1e-4, 1e-5, 1e-6],
-    }
-    # Explicitly calculate number of kernels per block (for Encoder)
-    config["n_kernels_per_block"] = [
-        config["n_kernels_init"] * (2**block_level)
-        for block_level in range(config["n_levels"])
-    ]
-
-    return config
-
-
-"""
-name reduction...
-
-prostate
-    prostate+sv
-    ctv1  ctv2 ctv3
-    prostate_+_sv
-    p+sv
-    prostate_&_sv
-    pros_new           prossv_new
-    p_+_base_sv      p_only_js
-    prostate_only   prostate_sv | prostate_and_base_svs | prostate_only
-    prostate_alone      prostate_and_svs
-    p_+_sv
-    2_prostate     3prost_semves
-    2_prost_sv   3prostate
-    ctv_pros+sv   ctv_pros_only
-    pros+sem   prostate_only
-    prostate_and_sv
-    
-    [
-        "prostate+sv",
-        "ctv2",
-        "prostate_+_sv",
-        "p+sv",
-        "prostate_&_sv",
-        "pros_new",
-        "p_+_sv",
-        "2_prostate",
-        "2_prost_sv",
-        "ctv_pros+sv",
-        "pros+sem",
-        "prostate",
-        "p_+_base_sv",
-        "prostate_only",
-        "prostate_alone",
-        "prostate_and_sv",
-        "ctv1",
-    ]
-      
-bladder
-    bladder_jp
-    bladder_db
-    bladder_c
-    
-    ['bladder', 'bladder_jp']
-    
-rectum
-    rectum_kc rectum_aw | rectum_kc | rectumaw_kc
-    rectum,_nos rectum_kf rectumaw_kf
-    rectum_jp rectumaw_jp
-    rectum_rb rectumaw_rb
-
-["rectum", 'rectum_kc', 'rectum_kf', 'rectum_jp', 'rectum_rb']
-
-for each organ, use match list
-find how many rois belong to organ
-    find intersection
-if more than 1, choose shortest name
-    if same length, choose first name
-return roi name for the organ
-"""
 
 # list of ROI name variants in the patient scans for organs of interest
 ORGAN_MATCHES: Final[dict[str, list[str]]] = {

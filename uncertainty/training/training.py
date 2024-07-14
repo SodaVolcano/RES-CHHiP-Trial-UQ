@@ -70,7 +70,18 @@ def preprocess_data(
         return tz.pipe(
             scan.volume,
             lambda v: zoom(
-                v, (config["input_height"], config["input_width"], config["input_dim"])
+                v,
+                tuple(
+                    to / from_
+                    for to, from_ in zip(
+                        (
+                            config["input_height"],
+                            config["input_width"],
+                            config["input_dim"],
+                        ),
+                        v.shape,
+                    )
+                ),
             ),
             lambda v: np.clip(v, *HU_RANGE),
             map_interval(HU_RANGE, (0, 1)),

@@ -1,7 +1,7 @@
 """
 Path modification to resolve package name
 
-add `from .context import uncertainty_quantification` to test modules
+add `from .context import uncertainty` to test modules
 """
 
 import os
