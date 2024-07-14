@@ -4,10 +4,7 @@ Overload for embarrassingly parallel tasks
 
 from typing import Literal, Optional
 from .wrappers import curry
-from multiprocessing import Pool
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
-
-from toolz.curried import map
 
 
 @curry

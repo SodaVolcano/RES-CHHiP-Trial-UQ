@@ -133,3 +133,116 @@ def model_config() -> dict:
     ]
 
     return config
+
+
+"""
+name reduction...
+
+prostate
+    prostate+sv
+    ctv1  ctv2 ctv3
+    prostate_+_sv
+    p+sv
+    prostate_&_sv
+    pros_new           prossv_new
+    p_+_base_sv      p_only_js
+    prostate_only   prostate_sv | prostate_and_base_svs | prostate_only
+    prostate_alone      prostate_and_svs
+    p_+_sv
+    2_prostate     3prost_semves
+    2_prost_sv   3prostate
+    ctv_pros+sv   ctv_pros_only
+    pros+sem   prostate_only
+    prostate_and_sv
+    
+    [
+        "prostate+sv",
+        "ctv2",
+        "prostate_+_sv",
+        "p+sv",
+        "prostate_&_sv",
+        "pros_new",
+        "p_+_sv",
+        "2_prostate",
+        "2_prost_sv",
+        "ctv_pros+sv",
+        "pros+sem",
+        "prostate",
+        "p_+_base_sv",
+        "prostate_only",
+        "prostate_alone",
+        "prostate_and_sv",
+        "ctv1",
+    ]
+      
+bladder
+    bladder_jp
+    bladder_db
+    bladder_c
+    
+    ['bladder', 'bladder_jp']
+    
+rectum
+    rectum_kc rectum_aw | rectum_kc | rectumaw_kc
+    rectum,_nos rectum_kf rectumaw_kf
+    rectum_jp rectumaw_jp
+    rectum_rb rectumaw_rb
+
+["rectum", 'rectum_kc', 'rectum_kf', 'rectum_jp', 'rectum_rb']
+
+for each organ, use match list
+find how many rois belong to organ
+    find intersection
+if more than 1, choose shortest name
+    if same length, choose first name
+return roi name for the organ
+"""
+
+# list of ROI name variants in the patient scans for organs of interest
+ORGAN_MATCHES: Final[dict[str, list[str]]] = {
+    "prostate": [
+        "prostate",
+        "prostate+sv",
+        "ctv1",
+        "ctv2",
+        "ctv3",
+        "prostate_+_sv",
+        "p+sv",
+        "prostate_&_sv",
+        "pros_new",
+        "prossv_new",
+        "p_+_base_sv",
+        "p_only_js",
+        "prostate_only",
+        "prostate_sv",
+        "prostate_and_base_svs",
+        "prostate_only",
+        "prostate_alone",
+        "prostate_and_svs",
+        "p_+_sv",
+        "2_prostate",
+        "3prost_semves",
+        "2_prost_sv",
+        "3prostate",
+        "ctv_pros+sv",
+        "ctv_pros_only",
+        "pros+sem",
+        "prostate_only",
+        "prostate_and_sv",
+    ],
+    "bladder": ["bladder", "bladder_jp", "bladder_c", "bladder_db"],
+    "rectum": [
+        "rectum",
+        "rectum_kc",
+        "rectum_aw",
+        "rectum_kc",
+        "rectumaw_kc",
+        "rectum,_nos",
+        "rectum_kf",
+        "rectumaw_kf",
+        "rectum_jp",
+        "rectumaw_jp",
+        "rectum_rb",
+        "rectumaw_rb",
+    ],
+}

@@ -2,9 +2,12 @@
 Utility functions for model training, from model construction, data loading, and training loop
 """
 
+from operator import methodcaller
+from uncertainty.data.preprocessing import filter_roi, map_interval
+from uncertainty.utils.parallel import pmap
 from ..utils.logging import logger_wraps
 from ..utils.wrappers import curry
-from ..common.constants import model_config
+from ..common.constants import model_config, HU_RANGE
 
 from typing import Callable, Iterable
 
@@ -13,6 +16,7 @@ from tensorflow.python.keras import Model
 import tensorflow.keras as keras
 import toolz as tz
 import toolz.curried as curried
+from scipy.ndimage import zoom
 
 
 @logger_wraps(level="INFO")
@@ -59,20 +63,28 @@ def preprocess_data(
     """
     Preprocess data for training
     """
-    pipeline = lambda x: tz.pipe(
-        x,
-        # select ONE ROI if multiple observer is present
-        # make sure label one-hot-encoding are in right order
-        # resize images to input dimensions
-        # ensure mask dimension match image dimensions
-        # reshape to (height, width, channels)
-        # clip first to HU range, then
-        # normalise pixel values to [0, 1]
-        # cast to float32
+    volume_pipeline = lambda scan: tz.pipe(
+        scan.volume,
+        lambda v: zoom(
+            v, (config["input_height"], config["input_width"], config["input_dim"])
+        ),
+        lambda v: np.clip(v, *HU_RANGE),
+        map_interval(HU_RANGE, (0, 1)),
+        lambda v: v.astype(np.float32),
         # class weight?
-        # intensity norm?
     )
-    pass
+    mask_pipeline = lambda scan: tz.pipe(
+        scan.masks[""].get_organ_names(),
+        filter_roi,
+        # TODO: handle empty list
+        # TODO: remove duplicate names...
+        getattr(scan.masks[""], "as_array"),
+        lambda m: zoom(
+            m, (config["input_height"], config["input_width"], config["input_dim"])
+        ),  # TODO: mask have 4th dimension?
+        lambda m: m.astype(np.float32),
+    )
+    return pmap(curried.juxt(volume_pipeline, mask_pipeline), dataset)
 
 
 @logger_wraps(level="INFO")

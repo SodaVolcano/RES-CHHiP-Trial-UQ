@@ -32,11 +32,11 @@ def conditional[T, R](cond: bool, val1: T, val2: Optional[R] = None) -> Optional
 
 
 @curry
-def apply_if_truthy[T, R](func: Callable[[T], R], arg: T) -> Optional[R]:
+def apply_if_truthy[T, R, Q](func: Callable[[T], R], arg: T, val2: Optional[Q] = None) -> Optional[R | Q]:
     """
-    Apply unary func to arg if arg is truthy (e.g. not None, [], ...), otherwise return None
+    Apply unary func to arg if arg is truthy (e.g. not None, [], ...), otherwise return val2
     """
-    return func(arg) if arg else None
+    return func(arg) if arg else val2
 
 
 @curry

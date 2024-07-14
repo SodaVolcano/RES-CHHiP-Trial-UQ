@@ -243,51 +243,6 @@ def _preprocess_mask(
     )
 
 
-@logger_wraps()
-@curry
-def _filter_roi(
-    roi_names: list[str],
-    keep_list: list[str] = c.ROI_KEEP_LIST,
-    exclusion_list: list[str] = c.ROI_EXCLUSION_LIST,
-) -> list[str]:
-    """
-    Filter out ROIs based on keep and exclusion lists
-
-    Parameters
-    ----------
-    roi_names : list[str]
-        Array of ROI names
-    keep_list : list[str]
-        List of substrings to keep
-    exclusion_list : list[str]
-        List of substrings to exclude
-
-    Returns
-    -------
-    list[str]
-        Array of ROI names not in exclusion list and containing any substring in keep list
-    """
-
-    def is_numeric(name):
-        try:
-            float(name)
-            return True
-        except ValueError:
-            return False
-
-    def not_excluded(name):
-        return not any(
-            exclude in name for exclude in exclusion_list
-        ) and not is_numeric(name)
-
-    return tz.pipe(
-        roi_names,
-        curried.filter(not_excluded),
-        curried.filter(lambda name: any(keep in name for keep in keep_list)),
-        list,
-    )
-
-
 # ============ Main functions ============
 @logger_wraps(level="INFO")
 @curry
@@ -298,8 +253,9 @@ def load_patient_scan(
     Load PatientScan from directory of DICOM files in dicom_path
 
     Preprocessing involves interpolating the volume and masks to have isotropic spacing,
-    mapping the volume pixel values to Hounsfield units (HU), and filtering and standardising
-    the ROI names in the masks. None is returned if no DICOM files are found
+    mapping the volume pixel values to Hounsfield units (HU), and standardising
+    the ROI names in the masks to be snake_case. None is returned if no DICOM files
+    are found.
 
     Parameters
     ----------
@@ -340,8 +296,9 @@ def load_patient_scans(
     Load PatientScans from folders of DICOM files in dicom_collection_path
 
     Preprocessing involves interpolating the volume and masks to have isotropic spacing,
-    mapping the volume pixel values to Hounsfield units (HU), and filtering and standardising
-    the ROI names in the masks. None is returned if no DICOM files are found
+    mapping the volume pixel values to Hounsfield units (HU), and standardising
+    the ROI names in the masks to be in snake_case. None is returned if no DICOM
+    files are found.
 
     Parameters
     ----------
@@ -441,8 +398,8 @@ def load_mask(dicom_path: str, preprocess: bool = True) -> Optional[Mask]:
     """
     Load organ-Mask pair from one observer from a folder of DICOM files in dicom_path
 
-    Preprocessing involves interpolating the mask to have isotropic spacing,
-    standardising the ROI names and filtering out unwanted ROIs. `None` is
+    Preprocessing involves interpolating the mask to have isotropic spacing
+    and standardising the ROI names to be in snake_case. `None` is
     returned if no RT struct file is found.
 
     Parameters
@@ -458,11 +415,8 @@ def load_mask(dicom_path: str, preprocess: bool = True) -> Optional[Mask]:
     if rt_struct is None:
         return None
 
-    keep_lst = _filter_roi(list(map(_standardise_roi_name, rt_struct.get_roi_names())))
-
     return tz.pipe(
         rt_struct.get_roi_names(),
-        curried.filter(lambda name: _standardise_roi_name(name) in keep_lst),
         curried.map(_load_roi_mask(rt_struct)),
         # (roi_name, mask_generator) pairs, only successful masks are kept
         curried.filter(lambda name_mask_pair: name_mask_pair is not None),

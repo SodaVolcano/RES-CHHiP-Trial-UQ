@@ -120,8 +120,8 @@ class PatientScan:
         """
         return next(mask for mask in self.__masks if mask.observer == observer)
 
-    @logger.catch
     @classmethod
+    @logger.catch
     def load_h5py(cls, file_path: str):
         with h5py.File(file_path, "r") as f:
             masks = []
