@@ -56,10 +56,9 @@ class Mask:
 
     def as_array(self, organ_ordering: List[str]) -> np.array:
         """
-        Return array of masks, ordered by organ_ordering
+        Return array of N masks with shape (H, W, D, N), ordered by organ_ordering
         """
-        # TODO: organ name differs in each mask, not standardised
-        pass
+        return np.stack([self[organ] for organ in organ_ordering], axis=-1)
 
 
 class PatientScan:

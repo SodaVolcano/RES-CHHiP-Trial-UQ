@@ -3,11 +3,12 @@ Utility functions for model training, from model construction, data loading, and
 """
 
 from operator import methodcaller
-from uncertainty.data.preprocessing import filter_roi, map_interval
+from tests.context import PatientScan
+from uncertainty.data.preprocessing import filter_roi, find_organ_roi, map_interval
 from uncertainty.utils.parallel import pmap
 from ..utils.logging import logger_wraps
 from ..utils.wrappers import curry
-from ..common.constants import model_config, HU_RANGE
+from ..common.constants import model_config, HU_RANGE, ORGAN_MATCHES
 
 from typing import Callable, Iterable
 
@@ -17,6 +18,7 @@ import tensorflow.keras as keras
 import toolz as tz
 import toolz.curried as curried
 from scipy.ndimage import zoom
+from fn import _
 
 
 @logger_wraps(level="INFO")
@@ -63,27 +65,55 @@ def preprocess_data(
     """
     Preprocess data for training
     """
-    volume_pipeline = lambda scan: tz.pipe(
-        scan.volume,
-        lambda v: zoom(
-            v, (config["input_height"], config["input_width"], config["input_dim"])
-        ),
-        lambda v: np.clip(v, *HU_RANGE),
-        map_interval(HU_RANGE, (0, 1)),
-        lambda v: v.astype(np.float32),
-        # class weight?
-    )
-    mask_pipeline = lambda scan: tz.pipe(
-        scan.masks[""].get_organ_names(),
-        filter_roi,
-        # TODO: handle empty list
-        # TODO: remove duplicate names...
-        getattr(scan.masks[""], "as_array"),
-        lambda m: zoom(
-            m, (config["input_height"], config["input_width"], config["input_dim"])
-        ),  # TODO: mask have 4th dimension?
-        lambda m: m.astype(np.float32),
-    )
+
+    def volume_pipeline(scan: PatientScan):
+        return tz.pipe(
+            scan.volume,
+            lambda v: zoom(
+                v, (config["input_height"], config["input_width"], config["input_dim"])
+            ),
+            lambda v: np.clip(v, *HU_RANGE),
+            map_interval(HU_RANGE, (0, 1)),
+            lambda v: v.astype(np.float32),
+        )
+
+    def mask_pipeline(scan: PatientScan):
+        names = tz.pipe(
+            scan.masks[""].get_organ_names(),
+            filter_roi,
+            lambda mask_names: [
+                find_organ_roi(organ, mask_names) for organ in ORGAN_MATCHES
+            ],
+            curried.filter(_ is not None),
+            list,
+        )
+
+        if len(names) != len(ORGAN_MATCHES):
+            return None
+
+        return tz.pipe(
+            names,
+            getattr(scan.masks[""], "as_array"),
+            lambda m: zoom(
+                m,
+                tuple(
+                    (
+                        to / from_
+                        for to, from_ in zip(
+                            (
+                                config["input_height"],
+                                config["input_width"],
+                                config["input_dim"],
+                                m.shape[3],
+                            ),
+                            m.shape,
+                        )
+                    )
+                ),
+            ),
+            lambda m: m.astype(np.float32),
+        )
+
     return pmap(curried.juxt(volume_pipeline, mask_pipeline), dataset)
 
 
