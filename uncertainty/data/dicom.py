@@ -133,7 +133,7 @@ def _get_dicom_slices(dicom_path: str) -> Iterable[dicom.Dataset]:
     return tz.pipe(
         dicom_path,
         list_files,
-        pmap(dicom.dcmread),
+        curried.map(dicom.dcmread),
         curried.filter(_dicom_type_is(c.CT_IMAGE)),
         # Some slice are not part of the volume (have thickness = "0")
         curried.filter(lambda dicom_file: float(dicom_file.SliceThickness) > 0),
@@ -273,7 +273,7 @@ def load_patient_scan(
     return tz.pipe(
         dicom_path,
         list_files,
-        pmap(dicom.dcmread),
+        curried.map(dicom.dcmread),
         # Get one dicom file to extract PatientID
         lambda dicom_files: next(dicom_files, None),
         apply_if_truthy(
@@ -314,7 +314,7 @@ def load_patient_scans(
     return tz.pipe(
         dicom_collection_path,
         generate_full_paths(path_generator=os.listdir),
-        pmap(load_patient_scan(method=method, preprocess=preprocess)),
+        curried.map(load_patient_scan(method=method, preprocess=preprocess)),
     )
 
 
@@ -392,7 +392,7 @@ def load_all_volumes(
     return tz.pipe(
         dicom_collection_path,
         generate_full_paths(path_generator=os.listdir),
-        pmap(load_volume(method=method, preprocess=preprocess)),
+        curried.map(load_volume(method=method, preprocess=preprocess)),
     )
 
 
@@ -442,7 +442,7 @@ def load_all_masks(
     """
     return tz.pipe(
         generate_full_paths(dicom_collection_path, os.listdir),
-        pmap(load_mask(preprocess=preprocess)),
+        curried.map(load_mask(preprocess=preprocess)),
     )
 
 
@@ -453,12 +453,24 @@ def save_dicom_scans_to_h5py(dicom_path: str, save_dir: str, preprocess=True) ->
     Save PatientScans to .h5 files in save_dir from folders of DICOM files in dicom_path
     """
 
-    return tz.pipe(
+    @logger.catch
+    def save_dicom_scan(dicom_path):
+        valid_scan = tz.pipe(
+            dicom_path,
+            load_patient_scan(preprocess=preprocess),
+            lambda x: conditional(x.masks.get_organ_names(), x),
+        )
+        if valid_scan is None:
+            return
+
+        tz.pipe(
+            valid_scan,
+            curried.map(_.save_h5py(save_dir)),
+        )
+
+    tz.pipe(
         dicom_path,
-        load_patient_scans(preprocess=preprocess),
-        curried.filter(_.masks.get_organ_names()),
-        curried.map(_.save_h5py(save_dir)),
+        generate_full_paths(path_generator=os.listdir),
+        pmap(save_dicom_scan),
         tqdm,
-        list,
-        lambda x: None,
     )
