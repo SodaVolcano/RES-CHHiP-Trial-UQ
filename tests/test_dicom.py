@@ -28,7 +28,6 @@ PATCH_LOAD_MASK = "uncertainty.data.dicom.load_mask"
 PATCH_GENERATE_FULL_PATHS = "uncertainty.data.dicom.generate_full_paths"
 PATCH_LOAD_PATIENT_SCAN = "uncertainty.data.dicom.load_patient_scan"
 PATCH_LISTDIR = "os.listdir"
-PATCH_FILTER_ROI = "uncertainty.data.dicom._filter_roi"
 PATCH_GET_DICOM_SLICES = "uncertainty.data.dicom._get_dicom_slices"
 PATCH_PMAP = "uncertainty.data.dicom.pmap"
 
@@ -320,7 +319,6 @@ class TestLoadMask:
             PATCH_LOAD_RT_STRUCT,
             return_value=mock_rt_struct,
         )
-        mocker.patch(PATCH_FILTER_ROI, return_value=["organ_1", "organ_2"])
 
         with mock.patch(PATCH_PMAP, curried.map):
             mask = load_mask(dicom_path)
@@ -351,7 +349,6 @@ class TestLoadMask:
             PATCH_LOAD_RT_STRUCT,
             return_value=mock_rt_struct,
         )
-        mocker.patch(PATCH_FILTER_ROI, return_value=["organ_1", "organ_2"])
 
         mask = load_mask(dicom_path, preprocess=False)
 
@@ -614,7 +611,6 @@ class TestLoadAllMasks:
             PATCH_LOAD_RT_STRUCT,
             return_value=mock_rt_struct,
         )
-        mocker.patch(PATCH_FILTER_ROI, return_value=["organ_1", "organ_2"])
         mocker.patch(PATCH_GET_DICOM_SLICES, return_value=[mock_dicom, mock_dicom])
 
         with mock.patch(PATCH_PMAP, curried.map):

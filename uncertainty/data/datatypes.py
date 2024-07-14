@@ -35,7 +35,6 @@ class Mask:
         Return mask array for given organ
         """
         if isinstance(self.__organs[organ], Generator):
-
             self.__organs[organ] = next(self.__organs[organ])
         return self.__organs[organ]
 

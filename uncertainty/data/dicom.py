@@ -13,6 +13,7 @@ import toolz as tz
 import toolz.curried as curried
 from tqdm import tqdm
 from loguru import logger
+from fn import _
 
 from .preprocessing import make_isotropic
 from .datatypes import Mask, PatientScan
@@ -356,7 +357,10 @@ def load_volume(
                 stack_volume(it1),
                 _get_uniform_spacing(it2),
                 [
-                    (float(d_slice.RescaleIntercept), float(d_slice.RescaleSlope))
+                    (
+                        float(d_slice.RescaleIntercept),
+                        float(d_slice.RescaleSlope),
+                    )
                     for d_slice in it3
                 ],
             )
@@ -419,7 +423,7 @@ def load_mask(dicom_path: str, preprocess: bool = True) -> Optional[Mask]:
         rt_struct.get_roi_names(),
         curried.map(_load_roi_mask(rt_struct)),
         # (roi_name, mask_generator) pairs, only successful masks are kept
-        curried.filter(lambda name_mask_pair: name_mask_pair is not None),
+        curried.filter(_),  # not None
         curried.map(
             unpack_args(lambda name, mask: (_standardise_roi_name(name), mask))
         ),
@@ -452,8 +456,8 @@ def save_dicom_scans_to_h5py(dicom_path: str, save_dir: str, preprocess=True) ->
     return tz.pipe(
         dicom_path,
         load_patient_scans(preprocess=preprocess),
-        curried.filter(lambda scan: scan.masks.get_organ_names()),
-        curried.map(lambda scan: scan.save_h5py(save_dir)),
+        curried.filter(_.masks.get_organ_names()),
+        curried.map(_.save_h5py(save_dir)),
         tqdm,
         list,
         lambda x: None,
