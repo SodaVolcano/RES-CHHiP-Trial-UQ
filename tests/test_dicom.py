@@ -1,3 +1,5 @@
+from toolz import curried
+from unittest import mock
 import pytest
 import numpy as np
 import pydicom
@@ -28,6 +30,7 @@ PATCH_LOAD_PATIENT_SCAN = "uncertainty.data.dicom.load_patient_scan"
 PATCH_LISTDIR = "os.listdir"
 PATCH_FILTER_ROI = "uncertainty.data.dicom._filter_roi"
 PATCH_GET_DICOM_SLICES = "uncertainty.data.dicom._get_dicom_slices"
+PATCH_PMAP = "uncertainty.data.dicom.pmap"
 
 
 class Test_MostCommonShape:
@@ -141,8 +144,9 @@ class TestLoadVolume:
         mock_dicom.RescaleIntercept = 0.0
         mocker.patch(PATCH_DCMREAD, return_value=mock_dicom)
 
-        # Call the load_volume function
-        volume = load_volume(gen_path())
+        with mock.patch(PATCH_PMAP, curried.map):
+            # Call the load_volume function
+            volume = load_volume(gen_path())
 
         # Assert the volume shape is as expected
         assert volume.shape == (512 // 2, 512 // 2, 7)
@@ -169,8 +173,9 @@ class TestLoadVolume:
         mock_dicom.RescaleIntercept = 0.0
         mocker.patch(PATCH_DCMREAD, return_value=mock_dicom)
 
-        # Call the load_volume function
-        volume = load_volume(gen_path(), preprocess=False)
+        with mock.patch(PATCH_PMAP, curried.map):
+            # Call the load_volume function
+            volume = load_volume(gen_path(), preprocess=False)
 
         # Assert the volume shape is as expected
         assert volume.shape == (512, 512, 4)
@@ -194,11 +199,11 @@ class TestLoadVolume:
         )
 
         # Mock the dicom.dcmread function to return mock DICOM objects with different shapes
-        mock_dicom1 = mocker.Mock()
+        mock_dicom1 = pydicom.Dataset()
         mock_dicom1.SOPClassUID = c.CT_IMAGE
         mock_dicom1.Rows = 512
         mock_dicom1.Columns = 512
-        mock_dicom1.pixel_array = np.zeros((512, 512))
+        mock_dicom1._pixel_array = np.zeros((512, 512))
         mock_dicom1.PixelSpacing = [0.5, 0.5]
         mock_dicom1.SliceThickness = 1.0
         mock_dicom1.ImageOrientationPatient = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0]
@@ -206,11 +211,11 @@ class TestLoadVolume:
         mock_dicom1.RescaleSlope = 1.0
         mock_dicom1.RescaleIntercept = 0.0
 
-        mock_dicom2 = mocker.Mock()
+        mock_dicom2 = pydicom.Dataset()
         mock_dicom2.SOPClassUID = c.CT_IMAGE
         mock_dicom2.Rows = 256
         mock_dicom2.Columns = 256
-        mock_dicom2.pixel_array = np.zeros((256, 256))
+        mock_dicom2._pixel_array = np.zeros((256, 256))
         mock_dicom2.PixelSpacing = [0.5, 0.5]
         mock_dicom2.SliceThickness = 1.0
         mock_dicom2.ImageOrientationPatient = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0]
@@ -218,11 +223,11 @@ class TestLoadVolume:
         mock_dicom2.RescaleSlope = 1.0
         mock_dicom2.RescaleIntercept = 0.0
 
-        mock_dicom3 = mocker.Mock()
+        mock_dicom3 = pydicom.Dataset()
         mock_dicom3.SOPClassUID = c.CT_IMAGE
         mock_dicom3.Rows = 512
         mock_dicom3.Columns = 512
-        mock_dicom3.pixel_array = np.zeros((512, 512))
+        mock_dicom3._pixel_array = np.zeros((512, 512))
         mock_dicom3.PixelSpacing = [0.5, 0.5]
         mock_dicom3.SliceThickness = 1.0
         mock_dicom3.ImageOrientationPatient = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0]
@@ -244,7 +249,7 @@ class Test_LoadRtStruct:
     # Successfully loads RTStructBuilder from a valid DICOM RT struct file
     def test_loads_rtstructbuilder_successfully(self, mocker):
         dicom_path = gen_path()
-        mock_dicom_file = mocker.Mock()
+        mock_dicom_file = pydicom.Dataset()
         mock_dicom_file.SOPClassUID = c.RT_STRUCTURE_SET
         mock_rt_struct_builder = mocker.patch(
             PATCH_RT_CREATE_FROM,
@@ -298,11 +303,11 @@ class TestLoadMask:
         )
 
         # Mock the dicom.dcmread function to return a mock DICOM object with pixel_array, PixelSpacing, ImageOrientationPatient, and ImagePositionPatient attributes
-        mock_dicom = mocker.Mock()
+        mock_dicom = pydicom.Dataset()
         mock_dicom.SOPClassUID = c.CT_IMAGE
         mock_dicom.Rows = 512
         mock_dicom.Columns = 512
-        mock_dicom.pixel_array = np.zeros((512, 512))
+        mock_dicom._pixel_array = np.zeros((512, 512))
         mock_dicom.PixelSpacing = [0.5, 0.7]
         mock_dicom.SliceThickness = 2.0
         mock_dicom.ImageOrientationPatient = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0]
@@ -317,7 +322,8 @@ class TestLoadMask:
         )
         mocker.patch(PATCH_FILTER_ROI, return_value=["organ_1", "organ_2"])
 
-        mask = load_mask(dicom_path)
+        with mock.patch(PATCH_PMAP, curried.map):
+            mask = load_mask(dicom_path)
 
         assert isinstance(mask, Mask)
         assert "organ_1" in mask.get_organ_names()
@@ -392,7 +398,7 @@ class TestLoadPatientScan:
         )
 
         # Mocking the dicom.dcmread function to return a mock object with a PatientID attribute
-        mock_dicom = mocker.Mock()
+        mock_dicom = pydicom.Dataset()
         mock_dicom.PatientID = "12345"
         mocker.patch(PATCH_DCMREAD, return_value=mock_dicom)
 
@@ -403,12 +409,12 @@ class TestLoadPatientScan:
         )
 
         # Mocking the load_mask function to return a list of Mask objects
-        mock_mask = mocker.Mock()
-        mock_mask.observer = "observer1"
+        mock_mask = Mask({}, "observer1")
         mocker.patch(PATCH_LOAD_MASK, return_value=mock_mask)
 
-        # Calling the function under test
-        result = load_patient_scan(gen_path())
+        with mock.patch(PATCH_PMAP, curried.map):
+            # Calling the function under test
+            result = load_patient_scan(gen_path())
 
         # Assertions
         assert result.patient_id == "12345"
@@ -446,7 +452,7 @@ class TestLoadPatientScan:
         )
 
         # Mocking the dicom.dcmread function to return a mock object with a PatientID attribute
-        mock_dicom = mocker.Mock()
+        mock_dicom = pydicom.Dataset()
         mock_dicom.PatientID = "12345"
         mocker.patch(PATCH_DCMREAD, return_value=mock_dicom)
 
@@ -456,11 +462,13 @@ class TestLoadPatientScan:
             return_value=np.moveaxis(np.array([[[1, 2], [3, 4]]]), 0, -1),
         )
 
-        # Mocking the load_mask function to return None since no RT struct data is found
-        mocker.patch(PATCH_LOAD_MASK, return_value=None)
+        with mock.patch(PATCH_PMAP, curried.map):
+            # Mocking the load_mask function to return None since no RT struct data is found
+            mocker.patch(PATCH_LOAD_MASK, return_value=None)
 
-        # Calling the function under test
-        result = load_patient_scan(gen_path())
+        with mock.patch(PATCH_PMAP, curried.map):
+            # Calling the function under test
+            result = load_patient_scan(gen_path())
 
         # Assertions
         assert result.patient_id == "12345"
@@ -479,7 +487,7 @@ class TestLoadPatientScan:
         )
 
         # Mocking the dicom.dcmread function to return a mock object with a PatientID attribute
-        mock_dicom = mocker.Mock()
+        mock_dicom = pydicom.Dataset()
         mock_dicom.PatientID = "12345"
         mocker.patch(PATCH_DCMREAD, return_value=mock_dicom)
 
@@ -490,12 +498,12 @@ class TestLoadPatientScan:
         )
 
         # Mocking the load_mask function to return a list of Mask objects
-        mock_mask = mocker.Mock()
-        mock_mask.observer = "observer1"
+        mock_mask = Mask({}, "observer1")
         mocker.patch(PATCH_LOAD_MASK, return_value=mock_mask)
 
-        # Calling the function under test
-        result = load_patient_scan(gen_path())
+        with mock.patch(PATCH_PMAP, curried.map):
+            # Calling the function under test
+            result = load_patient_scan(gen_path())
 
         # Assertions
         assert result.patient_id == "12345"
@@ -518,7 +526,7 @@ class TestLoadPatientScans:
         )
 
         # Mocking the dicom.dcmread function to return a mock object with a PatientID attribute
-        mock_dicom = mocker.Mock()
+        mock_dicom = pydicom.Dataset()
         mock_dicom.PatientID = "12345"
         mocker.patch(PATCH_DCMREAD, return_value=mock_dicom)
 
@@ -539,8 +547,9 @@ class TestLoadPatientScans:
         # Mocking the load_mask function to return None since no RT struct data is found
         mocker.patch(PATCH_LOAD_MASK, return_value=mock_mask)
 
-        # Call the function under test
-        result = list(load_patient_scans(gen_path()))
+        with mock.patch(PATCH_PMAP, curried.map):
+            # Call the function under test
+            result = list(load_patient_scans(gen_path()))
 
         # Assertions
         assert len(result) == 2
@@ -587,11 +596,11 @@ class TestLoadAllMasks:
         mock_rt_struct = mocker.Mock()
         mock_rt_struct.get_roi_names.return_value = ["Organ 1", "Organ 2"]
         mock_mask = np.random.randint(0, 2, (512, 512, 4))
-        mock_dicom = mocker.Mock()
+        mock_dicom = pydicom.Dataset()
         mock_dicom.SOPClassUID = c.CT_IMAGE
         mock_dicom.Rows = 512
         mock_dicom.Columns = 512
-        mock_dicom.pixel_array = np.zeros((512, 512))
+        mock_dicom._pixel_array = np.zeros((512, 512))
         mock_dicom.PixelSpacing = [0.5, 0.5]
         mock_dicom.SliceThickness = 2.0
         mock_dicom.ImageOrientationPatient = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0]
@@ -608,10 +617,13 @@ class TestLoadAllMasks:
         mocker.patch(PATCH_FILTER_ROI, return_value=["organ_1", "organ_2"])
         mocker.patch(PATCH_GET_DICOM_SLICES, return_value=[mock_dicom, mock_dicom])
 
-        result = list(load_all_masks(dicom_collection_path))
+        with mock.patch(PATCH_PMAP, curried.map):
+            result = list(load_all_masks(dicom_collection_path))
+
         from uncertainty.data.preprocessing import make_isotropic
 
         mock_mask_interp = make_isotropic((0.5, 0.5, 2.0), mock_mask, method="nearest")
+
         assert len(result) == 2
         assert isinstance(result[0], Mask)
         assert isinstance(result[1], Mask)

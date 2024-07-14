@@ -59,18 +59,19 @@ def preprocess_data(
     """
     Preprocess data for training
     """
-    return map()
-    # select ONE ROI if multiple observer is present
-    # make sure label one-hot-encoding are in right order
-    # resize images to input dimensions
-    # ensure mask dimension match image dimensions
-    # reshape to (height, width, channels)
-    # clip first to HU range, then
-    # normalise pixel values to [0, 1]
-    # cast to float32
-
-    # class weight?
-    # intensity norm?
+    pipeline = lambda x: tz.pipe(
+        x,
+        # select ONE ROI if multiple observer is present
+        # make sure label one-hot-encoding are in right order
+        # resize images to input dimensions
+        # ensure mask dimension match image dimensions
+        # reshape to (height, width, channels)
+        # clip first to HU range, then
+        # normalise pixel values to [0, 1]
+        # cast to float32
+        # class weight?
+        # intensity norm?
+    )
     pass
 
 

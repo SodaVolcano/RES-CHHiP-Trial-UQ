@@ -20,6 +20,7 @@ from ..utils.common import conditional, unpack_args, yield_val, apply_if_truthy
 from ..utils.path import list_files, generate_full_paths
 from ..utils.wrappers import curry
 from ..utils.logging import logger_wraps
+from ..utils.parallel import pmap
 from ..common import constants as c
 
 # ============ Helper functions ============
@@ -131,7 +132,7 @@ def _get_dicom_slices(dicom_path: str) -> Iterable[dicom.Dataset]:
     return tz.pipe(
         dicom_path,
         list_files,
-        curried.map(dicom.dcmread),
+        pmap(dicom.dcmread),
         curried.filter(_dicom_type_is(c.CT_IMAGE)),
         # Some slice are not part of the volume (have thickness = "0")
         curried.filter(lambda dicom_file: float(dicom_file.SliceThickness) > 0),
@@ -315,7 +316,7 @@ def load_patient_scan(
     return tz.pipe(
         dicom_path,
         list_files,
-        curried.map(dicom.dcmread),
+        pmap(dicom.dcmread),
         # Get one dicom file to extract PatientID
         lambda dicom_files: next(dicom_files, None),
         apply_if_truthy(
@@ -355,7 +356,7 @@ def load_patient_scans(
     return tz.pipe(
         dicom_collection_path,
         generate_full_paths(path_generator=os.listdir),
-        curried.map(load_patient_scan(method=method, preprocess=preprocess)),
+        pmap(load_patient_scan(method=method, preprocess=preprocess)),
     )
 
 
@@ -430,7 +431,7 @@ def load_all_volumes(
     return tz.pipe(
         dicom_collection_path,
         generate_full_paths(path_generator=os.listdir),
-        curried.map(load_volume(method=method, preprocess=preprocess)),
+        pmap(load_volume(method=method, preprocess=preprocess)),
     )
 
 
@@ -483,7 +484,7 @@ def load_all_masks(
     """
     return tz.pipe(
         generate_full_paths(dicom_collection_path, os.listdir),
-        curried.map(load_mask(preprocess=preprocess)),
+        pmap(load_mask(preprocess=preprocess)),
     )
 
 
