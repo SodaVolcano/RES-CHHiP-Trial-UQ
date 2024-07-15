@@ -95,7 +95,7 @@ def preprocess_data(
             lambda mask_names: [
                 find_organ_roi(organ, mask_names) for organ in ORGAN_MATCHES
             ],
-            curried.filter(_ is not None),
+            curried.filter(_),
             list,
         )
 

@@ -314,7 +314,7 @@ def load_patient_scans(
     return tz.pipe(
         dicom_collection_path,
         generate_full_paths(path_generator=os.listdir),
-        curried.map(load_patient_scan(method=method, preprocess=preprocess)),
+        pmap(load_patient_scan(method=method, preprocess=preprocess)),
     )
 
 
@@ -392,7 +392,7 @@ def load_all_volumes(
     return tz.pipe(
         dicom_collection_path,
         generate_full_paths(path_generator=os.listdir),
-        curried.map(load_volume(method=method, preprocess=preprocess)),
+        pmap(load_volume(method=method, preprocess=preprocess)),
     )
 
 
@@ -442,7 +442,7 @@ def load_all_masks(
     """
     return tz.pipe(
         generate_full_paths(dicom_collection_path, os.listdir),
-        curried.map(load_mask(preprocess=preprocess)),
+        pmap(load_mask(preprocess=preprocess)),
     )
 
 
@@ -453,7 +453,6 @@ def save_dicom_scans_to_h5(dicom_path: str, save_dir: str, preprocess=True) -> N
     Save PatientScans to .h5 files in save_dir from folders of DICOM files in dicom_path
     """
 
-    @logger.catch
     def save_dicom_scan(dicom_path):
         valid_scan = tz.pipe(
             dicom_path,
@@ -461,12 +460,9 @@ def save_dicom_scans_to_h5(dicom_path: str, save_dir: str, preprocess=True) -> N
             lambda x: conditional(x.masks.get_organ_names(), x),
         )
         if valid_scan is None:
+            logger.error(f"Failed to load scan from {dicom_path}")
             return
-
-        tz.pipe(
-            valid_scan,
-            curried.map(_.save_h5(save_dir)),
-        )
+        valid_scan.save_h5(save_dir)
 
     tz.pipe(
         dicom_path,

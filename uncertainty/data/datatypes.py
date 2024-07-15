@@ -2,6 +2,7 @@
 Collection of class encapsulating volume data, supporting lazy evaluation
 """
 
+from pydoc import classname
 import shutil
 from typing import TypeVar
 from typing import Generator, List
@@ -64,12 +65,7 @@ class PatientScan:
     Volume-mask pair
     """
 
-    patient_id: str
-
-    # 3D array of the CT/MRI scan
-    __volume: Generator[np.array, None, None] | np.array
-    # One or multiple masks
-    __masks: List[Mask]
+    logger = logger.bind(classname="PatientScan")
 
     def __init__(
         self,
@@ -118,20 +114,22 @@ class PatientScan:
         return next(mask for mask in self.__masks if mask.observer == observer)
 
     @classmethod
-    @logger.catch
     def load_h5(cls, file_path: str):
-        with h5py.File(file_path, "r") as f:
-            masks = []
-            for observer in f.attrs["mask_observers"]:
-                mask_group = f[f"mask_{observer}"]
-                organs = {name: mask_group[name][:] for name in mask_group.keys()}
-                masks.append(Mask(organs=organs, observer=observer))
+        try:
+            with h5py.File(file_path, "r") as f:
+                masks = []
+                for observer in f.attrs["mask_observers"]:
+                    mask_group = f[f"mask_{observer}"]
+                    organs = {name: mask_group[name][:] for name in mask_group.keys()}
+                    masks.append(Mask(organs=organs, observer=observer))
 
-            return PatientScan(
-                patient_id=f.attrs["patient_id"], volume=f["volume"][:], masks=masks
-            )
+                return PatientScan(
+                    patient_id=f.attrs["patient_id"], volume=f["volume"][:], masks=masks
+                )
+        except Exception as e:
+            cls.logger.error(f"Error loading PatientScan from {file_path}: {e}")
+            return None
 
-    @logger.catch
     def save_h5(self, save_dir: str):
         """
         Save the current object in a file at save_dir/patient_id.h5
@@ -159,14 +157,7 @@ class PatientScan:
             shutil.move(temp_path, file_path)
         except Exception as e:
             os.remove(temp_path)
-            logger.error(f"Error saving PatientScan {self.patient_id}: {e}")
+            self.logger.error(f"Error saving PatientScan {self.patient_id}: {e}")
 
     def __repr__(self) -> str:
         return f"PatientScan(patient_id='{self.patient_id}', mask_observers={self.mask_observers})"
-
-    @property
-    def training_instance(self) -> tuple[np.array, np.array]:
-        """
-        Return tuple of volume and mask for training
-        """
-        pass
