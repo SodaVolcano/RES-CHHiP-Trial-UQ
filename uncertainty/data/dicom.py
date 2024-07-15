@@ -137,7 +137,8 @@ def _get_dicom_slices(dicom_path: str) -> Iterable[dicom.Dataset]:
         curried.filter(_dicom_type_is(c.CT_IMAGE)),
         # Some slice are not part of the volume (have thickness = "0")
         curried.filter(lambda dicom_file: float(dicom_file.SliceThickness) > 0),
-        curried.sorted(key=_dicom_slice_order),
+        # Depth is bottom up, reverse to top down
+        curried.sorted(key=_dicom_slice_order, reverse=True),
     )
 
 
@@ -151,7 +152,12 @@ def _load_roi_mask(
     Wrapper to get_roi_mask_by_name, delay execution and return None if exception is raised
     """
     try:
-        return name, rt_struct.get_roi_mask_by_name(name)
+        return tz.pipe(
+            rt_struct.get_roi_mask_by_name(name),
+            lambda mask: np.flip(mask, 2),  # Flip depth to be top-down in ascending
+            lambda mask: np.flip(mask, 1),  # Flip width from right->left to left->right
+            lambda mask: (name, mask),
+        )
     except AttributeError as e:
         logger.warning(
             f"[WARNING]: Failed to load {name} ROI mask for {rt_struct.ds.PatientID}, ROI name present but ContourSequence is missing.",
@@ -202,13 +208,13 @@ def _preprocess_volume(
     """
     return tz.pipe(
         array,
+        # Move D to first axis so slice is accessible via first axis by zip()
         lambda arr: np.moveaxis(arr, -1, 0),
         lambda arr: [
             arr_slice * intercept_slope[1] + intercept_slope[0]
             for arr_slice, intercept_slope in zip(arr, intercept_slopes)
         ],
-        np.stack,
-        lambda arr: np.moveaxis(arr, 0, -1),
+        lambda slices: np.stack(slices, axis=-1),  # Change depth back to last axis
         make_isotropic(spacings, method=method),
     )
 
@@ -258,6 +264,10 @@ def load_patient_scan(
     the ROI names in the masks to be snake_case. None is returned if no DICOM files
     are found.
 
+    The volume and mask have shape (width, height, depth). On the 2D slices, the
+    width increases from left to right and the height increases from top to bottom.
+    The depth increases from top to bottom (head to feet).
+
     Parameters
     ----------
     dicom_path : str
@@ -301,6 +311,10 @@ def load_patient_scans(
     the ROI names in the masks to be in snake_case. None is returned if no DICOM
     files are found.
 
+    The volume and mask have shape (width, height, depth). On the 2D slices, the
+    width increases from left to right and the height increases from top to bottom.
+    The depth increases from top to bottom (head to feet).
+
     Parameters
     ----------
     dicom_collection_path : str
@@ -324,10 +338,13 @@ def load_volume(
     dicom_path: str, method: str = "linear", preprocess: bool = True
 ) -> Optional[np.array]:
     """
-    Load 3D isotropic volume in range (0, 1) from DICOM files in dicom_path
+    Load 3D volume of shape (W, H, D) from DICOM files in dicom_path
+
+    On a 2D slice, width increases from left to right and height increases from top to bottom.
+    Depth increases from top to bottom (head to feet).
 
     Preprocessing involves interpolating the volume to have isotropic spacing and
-    mapping the pixel values to Hounsfield units (HU)
+    mapping the pixel values to Hounsfield units (HU).
 
     Parameters
     ----------
@@ -336,15 +353,19 @@ def load_volume(
     method : str, optional
         Interpolation method for volume, by default "linear", see `scipy.interpolate`
     preprocess : bool, optional
-        Whether to preprocess the volume and mask, by default True. WARNING: will
+        Whether to preprocess the volume, by default True. WARNING: will
         take significantly longer to load if set to True
     """
 
     def stack_volume(files):
         return tz.pipe(
             [dicom_file.pixel_array for dicom_file in files],
+            # Assume LPS orientation, L axis is right to left, change to be left to right
+            curried.map(lambda slice_: np.flip(slice_, axis=1)),
+            list,
+            # Put depth on last axis
             apply_if_truthy(
-                lambda slices: np.moveaxis(np.stack(slices), 0, -1),
+                lambda slices: np.stack(slices, axis=-1),
             ),
         )
 
@@ -388,6 +409,22 @@ def load_all_volumes(
 ) -> Generator[np.ndarray, None, None]:
     """
     Load 3D volumes from folders of DICOM files in dicom_collection_path
+
+    On a 2D slice, width increases from left to right and height increases from top to bottom.
+    Depth increases from top to bottom (head to feet).
+
+    Preprocessing involves interpolating the volume to have isotropic spacing and
+    mapping the pixel values to Hounsfield units (HU).
+
+    Parameters
+    ----------
+    dicom_collection_path : str
+        Path to the directory containing directories of DICOM files
+    method : str, optional
+        Interpolation method for volume, by default "linear", see `scipy.interpolate`
+    preprocess : bool, optional
+        Whether to preprocess the volume, by default True. WARNING: will
+        take significantly longer to load if set to True
     """
     return tz.pipe(
         dicom_collection_path,
@@ -400,11 +437,16 @@ def load_all_volumes(
 @curry
 def load_mask(dicom_path: str, preprocess: bool = True) -> Optional[Mask]:
     """
-    Load organ-Mask pair from one observer from a folder of DICOM files in dicom_path
+    Load Mask from one observer from a folder of DICOM files in dicom_path
+
+    On a 2D slice, width increases from left to right and height increases from top to bottom.
+    Depth increases from top to bottom (head to feet).
 
     Preprocessing involves interpolating the mask to have isotropic spacing
     and standardising the ROI names to be in snake_case. `None` is
     returned if no RT struct file is found.
+
+    **NOTE**: May not be the same shape as the volume.
 
     Parameters
     ----------
@@ -439,6 +481,22 @@ def load_all_masks(
 ) -> Generator[Mask, None, None]:
     """
     Load Mask list from folders of DICOM files in dicom_collection_path
+
+    On a 2D slice, width increases from left to right and height increases from top to bottom.
+    Depth increases from top to bottom (head to feet).
+
+    Preprocessing involves interpolating the mask to have isotropic spacing
+    and standardising the ROI names to be in snake_case. `None` is
+    returned if no RT struct file is found.
+
+    **NOTE**: May not be the same shape as the volume.
+
+    Parameters
+    ----------
+    dicom_collection_path : str
+        Path to the directory containing directories of DICOM files including the RT struct file
+    preprocess : bool, optional
+        Whether to preprocess the mask using information stored in the DICOM files,
     """
     return tz.pipe(
         generate_full_paths(dicom_collection_path, os.listdir),
@@ -451,6 +509,19 @@ def load_all_masks(
 def save_dicom_scans_to_h5(dicom_path: str, save_dir: str, preprocess=True) -> None:
     """
     Save PatientScans to .h5 files in save_dir from folders of DICOM files in dicom_path
+
+    Preprocessing involves interpolating the volume and masks to have isotropic spacing,
+    mapping the volume pixel values to Hounsfield units (HU), and standardising
+    the ROI names in the masks to be in snake_case. None is returned if no DICOM
+    files are found.
+
+    Parameters
+    ----------
+    dicom_path : str
+        Path to the directory containing folders of DICOM files
+    preprocess : bool, optional
+        Whether to preprocess the volume and mask, by default True. WARNING: will
+        take significantly longer to load if set to True
     """
 
     def save_dicom_scan(dicom_path):

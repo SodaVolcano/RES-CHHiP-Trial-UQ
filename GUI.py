@@ -1,11 +1,11 @@
 import sys
+from scipy.ndimage import zoom
 from PySide6.QtWidgets import (
     QApplication,
     QMainWindow,
     QVBoxLayout,
     QPushButton,
     QSlider,
-    QLabel,
     QComboBox,
     QCheckBox,
     QWidget,
@@ -13,13 +13,9 @@ from PySide6.QtWidgets import (
     QFileDialog,
 )
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QPixmap, QImage
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-from dataclasses import dataclass
-from typing import Union
-import numpy.typing as npt
 
 
 from uncertainty.data.dicom import load_patient_scan
@@ -68,6 +64,13 @@ class MainWindow(QMainWindow):
         self.mask_toggle.stateChanged.connect(self.update_mask)
         control_layout.addWidget(self.mask_toggle)
 
+        self.preprocess_toggle = QCheckBox("Preprocess")
+        self.preprocess_toggle.setEnabled(False)
+        control_layout.addWidget(self.preprocess_toggle)
+
+        self.organ_dropdown = QComboBox()
+        control_layout.addWidget(self.organ_dropdown)
+
         # Add control layout to the main layout
         main_layout.addLayout(control_layout)
 
@@ -84,11 +87,14 @@ class MainWindow(QMainWindow):
     def load_volume(self):
         directory = QFileDialog.getExistingDirectory(self, "Select Directory")
         if directory:
-            self.patient_scan = load_patient_scan(directory, preprocess=True)
+            self.patient_scan = load_patient_scan(
+                directory, preprocess=self.preprocess_toggle.isChecked()
+            )
             self.slice_slider.setMaximum(self.patient_scan.volume.shape[0] - 1)
             self.slice_slider.setEnabled(True)
             self.plane_dropdown.setEnabled(True)
             self.mask_toggle.setEnabled(True)
+            self.organ_dropdown.addItems(self.patient_scan.masks[""].get_organ_names())
             self.update_slice(0)
 
     def update_slice(self, slice_index):
@@ -99,47 +105,61 @@ class MainWindow(QMainWindow):
         self.current_plane = plane
         self.update_slice(0)
 
-    def update_mask(self, state):
-        self.show_mask = state == Qt.Checked
+    def update_mask(self):
+        self.show_mask = self.mask_toggle.isChecked()
         self.display_slice()
 
     def display_slice(self):
         if self.patient_scan is None:
             return
 
-        plane_index = {"Axial": 0, "Sagittal": 1, "Coronal": 2}
+        plane_index = {"Axial": 2, "Sagittal": 1, "Coronal": 0}
         axis = plane_index[self.current_plane]
         self.slice_slider.setMaximum(self.patient_scan.volume.shape[axis])
 
         if axis == 0:
             slice_image = self.patient_scan.volume[self.current_slice, :, :]
             mask_image = (
-                self.patient_scan.mask[self.current_slice, :, :]
+                self.patient_scan.masks[""][self.organ_dropdown.currentText()][
+                    self.current_slice, :, :
+                ]
                 if self.show_mask
                 else None
             )
         elif axis == 1:
             slice_image = self.patient_scan.volume[:, self.current_slice, :]
             mask_image = (
-                self.patient_scan.mask[:, self.current_slice, :]
+                self.patient_scan.masks[""][self.organ_dropdown.currentText()][
+                    :, self.current_slice, :
+                ]
                 if self.show_mask
                 else None
             )
         else:
             slice_image = self.patient_scan.volume[:, :, self.current_slice]
             mask_image = (
-                self.patient_scan.mask[:, :, self.current_slice]
+                self.patient_scan.masks[""][self.organ_dropdown.currentText()][
+                    :, :, self.current_slice
+                ]
                 if self.show_mask
                 else None
             )
 
         self.ax.clear()
-        self.ax.axis("off")
+        self.ax.axis("on")
         self.ax.imshow(slice_image, cmap="gray")
 
         if mask_image is not None:
+            # zoom to be same size as slice_image
+            mask_image = zoom(
+                mask_image,
+                np.array(slice_image.shape) / np.array(mask_image.shape),
+                order=1,
+            )
             self.ax.imshow(
-                np.ma.masked_where(mask_image == 0, mask_image), cmap="jet", alpha=0.5
+                np.ma.masked_where(mask_image == 0, mask_image),
+                cmap="jet",
+                alpha=0.5,
             )
 
         self.ax.set_title(f"Slice {self.current_slice} - {self.current_plane}")

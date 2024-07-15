@@ -121,6 +121,7 @@ def preprocess_data(
                         )
                     )
                 ),
+                order=1,
             ),
             _.astype(np.float32),
         )
