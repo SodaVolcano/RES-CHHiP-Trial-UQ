@@ -342,8 +342,8 @@ class TestLoadMask:
         dicom_path = gen_path()
         mock_rt_struct = mocker.Mock()
         mock_rt_struct.get_roi_names.return_value = ["Organ 1", "Organ 2"]
-        mock_mask1 = np.random.randint(0, 2, (512, 512, 4))
-        mock_mask2 = np.random.randint(0, 2, (512, 512, 4))
+        mock_mask1 = np.random.randint(0, 2, (512, 400, 4))
+        mock_mask2 = np.random.randint(0, 2, (512, 400, 4))
         mock_rt_struct.get_roi_mask_by_name.side_effect = [mock_mask1, mock_mask2]
         mocker.patch(
             PATCH_LOAD_RT_STRUCT,
@@ -355,10 +355,14 @@ class TestLoadMask:
         assert isinstance(mask, Mask)
         assert "organ_1" in mask.get_organ_names()
         assert "organ_2" in mask.get_organ_names()
+        mock_mask1 = np.flip(mock_mask1, axis=1)
+        mock_mask1 = np.flip(mock_mask1, axis=2)
+        mock_mask2 = np.flip(mock_mask2, axis=1)
+        mock_mask2 = np.flip(mock_mask2, axis=2)
         np.testing.assert_array_equal(mask["organ_1"], mock_mask1)
         np.testing.assert_array_equal(mask["organ_2"], mock_mask2)
-        assert mask["organ_1"].shape == (512, 512, 4)
-        assert mask["organ_2"].shape == (512, 512, 4)
+        assert mask["organ_1"].shape == (512, 400, 4)
+        assert mask["organ_2"].shape == (512, 400, 4)
 
     # Handle empty DICOM directory gracefully
     def test_load_mask_empty_directory(self, mocker):
@@ -618,6 +622,8 @@ class TestLoadAllMasks:
 
         from uncertainty.data.preprocessing import make_isotropic
 
+        mock_mask = np.flip(mock_mask, axis=1)
+        mock_mask = np.flip(mock_mask, axis=2)
         mock_mask_interp = make_isotropic((0.5, 0.5, 2.0), mock_mask, method="nearest")
 
         assert len(result) == 2
