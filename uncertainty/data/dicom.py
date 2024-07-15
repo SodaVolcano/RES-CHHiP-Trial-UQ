@@ -328,7 +328,7 @@ def load_patient_scans(
     return tz.pipe(
         dicom_collection_path,
         generate_full_paths(path_generator=os.listdir),
-        pmap(load_patient_scan(method=method, preprocess=preprocess)),
+        curried.map(load_patient_scan(method=method, preprocess=preprocess)),
     )
 
 
@@ -429,7 +429,7 @@ def load_all_volumes(
     return tz.pipe(
         dicom_collection_path,
         generate_full_paths(path_generator=os.listdir),
-        pmap(load_volume(method=method, preprocess=preprocess)),
+        curried.map(load_volume(method=method, preprocess=preprocess)),
     )
 
 
@@ -500,13 +500,18 @@ def load_all_masks(
     """
     return tz.pipe(
         generate_full_paths(dicom_collection_path, os.listdir),
-        pmap(load_mask(preprocess=preprocess)),
+        curried.map(load_mask(preprocess=preprocess)),
     )
+
+
+print()
 
 
 @logger_wraps(level="INFO")
 @curry
-def save_dicom_scans_to_h5(dicom_path: str, save_dir: str, preprocess=True) -> None:
+def save_dicom_scans_to_h5(
+    dicom_path: str, save_dir: str, preprocess=True, n_workers: Optional[int] = None
+) -> None:
     """
     Save PatientScans to .h5 files in save_dir from folders of DICOM files in dicom_path
 
@@ -514,6 +519,8 @@ def save_dicom_scans_to_h5(dicom_path: str, save_dir: str, preprocess=True) -> N
     mapping the volume pixel values to Hounsfield units (HU), and standardising
     the ROI names in the masks to be in snake_case. None is returned if no DICOM
     files are found.
+
+    **Side effect**: Saves PatientScans to .h5 files in save_dir, displays progress bar
 
     Parameters
     ----------
@@ -528,17 +535,23 @@ def save_dicom_scans_to_h5(dicom_path: str, save_dir: str, preprocess=True) -> N
         valid_scan = tz.pipe(
             dicom_path,
             load_patient_scan(preprocess=preprocess),
-            lambda x: conditional(x.masks.get_organ_names(), x),
+            lambda x: conditional(x.masks[""].get_organ_names(), x),
         )
+
         if valid_scan is None:
             logger.error(f"Failed to load scan from {dicom_path}")
             return
+        if os.path.exists(os.path.join(save_dir, f"{valid_scan.patient_id}.h5")):
+            logger.warning(f"Scan {valid_scan.patient_id} already exist, skipping...")
+            return
+
         valid_scan.save_h5(save_dir)
 
+    n_scans = len(os.listdir(dicom_path))
     tz.pipe(
         dicom_path,
         generate_full_paths(path_generator=os.listdir),
-        pmap(save_dicom_scan),
-        tqdm,
-        list,
+        lambda x: [
+            i for i in tqdm(pmap(save_dicom_scan, n_workers=n_workers), total=n_scans)
+        ],
     )

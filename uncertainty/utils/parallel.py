@@ -4,7 +4,6 @@ Overload for embarrassingly parallel tasks
 
 from typing import Generator, Literal, Optional
 from .wrappers import curry
-from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 from pathos.multiprocessing import ProcessingPool, ThreadingPool
 
 
