@@ -1,0 +1,32 @@
+{
+  "$schema": "https://raw.githubusercontent.com/jetify-com/devbox/0.12.0/.schema/devbox.schema.json",
+  "packages": [
+    "python@3.12.4",
+    // Used by tensorflow
+    "stdenv.cc.cc.lib",
+    //"glibc",
+    //"zlib",
+    //"zstd",
+    //"libGL",
+    //"libGLU",
+    "github:GuillaumeDesforges/fix-python/"
+  ],
+  "env": {
+    "VENV_DIR": ".venv"
+  },
+  "shell": {
+    "init_hook": [
+      ". $VENV_DIR/bin/activate",
+      "pip install -r requirements.txt -q",
+      // Python modules assume path for C/C++ libraries, use fix-python to change link
+      "fix-python --venv .venv --libs .nix/libs.nix",
+      // Change library path for tensorflow so it can import C++ library
+      "export LD_LIBRARY_PATH=./.devbox/nix/profile/default/lib64:$LD_LIBRARY_PATH"
+    ],
+    "scripts": {
+      "test": [
+        "pytest"
+      ]
+    }
+  }
+}

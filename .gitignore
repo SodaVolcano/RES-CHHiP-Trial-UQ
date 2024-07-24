@@ -10,6 +10,10 @@ demo.py
 *.zip
 logs/
 
+.devbox/
+.nix/fix-python
+logs/*
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
