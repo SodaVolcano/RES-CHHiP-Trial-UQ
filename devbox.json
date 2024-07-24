@@ -19,14 +19,10 @@
       ". $VENV_DIR/bin/activate",
       "pip install -r requirements.txt -q",
       // Python modules assume path for C/C++ libraries, use fix-python to change link
-      "fix-python --venv .venv --libs .nix/libs.nix",
+      "fix-python --venv .venv --libs .nix/libs.nix &> /dev/null",
       // Change library path for tensorflow so it can import C++ library
       "export LD_LIBRARY_PATH=./.devbox/nix/profile/default/lib64:$LD_LIBRARY_PATH"
     ],
-    "scripts": {
-      "test": [
-        "pytest"
-      ]
-    }
+    "scripts": {}
   }
 }
