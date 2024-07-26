@@ -4,17 +4,6 @@ Code for performing uncertainty quantification on CT prostate images.
 The repository contains modules for loading DICOM and NIFTI files, preprocessing the images, training a model, and performing uncertainty quantification.
 
 # Setup
-## pip
-Using python version 3.12.4, run the following commands.
-```bash
-python3 -m venv venv   # Create a virtual environment folder
-source venv/bin/activate   # on Mac OS and Linux, OR
-venv\Scripts\activate      # On Windows
-pip install -r /path/to/requirements.txt   # Install python dependencies
-```
-
-You can deactivate the virtual environment by running `deactivate`.
-
 
 ## Devbox + direnv
 This is the recommended method for Linux and Mac OS as the resulting environment is isolated from the rest of the host environment.
@@ -32,11 +21,23 @@ direnv allow    # Allow direnv to execute .envrc
 ```
 
 
+## pip
+Using python version 3.12.4, run the following commands.
+```bash
+python3 -m venv venv   # Create a virtual environment folder
+source venv/bin/activate   # on Mac OS and Linux, OR
+venv\Scripts\activate      # On Windows
+pip install -r /path/to/requirements.txt   # Install python dependencies
+```
+
+You can deactivate the virtual environment by running `deactivate`.
+
+
 # Usage
 ## Logging
 Logging is disable by default. To enable logging, add the following lines to your code and logs will be added to `logs/` each time the code is run. You can manually configure the logger if you do not wish to use the provided configurations.
 
-```
+```python
 from loguru import logger
 from uncertainty.utils.logging import config_logger
 
@@ -83,7 +84,7 @@ Devbox is internally powered by [Nix](https://nixos.org/) which both a package m
 [Nix Flakes](https://nixos.org/) is a standarised way of building packages consisting of mainly two attributes. `inputs` specify the dependencies for building the `outputs` where the specified dependencies are version locked in a `flake.lock` file to ensure that they are reproducible on future installs (`devbox.lock` functions in the same manner). The `outputs` attribute is a *function* that takes dependencies in `inputs` to produce an attribute set, such as a set containing `packages` or `devShells`.
 
 Devbox allows packages to be installed from a `flake.nix` file, whether locally or online e.g. via GitHub repositories. The line
-```
+```json
 "packages": [
     ...
     "github:GuillaumeDesforges/fix-python/"
@@ -99,6 +100,8 @@ As Nix installs packages in isolation from one another, many libraries that link
 
 A function can by "curried" if it's decorated by `@curry`, where the function can be called with only partial arguments and return a new function that can be called with the remaining arguments. Consider the following example:
 ```python
+from uncertainty.utils.wrappers import curry  # wrapper around toolz.curry
+
 @curry
 def add(a, b, c=3):
     return a + b + c
@@ -115,6 +118,8 @@ add(5, c=6)  # equivalent to lambda b: 5 + b + 6
 
 Some pipelines use `_`, which is a shortcut for simple lambda functions from `fn.py`. For example:
 ```python
+from fn import _
+
 _      # lambda x: x
 _ + 3  # lambda x: x + 3
 _.some_method() # lambda x: x.some_method()
@@ -124,4 +129,4 @@ bool(_)  # bool(lambda x: x), can't pass value to inside functions
 _ is not None  # (lambda x: x) is not None, always True as a function is never None
 ```
 
-[^1]: Technically most functions *do* have side effects in the form of logging (if enabled). Some functions are purely used for their side effects such as read/write operations or displaying a progress bar.
+[^1]: Technically most functions in `uncertainty` *do* have side effects in the form of logging (if enabled). Some functions are purely used for their side effects such as read/write operations or displaying a progress bar.

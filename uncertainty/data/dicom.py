@@ -133,7 +133,7 @@ def _get_dicom_slices(dicom_path: str) -> Iterable[dicom.Dataset]:
     return tz.pipe(
         dicom_path,
         list_files,
-        curried.map(dicom.dcmread),
+        curried.map(lambda x: dicom.dcmread(x, force=True)),
         curried.filter(_dicom_type_is(c.CT_IMAGE)),
         # Some slice are not part of the volume (have thickness = "0")
         curried.filter(lambda dicom_file: float(dicom_file.SliceThickness) > 0),
@@ -181,7 +181,7 @@ def _load_rt_struct(dicom_path: str) -> Optional[rt_utils.RTStructBuilder]:
         dicom_path,
         list_files,
         curried.filter(
-            lambda path: _dicom_type_is(c.RT_STRUCTURE_SET)(dicom.dcmread(path))
+            lambda path: _dicom_type_is(c.RT_STRUCTURE_SET, dicom.dcmread(path, force=True))
         ),
         list,
         apply_if_truthy(
@@ -283,7 +283,7 @@ def load_patient_scan(
     return tz.pipe(
         dicom_path,
         list_files,
-        curried.map(dicom.dcmread),
+        curried.map(lambda x: dicom.dcmread(x, force=True)),
         # Get one dicom file to extract PatientID
         lambda dicom_files: next(dicom_files, None),
         apply_if_truthy(
@@ -532,26 +532,29 @@ def save_dicom_scans_to_h5(
     """
 
     def save_dicom_scan(dicom_path):
-        valid_scan = tz.pipe(
-            dicom_path,
-            load_patient_scan(preprocess=preprocess),
-            lambda x: conditional(x.masks[""].get_organ_names(), x),
-        )
+        try:
+            valid_scan = tz.pipe(
+                dicom_path,
+                load_patient_scan(preprocess=preprocess),
+                lambda x: conditional(x.masks[""].get_organ_names(), x),
+            )
 
-        if valid_scan is None:
-            logger.error(f"Failed to load scan from {dicom_path}")
-            return
-        if os.path.exists(os.path.join(save_dir, f"{valid_scan.patient_id}.h5")):
-            logger.warning(f"Scan {valid_scan.patient_id} already exist, skipping...")
-            return
+            if valid_scan is None:
+                logger.error(f"Failed to load scan from {dicom_path}")
+                return
+            if os.path.exists(os.path.join(save_dir, f"{valid_scan.patient_id}.h5")):
+                logger.warning(f"Scan {valid_scan.patient_id} already exist, skipping...")
+                return
 
-        valid_scan.save_h5(save_dir)
+            valid_scan.save_h5(save_dir)
+        except Exception as e:
+            logger.error(f"Failed to load scan from {dicom_path}, {e}")
 
     n_scans = len(os.listdir(dicom_path))
     tz.pipe(
         dicom_path,
         generate_full_paths(path_generator=os.listdir),
         lambda x: [
-            i for i in tqdm(pmap(save_dicom_scan, n_workers=n_workers), total=n_scans)
+            i for i in tqdm(pmap(save_dicom_scan, x, n_workers=n_workers), total=n_scans)
         ],
     )
