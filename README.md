@@ -49,7 +49,7 @@ config_logger()
 ### DICOM
 The list of utility functions for reading DICOM files is provided in `uncertainty.data.dicom`, the functions assume that all of the DICOM files for a single patient is stored in a single folder. A usage example is provided below.
 
-**Warning: Preprocessing will take a significant amount of time and RAM usage, do not enable if you have a weak computer (e.g. 8GB of RAM).**
+**Warning: Preprocessing will take a significant amount of time and RAM usage, do not enable if you don't have a beefy computer (e.g. 32+GB of RAM).**
 
 ```python
 import uncertainty.data.dicom as dicom

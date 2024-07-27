@@ -9,7 +9,7 @@
     //"zstd",
     //"libGL",
     //"libGLU",
-    "github:GuillaumeDesforges/fix-python/"
+    "github:GuillaumeDesforges/fix-python/",
   ],
   "env": {
     "VENV_DIR": ".venv"

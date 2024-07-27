@@ -536,8 +536,8 @@ def save_dicom_scans_to_h5(
         try:
             valid_scan = tz.pipe(
                 dicom_path,
-                load_patient_scan(preprocess=preprocess),
-                
+                # Load without preprocess to check for validity
+                load_patient_scan(preprocess=False),
                 lambda x: conditional(get_organ_names(x.masks[""]), x),
             )
 
@@ -549,7 +549,7 @@ def save_dicom_scans_to_h5(
                     f"Scan {valid_scan.patient_id} already exist, skipping..."
                 )
                 return
-            save_h5(valid_scan, save_dir)
+            save_h5(load_patient_scan(dicom_path, preprocess=preprocess), save_dir)
         except Exception as e:
             logger.error(f"Failed to load scan from {dicom_path}, {e}")
 

@@ -9,6 +9,9 @@ demo.ipynb
 demo.py
 *.zip
 logs/
+*.h5
+*.dcm
+*.nii.gz
 
 .devbox/
 .nix/fix-python

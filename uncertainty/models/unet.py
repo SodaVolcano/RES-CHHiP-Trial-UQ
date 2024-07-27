@@ -124,7 +124,7 @@ def unet_decoder(x, skips, config: dict = model_config()):
 
     return tz.pipe(
         x,
-        lambda x: curried.pipe(x, *levels),  # Run x through each decoder level
+        lambda x: tz.pipe(x, *levels),  # Run x through each decoder level
         layers.Conv2D(  # Final 1x1 convolution
             config["n_kernels_last"],
             kernel_size=(1, 1),
