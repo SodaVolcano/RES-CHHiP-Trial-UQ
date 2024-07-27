@@ -15,7 +15,7 @@ from tqdm import tqdm
 from loguru import logger
 
 from .preprocessing import make_isotropic
-from .mask import Mask
+from .mask import Mask, get_organ_names
 from .patient_scan import PatientScan, save_h5
 from ..utils.common import conditional, unpack_args, apply_if_truthy
 from ..utils.path import list_files, generate_full_paths
@@ -537,11 +537,12 @@ def save_dicom_scans_to_h5(
             valid_scan = tz.pipe(
                 dicom_path,
                 load_patient_scan(preprocess=preprocess),
-                lambda x: conditional(x.masks[""].get_organ_names(), x),
+                
+                lambda x: conditional(get_organ_names(x.masks[""]), x),
             )
 
             if valid_scan is None:
-                logger.error(f"Failed to load scan from {dicom_path}")
+                logger.error(f"Failed to load scan from {dicom_path}, load_patient_scan returned None")
                 return
             if os.path.exists(os.path.join(save_dir, f"{valid_scan.patient_id}.h5")):
                 logger.warning(

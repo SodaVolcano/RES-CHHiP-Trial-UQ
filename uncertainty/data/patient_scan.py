@@ -1,12 +1,10 @@
 import os
-import shutil
-import tempfile
 from typing import List, NamedTuple, Optional
 import numpy as np
 from loguru import logger
 import h5py
 
-from .mask import Mask
+from .mask import Mask, get_organ_names
 
 
 class PatientScan(NamedTuple):
@@ -73,18 +71,17 @@ def save_h5(scan: PatientScan, save_dir: str) -> None:
     """
     Save the current object in a file at save_dir/patient_id.h5
 
-    No file is created if exception occurs
+    The file is removed if an error occurs during saving
     """
-    temp_path = tempfile.NamedTemporaryFile(delete=False).name
     file_path = os.path.join(save_dir, f"{scan.patient_id}.h5")
 
     try:
-        with h5py.File(temp_path, "w") as f:
+        with h5py.File(file_path, "w") as f:
             f.create_dataset("volume", data=scan.volume, compression="gzip")
 
             for mask in scan.masks.values():
                 group = f.create_group(f"mask_{mask.observer}")
-                for organ_name in mask.get_organ_names():
+                for organ_name in get_organ_names(mask):
                     group.create_dataset(
                         organ_name, data=mask[organ_name], compression="gzip"
                     )
@@ -92,9 +89,7 @@ def save_h5(scan: PatientScan, save_dir: str) -> None:
             f.attrs["patient_id"] = scan.patient_id
             f.attrs["mask_observers"] = scan.mask_observers
 
-        from_h5(temp_path)  # Check if loading works
-        shutil.move(temp_path, file_path)
+        from_h5(file_path)  # Check if loading works
     except Exception as e:
         logger.error(f"Error saving PatientScan {scan.patient_id}: {e}")
-    finally:
-        os.remove(temp_path)
+        os.remove(file_path)
