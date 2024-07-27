@@ -1,6 +1,70 @@
 {
   "lockfile_version": "1",
   "packages": {
+    "black@24.4.2": {
+      "last_modified": "2024-07-07T07:43:47Z",
+      "resolved": "github:NixOS/nixpkgs/b60793b86201040d9dee019a05089a9150d08b5b#black",
+      "source": "devbox-search",
+      "version": "24.4.2",
+      "systems": {
+        "aarch64-darwin": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/mf9y318kdb0901npxrxl190xfk2wshz8-python3.12-black-24.4.2",
+              "default": true
+            },
+            {
+              "name": "dist",
+              "path": "/nix/store/7i6sr8h17lhclggm1ij8wrhsmw6gz1xj-python3.12-black-24.4.2-dist"
+            }
+          ],
+          "store_path": "/nix/store/mf9y318kdb0901npxrxl190xfk2wshz8-python3.12-black-24.4.2"
+        },
+        "aarch64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/p6ffa8k7njjscayxqz2y06pib4aailwj-python3.12-black-24.4.2",
+              "default": true
+            },
+            {
+              "name": "dist",
+              "path": "/nix/store/8llrl79pwa4ncpqsysilixwa8gqbhki8-python3.12-black-24.4.2-dist"
+            }
+          ],
+          "store_path": "/nix/store/p6ffa8k7njjscayxqz2y06pib4aailwj-python3.12-black-24.4.2"
+        },
+        "x86_64-darwin": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/1qd0wijhzc2b89bqxa9s59yr2rv5p976-python3.12-black-24.4.2",
+              "default": true
+            },
+            {
+              "name": "dist",
+              "path": "/nix/store/jlk9z1hq7l49lpnjlazbx2m1vb89rwa3-python3.12-black-24.4.2-dist"
+            }
+          ],
+          "store_path": "/nix/store/1qd0wijhzc2b89bqxa9s59yr2rv5p976-python3.12-black-24.4.2"
+        },
+        "x86_64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/1kwaqch1i3xhbr8pi85qr0bdqzifzqpp-python3.12-black-24.4.2",
+              "default": true
+            },
+            {
+              "name": "dist",
+              "path": "/nix/store/zxcq658kfv9n11adz7kz51dfdj5f8xha-python3.12-black-24.4.2-dist"
+            }
+          ],
+          "store_path": "/nix/store/1kwaqch1i3xhbr8pi85qr0bdqzifzqpp-python3.12-black-24.4.2"
+        }
+      }
+    },
     "python@3.12.4": {
       "last_modified": "2024-07-07T07:43:47Z",
       "plugin_version": "0.0.3",

@@ -3,12 +3,12 @@ Collection of functions to preprocess numpy arrays
 """
 
 from operator import add
-from typing import Iterable, Optional
+from typing import Iterable, Literal, Optional
 
+import SimpleITK as sitk
 import numpy as np
 import toolz as tz
 from toolz import curried
-from scipy.interpolate import interpn
 
 from uncertainty.utils.logging import logger_wraps
 
@@ -88,23 +88,19 @@ def _get_spaced_coords(spacing: np.number, length: int) -> list[np.number]:
 def make_isotropic(
     spacings: Iterable[np.number],
     array: np.ndarray,
-    method: str = "linear",
+    method: Literal["nearest", "linear", "b_spline", "gaussian"] = "linear",
 ) -> np.ndarray:
     """
     Return an isotropic array with uniformly 1 unit of spacing between coordinates
 
-    As an example, consider a 2D array of shape `(N, M)` defined on a grid with
-    spacings `(dx, dy)` on the x and y axes respectively. Let f(x, y) be a function
-    that maps the coordinates `(x, y)` on the grid to a value in the array. i.e.
-    `array[i, j] = f(x_i, y_j)`. This function interpolates the array to a new
-    grid with spacings `(1, 1)` on the x and y axes respectively.
+    Array can ONLY be **2D** or **3D**
 
     Parameters
     ----------
     spacings : Iterable[npt.Number]
         Spacing of coordinate points for each axis
     array : npt.NDArray[Any, npt.Number]
-        Array of any dimension to interpolate
+        Either a **2D** or **3D** array to interpolate
     method : str, optional
         Interpolation method, by default "linear"
 
@@ -113,19 +109,50 @@ def make_isotropic(
     npt.NDArray[Any, npt.Number]
         Interpolated array on an isotropic grid
     """
+    interpolators = {
+        "nearest": sitk.sitkNearestNeighbor,
+        "linear": sitk.sitkLinear,
+        "b_spline": sitk.sitkBSpline,
+        "gaussian": sitk.sitkGaussian,
+    }
+    new_size = [
+        int(round(old_size * old_spacing))
+        for old_size, old_spacing, in zip(array.shape, spacings)
+    ]
+
+    img = tz.pipe(
+        array,
+        lambda arr: arr.astype(np.float32),
+        # sitk moves (H, W, D) to (D, W, H) >:( move axis here so img is (H, W, D)
+        lambda arr: np.moveaxis(arr, 1, 0),  # width to first axis
+        lambda arr: conditional(
+            len(arr.shape) == 3, np.moveaxis(arr, -1, 0), arr  # depth to first axis
+        ),
+        lambda arr: sitk.GetImageFromArray(arr),
+    )
+    # cannot do functionally, sitk sucks
+    img.SetOrigin((0, 0, 0))  # truncates to (0, 0) if array is 2D
+    img.SetSpacing(spacings)
+
     return tz.pipe(
-        zip(spacings, array.shape),
-        tz.curried.map(
-            unpack_args(lambda spacing, length: _get_spaced_coords(spacing, length))
+        img,
+        lambda img: sitk.Resample(
+            img,
+            new_size,
+            sitk.Transform(),
+            interpolators[method],
+            img.GetOrigin(),
+            (1, 1, 1),  # new spacing
+            img.GetDirection(),
+            0,
+            img.GetPixelID(),
         ),
-        tuple,
-        # Resample array using isotropic grid
-        lambda anisotropic_coords: interpn(
-            anisotropic_coords,
-            array,
-            _isotropic_grid(anisotropic_coords),
-            method=method,
+        lambda img: sitk.GetArrayFromImage(img),
+        # arr is (D, W, H) move back to (H, W, D)
+        lambda arr: conditional(
+            len(arr.shape) == 3, np.moveaxis(arr, 0, -1), arr  # depth to last axis
         ),
+        lambda arr: np.moveaxis(arr, 1, 0),  # height to first axis
     )
 
 

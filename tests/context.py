@@ -13,8 +13,8 @@ print(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import uncertainty
 
 # Import aliases
-Mask = uncertainty.data.datatypes.Mask
-PatientScan = uncertainty.data.datatypes.PatientScan
+Mask = uncertainty.data.mask.Mask
+PatientScan = uncertainty.data.patient_scan.PatientScan
 c = uncertainty.common.constants
 
 # utils

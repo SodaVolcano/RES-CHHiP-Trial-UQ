@@ -11,15 +11,20 @@ from itertools import islice
 import toolz as tz
 import toolz.curried as curried
 
+
 @curry
-def growby[T, R](
+def growby[
+    T, R
+](
     init: T,
     f: Callable[[T | R], R],
     length: int | None = None,
-) -> Generator[T | R, None, None]:
-    """ 
+) -> Generator[
+    T | R, None, None
+]:
+    """
     Grow a sequence by repeatedly applying f to last item in sequence
-    
+
     Parameters
     ----------
     f: Callable
@@ -38,25 +43,27 @@ def growby[T, R](
 
 
 @curry
-def growby_accum[T, R](init: T, fs: Callable[[T|R], R]) -> Generator[T | R, None, None]:
+def growby_accum[
+    T, R
+](init: T, fs: Callable[[T | R], R]) -> Generator[T | R, None, None]:
     """
     Grow a sequence by applying list of functions to the last element of the current sequence
-    
+
     Parameters
     ----------
     fs: Callable
         List of functions to be called on the last element of the sequence
     init: any
         Initial value of the sequence
-    
+
     Returns
     -------
     Generator[T | R, None, None]
-        Sequence constructed by repeatedly applying each f in fs, 
+        Sequence constructed by repeatedly applying each f in fs,
         `[init, f1(init), f2(f1(init)), ...]`
     """
     return tz.pipe(
         fs,
-        curried.cons(init), # [init, f1, f2, ...]
+        curried.cons(init),  # [init, f1, f2, ...]
         curried.accumulate(lambda x, f: f(x)),
     )

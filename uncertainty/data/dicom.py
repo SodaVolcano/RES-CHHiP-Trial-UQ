@@ -13,11 +13,11 @@ import toolz as tz
 import toolz.curried as curried
 from tqdm import tqdm
 from loguru import logger
-from fn import _
 
 from .preprocessing import make_isotropic
-from .datatypes import Mask, PatientScan
-from ..utils.common import conditional, unpack_args, yield_val, apply_if_truthy
+from .mask import Mask
+from .patient_scan import PatientScan, save_h5
+from ..utils.common import conditional, unpack_args, apply_if_truthy
 from ..utils.path import list_files, generate_full_paths
 from ..utils.wrappers import curry
 from ..utils.logging import logger_wraps
@@ -137,8 +137,7 @@ def _get_dicom_slices(dicom_path: str) -> Iterable[dicom.Dataset]:
         curried.filter(_dicom_type_is(c.CT_IMAGE)),
         # Some slice are not part of the volume (have thickness = "0")
         curried.filter(lambda dicom_file: float(dicom_file.SliceThickness) > 0),
-        # Depth is bottom up, reverse to top down
-        curried.sorted(key=_dicom_slice_order, reverse=True),
+        curried.sorted(key=_dicom_slice_order),
     )
 
 
@@ -181,7 +180,9 @@ def _load_rt_struct(dicom_path: str) -> Optional[rt_utils.RTStructBuilder]:
         dicom_path,
         list_files,
         curried.filter(
-            lambda path: _dicom_type_is(c.RT_STRUCTURE_SET, dicom.dcmread(path, force=True))
+            lambda path: _dicom_type_is(
+                c.RT_STRUCTURE_SET, dicom.dcmread(path, force=True)
+            )
         ),
         list,
         apply_if_truthy(
@@ -228,7 +229,7 @@ def _preprocess_mask(
         lambda name, mask, spacings: (
             name,
             # Delay, make_isotropic is very slow
-            yield_val(make_isotropic, spacings, mask, method="nearest"),
+            make_isotropic(spacings, mask, method="nearest"),
         )
     )
 
@@ -290,7 +291,7 @@ def load_patient_scan(
             lambda dicom_file: (
                 PatientScan(
                     dicom_file.PatientID,
-                    yield_val(load_volume, dicom_path, method, preprocess),
+                    load_volume(dicom_path, method, preprocess),
                     empty_lst_if_none([load_mask(dicom_path, preprocess)]),
                 )
             )
@@ -338,7 +339,7 @@ def load_volume(
     dicom_path: str, method: str = "linear", preprocess: bool = True
 ) -> Optional[np.array]:
     """
-    Load 3D volume of shape (W, H, D) from DICOM files in dicom_path
+    Load 3D volume of shape (H, W, D) from DICOM files in dicom_path
 
     On a 2D slice, width increases from left to right and height increases from top to bottom.
     Depth increases from top to bottom (head to feet).
@@ -437,7 +438,7 @@ def load_all_volumes(
 @curry
 def load_mask(dicom_path: str, preprocess: bool = True) -> Optional[Mask]:
     """
-    Load Mask from one observer from a folder of DICOM files in dicom_path
+    Load Mask wiht shape (H, W, D) from one observer from a folder of DICOM files in dicom_path
 
     On a 2D slice, width increases from left to right and height increases from top to bottom.
     Depth increases from top to bottom (head to feet).
@@ -465,7 +466,7 @@ def load_mask(dicom_path: str, preprocess: bool = True) -> Optional[Mask]:
         rt_struct.get_roi_names(),
         curried.map(_load_roi_mask(rt_struct)),
         # (roi_name, mask_generator) pairs, only successful masks are kept
-        curried.filter(_),  # not None
+        curried.filter(lambda x: x is not None),
         curried.map(
             unpack_args(lambda name, mask: (_standardise_roi_name(name), mask))
         ),
@@ -543,18 +544,18 @@ def save_dicom_scans_to_h5(
                 logger.error(f"Failed to load scan from {dicom_path}")
                 return
             if os.path.exists(os.path.join(save_dir, f"{valid_scan.patient_id}.h5")):
-                logger.warning(f"Scan {valid_scan.patient_id} already exist, skipping...")
+                logger.warning(
+                    f"Scan {valid_scan.patient_id} already exist, skipping..."
+                )
                 return
-
-            valid_scan.save_h5(save_dir)
+            save_h5(valid_scan, save_dir)
         except Exception as e:
             logger.error(f"Failed to load scan from {dicom_path}, {e}")
 
     n_scans = len(os.listdir(dicom_path))
+    mapper = pmap(n_workers=n_workers) if n_workers > 1 else map
     tz.pipe(
         dicom_path,
         generate_full_paths(path_generator=os.listdir),
-        lambda x: [
-            i for i in tqdm(pmap(save_dicom_scan, x, n_workers=n_workers), total=n_scans)
-        ],
+        lambda x: [i for i in tqdm(mapper(save_dicom_scan, x), total=n_scans)],
     )

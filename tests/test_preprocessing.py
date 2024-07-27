@@ -5,8 +5,8 @@ from uncertainty.data.preprocessing import make_isotropic
 from .context import uncertainty
 
 # Import aliases
-Mask = uncertainty.data.datatypes.Mask
-PatientScan = uncertainty.data.datatypes.PatientScan
+Mask = uncertainty.data.mask.Mask
+PatientScan = uncertainty.data.patient_scan.PatientScan
 load_patient_scan = uncertainty.data.nifti.load_patient_scan
 map_interval = uncertainty.data.preprocessing.map_interval
 _isotropic_grid = uncertainty.data.preprocessing._isotropic_grid
@@ -197,7 +197,15 @@ class TestMakeIsotropic:
         spacings = [2, 2]
 
         # Expected output after interpolation
-        expected_output = np.array([[1, 1.5, 2], [2, 2.5, 3], [3, 3.5, 4]])
+
+        expected_output = np.array(
+            [
+                [1.0, 1.5, 2.0, 0.0],
+                [2.0, 2.5, 3.0, 0.0],
+                [3.0, 3.5, 4.0, 0.0],
+                [0.0, 0.0, 0.0, 0.0],
+            ]
+        )
 
         # Call the function
         result = make_isotropic(spacings, array)

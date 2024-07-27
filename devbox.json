@@ -4,7 +4,7 @@
     "python@3.12.4",
     // Used by tensorflow
     "stdenv.cc.cc.lib",
-    //"glibc",
+    "black@24.4.2",
     //"zlib",
     //"zstd",
     //"libGL",
@@ -17,9 +17,16 @@
   "shell": {
     "init_hook": [
       ". $VENV_DIR/bin/activate",
-      "pip install -r requirements.txt -q",
+      // Check if requirements.txt was modified in the latest commit
+      "if git diff --name-only HEAD~1 HEAD | grep -q 'requirements.txt'; then",
+      "    echo \"requirements.txt was modified. Installing dependencies...\"",
+      "    pip install -r requirements.txt -q",
       // Python modules assume path for C/C++ libraries, use fix-python to change link
-      "fix-python --venv .venv --libs .nix/libs.nix &> /dev/null",
+      "    echo \"Fixing python paths...\"",
+      "    fix-python --venv .venv --libs .nix/libs.nix &> /dev/null",
+      "else",
+      "    echo \"requirements.txt was not modified. Skipping dependency installation.\"",
+      "fi",
       // Change library path for tensorflow so it can import C++ library
       "export LD_LIBRARY_PATH=./.devbox/nix/profile/default/lib64:$LD_LIBRARY_PATH"
     ],

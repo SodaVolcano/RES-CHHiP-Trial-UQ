@@ -5,7 +5,7 @@ import numpy as np
 
 class TestMask:
 
-    # Retrieve mask for a valid organ using get_organ_mask
+    # Retrieve mask for a valid organ
     def test_retrieve_mask_for_valid_organ(self):
 
         # Initialize a Mask object with organ-mask pairs
@@ -17,12 +17,12 @@ class TestMask:
         )
 
         # Retrieve the mask for "organ_1"
-        organ_1_mask = mask.get_organ_mask("organ_1")
+        organ_1_mask = mask["organ_1"]
 
         # Assert that the retrieved mask is correct
         np.testing.assert_array_equal(organ_1_mask, np.array([[1, 1], [0, 1]]))
 
-    # Retrieve mask for a non-existent organ using get_organ_mask
+    # Retrieve mask for a non-existent organ
     def test_retrieve_mask_for_non_existent_organ(self):
 
         # Initialize a Mask object with organ-mask pairs
@@ -35,4 +35,4 @@ class TestMask:
 
         # Attempt to retrieve the mask for a non-existent organ and assert that it raises a KeyError
         with pytest.raises(KeyError):
-            mask.get_organ_mask("non_existent_organ")
+            mask["non_existent_organ"]

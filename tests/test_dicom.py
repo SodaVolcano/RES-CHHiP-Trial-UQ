@@ -4,6 +4,8 @@ import pytest
 import numpy as np
 import pydicom
 
+from uncertainty.data.mask import get_organ_mask, get_organ_names
+
 from .context import gen_path, uncertainty
 
 _most_common_shape = uncertainty.data.dicom._most_common_shape
@@ -15,8 +17,8 @@ load_mask = uncertainty.data.dicom.load_mask
 load_patient_scan = uncertainty.data.dicom.load_patient_scan
 load_patient_scans = uncertainty.data.dicom.load_patient_scans
 load_all_masks = uncertainty.data.dicom.load_all_masks
-Mask = uncertainty.data.datatypes.Mask
-PatientScan = uncertainty.data.datatypes.PatientScan
+Mask = uncertainty.data.mask.Mask
+PatientScan = uncertainty.data.patient_scan.PatientScan
 
 # Patch paths
 PATCH_LIST_FILES = "uncertainty.data.dicom.list_files"
@@ -134,7 +136,7 @@ class TestLoadVolume:
         mock_dicom.SOPClassUID = c.CT_IMAGE
         mock_dicom.Rows = 512
         mock_dicom.Columns = 512
-        mock_dicom.pixel_array = np.zeros((512, 512))
+        mock_dicom.pixel_array = np.zeros((512, 412))
         mock_dicom.PixelSpacing = [0.5, 0.5]
         mock_dicom.SliceThickness = 2.0
         mock_dicom.ImageOrientationPatient = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0]
@@ -148,7 +150,7 @@ class TestLoadVolume:
             volume = load_volume(gen_path())
 
         # Assert the volume shape is as expected
-        assert volume.shape == (512 // 2, 512 // 2, 7)
+        assert volume.shape == (512 // 2, 412 // 2, 8)
 
     # correctly loads a 3D volume from a directory of DICOM files
     def test_loads_3d_volume_correctly_no_preprocessing(self, mocker):
@@ -163,7 +165,7 @@ class TestLoadVolume:
         mock_dicom.SOPClassUID = c.CT_IMAGE
         mock_dicom.Rows = 512
         mock_dicom.Columns = 512
-        mock_dicom.pixel_array = np.zeros((512, 512))
+        mock_dicom.pixel_array = np.zeros((512, 412))
         mock_dicom.PixelSpacing = [0.5, 0.5]
         mock_dicom.SliceThickness = 2.0
         mock_dicom.ImageOrientationPatient = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0]
@@ -177,8 +179,8 @@ class TestLoadVolume:
             volume = load_volume(gen_path(), preprocess=False)
 
         # Assert the volume shape is as expected
-        assert volume.shape == (512, 512, 4)
-        np.testing.assert_array_equal(volume, np.zeros((512, 512, 4)))
+        assert volume.shape == (512, 412, 4)
+        np.testing.assert_array_equal(volume, np.zeros((512, 412, 4)))
 
     # directory contains no DICOM files
     def test_no_dicom_files_in_directory(self, mocker):
@@ -226,7 +228,7 @@ class TestLoadVolume:
         mock_dicom3.SOPClassUID = c.CT_IMAGE
         mock_dicom3.Rows = 512
         mock_dicom3.Columns = 512
-        mock_dicom3._pixel_array = np.zeros((512, 512))
+        mock_dicom3._pixel_array = np.zeros((512, 412))
         mock_dicom3.PixelSpacing = [0.5, 0.5]
         mock_dicom3.SliceThickness = 1.0
         mock_dicom3.ImageOrientationPatient = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0]
@@ -240,7 +242,7 @@ class TestLoadVolume:
         volume = load_volume(gen_path())
 
         # Assert the volume shape is as expected (using the most common shape)
-        assert volume.shape == (512, 512, 2)
+        assert volume.shape == (512, 412, 2)
 
 
 class Test_LoadRtStruct:
@@ -293,8 +295,8 @@ class TestLoadMask:
         dicom_path = gen_path()
         mock_rt_struct = mocker.Mock()
         mock_rt_struct.get_roi_names.return_value = ["Organ 1", "Organ 2"]
-        mock_mask1 = np.random.randint(0, 2, (512, 512, 4))
-        mock_mask2 = np.random.randint(0, 2, (512, 512, 4))
+        mock_mask1 = np.random.randint(0, 2, (512, 412, 4))
+        mock_mask2 = np.random.randint(0, 2, (512, 412, 4))
         mock_rt_struct.get_roi_mask_by_name.side_effect = [mock_mask1, mock_mask2]
         mocker.patch(
             PATCH_LIST_FILES,
@@ -304,9 +306,9 @@ class TestLoadMask:
         # Mock the dicom.dcmread function to return a mock DICOM object with pixel_array, PixelSpacing, ImageOrientationPatient, and ImagePositionPatient attributes
         mock_dicom = pydicom.Dataset()
         mock_dicom.SOPClassUID = c.CT_IMAGE
-        mock_dicom.Rows = 512
+        mock_dicom.Rows = 412
         mock_dicom.Columns = 512
-        mock_dicom._pixel_array = np.zeros((512, 512))
+        mock_dicom._pixel_array = np.zeros((512, 412))
         mock_dicom.PixelSpacing = [0.5, 0.7]
         mock_dicom.SliceThickness = 2.0
         mock_dicom.ImageOrientationPatient = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0]
@@ -324,17 +326,17 @@ class TestLoadMask:
             mask = load_mask(dicom_path)
 
         assert isinstance(mask, Mask)
-        assert "organ_1" in mask.get_organ_names()
-        assert "organ_2" in mask.get_organ_names()
+        assert "organ_1" in get_organ_names(mask)
+        assert "organ_2" in get_organ_names(mask)
         assert mask["organ_1"].shape == (
-            np.floor(int(512 * 0.5)),
-            np.floor(int(512 * 0.7)),
-            7,
+            int(512 * 0.5),
+            int(412 * 0.7),
+            8,
         )
         assert mask["organ_2"].shape == (
-            np.floor(int(512 * 0.5)),
-            np.floor(int(512 * 0.7)),
-            7,
+            int(512 * 0.5),
+            int(412 * 0.7),
+            8,
         )
 
     # Successfully load a mask when valid DICOM path is provided
@@ -353,8 +355,8 @@ class TestLoadMask:
         mask = load_mask(dicom_path, preprocess=False)
 
         assert isinstance(mask, Mask)
-        assert "organ_1" in mask.get_organ_names()
-        assert "organ_2" in mask.get_organ_names()
+        assert "organ_1" in get_organ_names(mask)
+        assert "organ_2" in get_organ_names(mask)
         mock_mask1 = np.flip(mock_mask1, axis=1)
         mock_mask1 = np.flip(mock_mask1, axis=2)
         mock_mask2 = np.flip(mock_mask2, axis=1)
@@ -385,7 +387,7 @@ class TestLoadMask:
         mask = load_mask(dicom_path)
 
         assert isinstance(mask, Mask)
-        assert len(mask.get_organ_names()) == 0
+        assert len(get_organ_names(mask)) == 0
 
 
 class TestLoadPatientScan:
@@ -423,7 +425,7 @@ class TestLoadPatientScan:
         assert isinstance(result, PatientScan)
         assert result.volume.shape == (2, 2, 1)
         assert result.masks == {mock_mask.observer: mock_mask}
-        assert result.get_mask(mock_mask.observer) == mock_mask
+        assert get_organ_mask(result, mock_mask.observer) == mock_mask
 
     # Directory contains no DICOM files
     def test_no_dicom_files_in_directory(self, mocker):
@@ -511,7 +513,7 @@ class TestLoadPatientScan:
         assert isinstance(result.volume, np.ndarray)
         assert result.volume.shape == (2, 2, 1)
         assert result.masks == {mock_mask.observer: mock_mask}
-        assert result.get_mask(mock_mask.observer) == mock_mask
+        assert get_organ_mask(result, mock_mask.observer) == mock_mask
 
 
 class TestLoadPatientScans:
@@ -543,8 +545,8 @@ class TestLoadPatientScans:
                 "organ_1": np.random.randint(0, 2, (512, 512, 4)),
                 "organ_2": np.random.randint(0, 2, (512, 512, 4)),
             },
+            "",
         )
-        mock_mask.observer = ""
         # Mocking the load_mask function to return None since no RT struct data is found
         mocker.patch(PATCH_LOAD_MASK, return_value=mock_mask)
 
@@ -563,14 +565,14 @@ class TestLoadPatientScans:
         )
         assert all(
             [
-                "organ_1" in mask.get_organ_names()
+                "organ_1" in get_organ_names(mask)
                 for scan in result
                 for mask in scan.masks.values()
             ]
         )
         assert all(
             [
-                "organ_2" in mask.get_organ_names()
+                "organ_2" in get_organ_names(mask)
                 for scan in result
                 for mask in scan.masks.values()
             ]
@@ -629,12 +631,12 @@ class TestLoadAllMasks:
         assert len(result) == 2
         assert isinstance(result[0], Mask)
         assert isinstance(result[1], Mask)
-        assert ["organ_1", "organ_2"] == result[0].get_organ_names()
-        assert ["organ_1", "organ_2"] == result[1].get_organ_names()
+        assert get_organ_names(result[0]) == ["organ_1", "organ_2"]
+        assert get_organ_names(result[1]) == ["organ_1", "organ_2"]
         [
             np.testing.assert_array_equal(mask[organ], mock_mask_interp)
             for mask in result
-            for organ in mask.get_organ_names()
+            for organ in get_organ_names(mask)
         ]
 
     # Directory contains no DICOM files

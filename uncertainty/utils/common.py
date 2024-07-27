@@ -9,12 +9,6 @@ from .wrappers import curry
 
 import toolz as tz
 
-def yield_val[T](func: Callable[..., T], *args, **kwargs) -> Generator[T, None, None]:
-    """
-    Yield the result of a function, delaying execution until the generator is iterated over
-    """
-    yield func(*args, **kwargs)
-
 
 def unpack_args[T](func: Callable[..., T]) -> Callable[..., T]:
     """
@@ -32,7 +26,9 @@ def conditional[T, R](cond: bool, val1: T, val2: Optional[R] = None) -> Optional
 
 
 @curry
-def apply_if_truthy[T, R, Q](func: Callable[[T], R], arg: T, val2: Optional[Q] = None) -> Optional[R | Q]:
+def apply_if_truthy[
+    T, R, Q
+](func: Callable[[T], R], arg: T, val2: Optional[Q] = None) -> Optional[R | Q]:
     """
     Apply unary func to arg if arg is truthy (e.g. not None, [], ...), otherwise return val2
     """
@@ -40,9 +36,9 @@ def apply_if_truthy[T, R, Q](func: Callable[[T], R], arg: T, val2: Optional[Q] =
 
 
 @curry
-def iterate_while[T, R](
-    func: Callable[[T], R], pred: Callable[[T | R], bool], initial: T
-) -> R | T:
+def iterate_while[
+    T, R
+](func: Callable[[T], R], pred: Callable[[T | R], bool], initial: T) -> R | T:
     """
     Repeatedly apply func to a value until predicate(value) is false
 
@@ -60,10 +56,5 @@ def iterate_while[T, R](
     any
         Output of func when condition is met
     """
-    
-    return (
-        iterate_while(func, pred, func(initial))
-        if pred(initial)
-        else initial
-    )
 
+    return iterate_while(func, pred, func(initial)) if pred(initial) else initial

@@ -13,8 +13,9 @@ import nibabel as nib
 
 from uncertainty.utils.logging import logger_wraps
 
-from .datatypes import Mask, PatientScan
-from ..utils.common import unpack_args, yield_val
+from .mask import Mask
+from .patient_scan import PatientScan
+from ..utils.common import unpack_args
 from ..utils.wrappers import curry
 from ..utils.path import resolve_path_placeholders
 from ..utils.string import placeholder_matches
@@ -70,7 +71,7 @@ def load_patient_scan(
         unpack_args(
             lambda vol_path, mask_path: PatientScan(
                 patient_id,
-                yield_val(load_volume, vol_path),
+                load_volume(vol_path),
                 list(load_mask_multiple_observers(mask_path)),
             )
         ),
@@ -142,7 +143,7 @@ def load_mask(mask_path_pattern: str, observer: str = "") -> Mask:
         ),
         lambda path_organ_pairs: {
             # organ is a tuple so need unpacking, e.g. ("Bladder",)
-            organ[0]: yield_val(load_volume, path)
+            organ[0]: load_volume(path)
             for path, organ in path_organ_pairs
         },
         lambda organ_dict: Mask(organ_dict, observer),

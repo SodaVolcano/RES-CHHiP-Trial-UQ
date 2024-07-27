@@ -116,17 +116,4 @@ add(5, 3)  # 11
 add(5, c=6)  # equivalent to lambda b: 5 + b + 6
 ```
 
-Some pipelines use `_`, which is a shortcut for simple lambda functions from `fn.py`. For example:
-```python
-from fn import _
-
-_      # lambda x: x
-_ + 3  # lambda x: x + 3
-_.some_method() # lambda x: x.some_method()
-
-# NOTE: below will not work as expected
-bool(_)  # bool(lambda x: x), can't pass value to inside functions
-_ is not None  # (lambda x: x) is not None, always True as a function is never None
-```
-
 [^1]: Technically most functions in `uncertainty` *do* have side effects in the form of logging (if enabled). Some functions are purely used for their side effects such as read/write operations or displaying a progress bar.

@@ -1,13 +1,14 @@
 import numpy as np
 
 from tests.test_dicom import PATCH_LIST_FILES
+from uncertainty.data.mask import get_organ_names
 
 from .context import gen_path, uncertainty
 
 
 # Import aliases
-Mask = uncertainty.data.datatypes.Mask
-PatientScan = uncertainty.data.datatypes.PatientScan
+Mask = uncertainty.data.mask.Mask
+PatientScan = uncertainty.data.patient_scan.PatientScan
 load_patient_scan = uncertainty.data.nifti.load_patient_scan
 load_patient_scans = uncertainty.data.nifti.load_patient_scans
 load_mask = uncertainty.data.nifti.load_mask
@@ -138,7 +139,7 @@ class TestLoadPatientScans:
             ]
         )
         assert all(
-            mask.get_organ_names() == ["bladder"]
+            get_organ_names(mask) == ["bladder"]
             for i in range(2)
             for mask in result[i].masks.values()
         )
@@ -196,7 +197,7 @@ class TestLoadMask:
         mask = load_mask(mask_path_pattern, observer)
 
         assert all(
-            organ in mask.get_organ_names() for organ in ["bladder", "eyes", "heart"]
+            organ in get_organ_names(mask) for organ in ["bladder", "eyes", "heart"]
         )
         assert mask.observer == observer
 
@@ -229,5 +230,5 @@ class TestLoadMask:
 
         mask = load_mask(mask_path_pattern, observer)
 
-        assert mask.get_organ_names() == []
+        assert get_organ_names(mask) == []
         assert mask.observer == observer

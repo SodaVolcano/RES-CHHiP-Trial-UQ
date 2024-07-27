@@ -18,7 +18,6 @@ import tensorflow.keras as keras
 import toolz as tz
 import toolz.curried as curried
 from scipy.ndimage import zoom
-from fn import _
 
 
 @logger_wraps(level="INFO")
@@ -83,9 +82,9 @@ def preprocess_data(
                     )
                 ),
             ),
-            lambda v: np.clip(v, *HU_RANGE),
+            lambda vol: np.clip(vol, *HU_RANGE),
             map_interval(HU_RANGE, (0, 1)),
-            _.astype(np.float32),
+            lambda vol: vol.astype(np.float32),
         )
 
     def mask_pipeline(scan: PatientScan):
@@ -95,7 +94,7 @@ def preprocess_data(
             lambda mask_names: [
                 find_organ_roi(organ, mask_names) for organ in ORGAN_MATCHES
             ],
-            curried.filter(_),
+            curried.filter(lambda m: m is not None),
             list,
         )
 
@@ -123,7 +122,7 @@ def preprocess_data(
                 ),
                 order=1,
             ),
-            _.astype(np.float32),
+            lambda mask: mask.astype(np.float32),
         )
 
     return pmap(curried.juxt(volume_pipeline, mask_pipeline), dataset)
