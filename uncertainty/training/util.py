@@ -4,13 +4,13 @@ Utility functions for model training, from model construction, data loading, and
 
 from operator import methodcaller
 from tests.context import PatientScan
+from uncertainty.data.mask import get_organ_names, masks_as_array
 from uncertainty.data.preprocessing import filter_roi, find_organ_roi, map_interval
-from uncertainty.utils.parallel import pmap
 from ..utils.logging import logger_wraps
 from ..utils.wrappers import curry
 from ..common.constants import model_config, HU_RANGE, ORGAN_MATCHES
 
-from typing import Callable, Iterable
+from typing import Callable, Iterable, Optional
 
 import numpy as np
 from tensorflow.python.keras import Model
@@ -64,32 +64,33 @@ def preprocess_data(
     """
     Preprocess data for training
     """
+    def get_zoom_factors(old_shape: tuple[int, int, int]) -> tuple[float, float, float]:
+        return tuple(
+            to / from_
+            for to, from_ in zip(
+                (config["input_height"], config["input_width"], config["input_depth"], config["input_dim"]),
+                old_shape,
+            )
+        )
 
-    def volume_pipeline(scan: PatientScan):
+    def preprocess_volume(scan: PatientScan) -> np.ndarray:
         return tz.pipe(
             scan.volume,
             lambda v: zoom(
                 v,
-                tuple(
-                    to / from_
-                    for to, from_ in zip(
-                        (
-                            config["input_height"],
-                            config["input_width"],
-                            config["input_dim"],
-                        ),
-                        v.shape,
-                    )
-                ),
+                get_zoom_factors(v.shape),
             ),
             lambda vol: np.clip(vol, *HU_RANGE),
             map_interval(HU_RANGE, (0, 1)),
             lambda vol: vol.astype(np.float32),
         )
 
-    def mask_pipeline(scan: PatientScan):
+    def preprocess_mask(scan: PatientScan) -> Optional[np.ndarray]:
+        """
+        Returns a mask with all organs present, or None if not all organs are present
+        """
         names = tz.pipe(
-            scan.masks[""].get_organ_names(),
+            get_organ_names(scan.masks[""]),
             filter_roi,
             lambda mask_names: [
                 find_organ_roi(organ, mask_names) for organ in ORGAN_MATCHES
@@ -98,31 +99,23 @@ def preprocess_data(
             list,
         )
 
+        # If not all organs are present, return None
         if len(names) != len(ORGAN_MATCHES):
             return None
 
         return tz.pipe(
             names,
-            getattr(scan.masks[""], "as_array"),
+            masks_as_array(scan.masks[""]),
             lambda m: zoom(
                 m,
-                tuple(
-                    (
-                        to / from_
-                        for to, from_ in zip(
-                            (
-                                config["input_height"],
-                                config["input_width"],
-                                config["input_dim"],
-                                m.shape[3],
-                            ),
-                            m.shape,
-                        )
-                    )
-                ),
+                get_zoom_factors(m.shape),
                 order=1,
             ),
             lambda mask: mask.astype(np.float32),
         )
 
-    return pmap(curried.juxt(volume_pipeline, mask_pipeline), dataset)
+    return tz.pipe(
+        dataset,
+        curried.map(curried.juxt(preprocess_volume, preprocess_mask)),
+        curried.filter(lambda x: x[1] is not None),
+    )

@@ -5,6 +5,8 @@ Data type Mask and functions that operate on Mask
 from typing import NamedTuple
 import numpy as np
 
+from uncertainty.utils.wrappers import curry
+
 
 class Mask(NamedTuple):
     """Organ mask for a single observer, allow multiple organs"""
@@ -30,6 +32,7 @@ class Mask(NamedTuple):
         return list(self.organs.keys())
 
 
+@curry
 def get_organ_mask(mask: Mask, organ: str) -> np.ndarray:
     """
     Return mask array for given organ
@@ -44,8 +47,9 @@ def get_organ_names(mask: Mask) -> list[str]:
     return list(mask.keys())
 
 
+@curry
 def masks_as_array(mask: Mask, organ_ordering: list[str]) -> np.array:
     """
-    Return array of N masks with shape (H, W, D, N), ordered by organ_ordering
+    Return array of N masks with shape `(H, W, D, n_organs)`, ordered by `organ_ordering`
     """
     return np.stack([mask[organ] for organ in organ_ordering], axis=-1)

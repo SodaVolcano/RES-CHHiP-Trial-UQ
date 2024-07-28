@@ -26,9 +26,10 @@ def model_config() -> dict:
     config = {
         # --------- Data settings ---------
         "data_dir": "/content/gdrive/MyDrive/dataset/Data",
-        "input_width": 200,
-        "input_height": 200,
-        "input_dim": 3,
+        "input_width": 500,
+        "input_height": 500,
+        "input_depth": 360,
+        "input_dim": 3,   # Number of organs
         # ------- ConvolutionBlock settings  --------
         "kernel_size": (3, 3),
         "n_convolutions_per_block": 1,
@@ -137,6 +138,7 @@ ROI_EXCLUSION_LIST: Final[list[str]] = [
 
 
 # list of ROI name variants in the patient scans for organs of interest
+# Preprocessed masks will have same name order as this list
 ORGAN_MATCHES: Final[dict[str, list[str]]] = {
     "prostate": [
         "prostate",

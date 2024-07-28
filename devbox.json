@@ -5,10 +5,6 @@
     // Used by tensorflow
     "stdenv.cc.cc.lib",
     "black@24.4.2",
-    //"zlib",
-    //"zstd",
-    //"libGL",
-    //"libGLU",
     "github:GuillaumeDesforges/fix-python/"
   ],
   "env": {

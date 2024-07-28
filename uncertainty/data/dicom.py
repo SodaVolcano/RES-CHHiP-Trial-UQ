@@ -137,7 +137,8 @@ def _get_dicom_slices(dicom_path: str) -> Iterable[dicom.Dataset]:
         curried.filter(_dicom_type_is(c.CT_IMAGE)),
         # Some slice are not part of the volume (have thickness = "0")
         curried.filter(lambda dicom_file: float(dicom_file.SliceThickness) > 0),
-        curried.sorted(key=_dicom_slice_order),
+        # Depth is from bottom up, reverse to be top down
+        curried.sorted(key=_dicom_slice_order, reverse=True),
     )
 
 

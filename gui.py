@@ -19,6 +19,7 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 
 
 from uncertainty.data.dicom import load_patient_scan
+from uncertainty.data.mask import get_organ_names
 
 
 # Main application window
@@ -94,7 +95,7 @@ class MainWindow(QMainWindow):
             self.slice_slider.setEnabled(True)
             self.plane_dropdown.setEnabled(True)
             self.mask_toggle.setEnabled(True)
-            self.organ_dropdown.addItems(self.patient_scan.masks[""].get_organ_names())
+            self.organ_dropdown.addItems(get_organ_names(self.patient_scan.masks[""]))
             self.update_slice(0)
 
     def update_slice(self, slice_index):
