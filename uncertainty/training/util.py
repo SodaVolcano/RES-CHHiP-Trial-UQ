@@ -18,6 +18,7 @@ import tensorflow.keras as keras
 import toolz as tz
 import toolz.curried as curried
 from scipy.ndimage import zoom
+from volumentations import Compose, Rotate, ElasticTransform, Flip, GaussianNoise, RandomGamma
 
 
 @logger_wraps(level="INFO")
@@ -59,10 +60,13 @@ def construct_model(
 @logger_wraps(level="INFO")
 @curry
 def preprocess_data(
-    dataset: Iterable[tuple[np.ndarray, np.ndarray]], config: dict = model_config()
-):
+    scan: PatientScan, config: dict = model_config()
+) -> tuple[np.ndarray, Optional[np.ndarray]]:
     """
-    Preprocess data for training
+    Preprocess a PatientScan object into (volume, masks) pairs
+
+    Mask for multiple organs are stacked along the last dimension to have
+    shape (height, width, depth, n_organs). Mask is `None` if not all organs are present.
     """
     def get_zoom_factors(old_shape: tuple[int, int, int]) -> tuple[float, float, float]:
         return tuple(
@@ -76,10 +80,10 @@ def preprocess_data(
     def preprocess_volume(scan: PatientScan) -> np.ndarray:
         return tz.pipe(
             scan.volume,
-            lambda v: zoom(
-                v,
-                get_zoom_factors(v.shape),
-            ),
+            #lambda v: zoom(
+            #    v,
+            #    get_zoom_factors(v.shape),
+            #),
             lambda vol: np.clip(vol, *HU_RANGE),
             map_interval(HU_RANGE, (0, 1)),
             lambda vol: vol.astype(np.float32),
@@ -106,16 +110,78 @@ def preprocess_data(
         return tz.pipe(
             names,
             masks_as_array(scan.masks[""]),
-            lambda m: zoom(
-                m,
-                get_zoom_factors(m.shape),
-                order=1,
-            ),
+            #lambda m: zoom(
+            #    m,
+            #    get_zoom_factors(m.shape),
+            #    order=1,
+            #),
             lambda mask: mask.astype(np.float32),
         )
 
+    return tz.juxt(preprocess_volume, preprocess_mask)(scan)
+
+@logger_wraps(level="INFO")
+@curry
+def preprocess_dataset(
+    dataset: Iterable[PatientScan], config: dict = model_config()
+) -> Iterable[tuple[np.ndarray, np.ndarray]]:
+    """
+    Preprocess a dataset of PatientScan objects into (volume, masks) pairs
+
+    Mask for multiple organs are stacked along the last dimension to have
+    shape (height, width, depth, n_organs). An instance is filtered out if
+    not all organs are present.
+    """
     return tz.pipe(
         dataset,
-        curried.map(curried.juxt(preprocess_volume, preprocess_mask)),
+        curried.map(preprocess_data(config=config)),
         curried.filter(lambda x: x[1] is not None),
     )
+
+
+@logger_wraps(level="INFO")
+def construct_augmentor():
+    """
+    Preset augmentor to apply rotation, elastic transformation, flips, noise and gamma adjustments
+    """
+    return Compose([
+        Rotate((-10, 10), (-10, 10), (-10, 10), p=0.5),
+        ElasticTransform((0, 0.25), interpolation=2, p=0.1),
+        Flip(0, p=0.2),
+        Flip(1, p=0.2),
+        Flip(2, p=0.2),
+        GaussianNoise(var_limit=(0, 5), p=0.2),
+        RandomGamma(gamma_limit=(80, 120), p=0.2),
+    ], p=1.0)
+
+@logger_wraps(level="INFO")
+@curry
+def augment_data(
+    dataset: Iterable[tuple[np.ndarray, np.ndarray]], augmentor: Compose
+) -> Iterable[tuple[np.ndarray, np.ndarray]]:
+    """
+    Augment data using the provided augmentor
+    """
+    return tz.pipe(
+        dataset,
+        # Pack in dictionary to work with augmentor
+        curried.map(
+            lambda x: {
+                "image": x[0],
+                "mask": x[1],
+            }
+        ),
+        curried.map(lambda x: augmentor(**x)),
+        curried.map(lambda x: (x["image"], x["mask"])),
+    )
+
+@logger_wraps(level="INFO")
+@curry
+def augment_dataset(
+    dataset: Iterable[tuple[np.ndarray, np.ndarray]],
+    augmentor: Compose
+) -> Iterable[tuple[np.ndarray, np.ndarray]]:
+    """
+    Augment data using the provided augmentor
+    """
+    return map(augment_data(augmentor=augmentor), dataset)

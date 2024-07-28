@@ -46,6 +46,8 @@ config_logger()
 ```
 
 ## Loading Data
+**TIP: As preprocessing may take significant time to complete, consider saving all preprocessed data as h5 files and loading them instead of loading directly from the original files.**
+
 ### DICOM
 The list of utility functions for reading DICOM files is provided in `uncertainty.data.dicom`, the functions assume that all of the DICOM files for a single patient is stored in a single folder. A usage example is provided below.
 
