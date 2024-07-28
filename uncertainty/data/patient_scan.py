@@ -83,7 +83,11 @@ def save_h5(scan: PatientScan, save_dir: str) -> None:
                 group = f.create_group(f"mask_{mask.observer}")
                 for organ_name in get_organ_names(mask):
                     # Replace with "|" to avoid incompatible object error, "" also causes error
-                    group_name = organ_name.replace("/", "|") if len(organ_name) > 0 else "_empty_"
+                    group_name = (
+                        organ_name.replace("/", "|")
+                        if len(organ_name) > 0
+                        else "_empty_"
+                    )
                     group.create_dataset(
                         group_name, data=mask[organ_name], compression="gzip"
                     )

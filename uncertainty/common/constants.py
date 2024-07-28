@@ -29,7 +29,7 @@ def model_config() -> dict:
         "input_width": 500,
         "input_height": 500,
         "input_depth": 360,
-        "input_dim": 3,   # Number of organs
+        "input_dim": 3,  # Number of organs
         # ------- ConvolutionBlock settings  --------
         "kernel_size": (3, 3),
         "n_convolutions_per_block": 1,

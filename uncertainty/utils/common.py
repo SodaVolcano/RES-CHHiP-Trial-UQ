@@ -2,12 +2,37 @@
 Collection of common utility functions
 """
 
+from copy import deepcopy
 from itertools import takewhile
 from typing import Callable, Generator, Optional, TypeVar
 
 from .wrappers import curry
 
 import toolz as tz
+
+
+def call_method_impure(method_name: str, /, *args, **kwargs) -> Callable:
+    """
+    Return a function that calls a method on the input object with the arguments and returns the object
+
+    The input object is modified in place if the method modifies the object. Use
+    `call_method` to avoid modifying the input object.
+    """
+    return lambda obj: tz.pipe(
+        obj,
+        lambda obj: getattr(obj, method_name)(*args, **kwargs),
+        lambda _: obj,
+    )
+
+
+def call_method(method_name: str, /, *args, **kwargs) -> Callable:
+    """
+    Return a function that calls a method on the input object with the arguments and returns the object
+
+    The object is copied to avoid modifying the input object. Use `call_method_impure`
+    to modify the input object.
+    """
+    return lambda obj: call_method_impure(method_name, *args, **kwargs)(deepcopy(obj))
 
 
 def unpack_args[T](func: Callable[..., T]) -> Callable[..., T]:

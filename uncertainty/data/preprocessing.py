@@ -2,7 +2,7 @@
 Collection of functions to preprocess numpy arrays
 """
 
-from operator import add
+from operator import add, methodcaller
 from typing import Iterable, Literal, Optional
 
 import SimpleITK as sitk
@@ -13,7 +13,7 @@ from toolz import curried
 from uncertainty.utils.logging import logger_wraps
 
 from ..utils.wrappers import curry
-from ..utils.common import conditional, unpack_args
+from ..utils.common import call_method, conditional, unpack_args
 from ..common import constants as c
 
 
@@ -44,43 +44,6 @@ def z_score_scale(array: np.ndarray) -> np.ndarray:
     Calculated as (x - mean) / std
     """
     return (array - array.mean()) / array.std()
-
-
-@logger_wraps()
-@curry
-def _isotropic_grid(coords: tuple[Iterable[np.number]]) -> tuple[Iterable[np.number]]:
-    """
-    Create an isotropic grid (1 unit spacing) from a list of coordinate arrays
-
-    coords is a N-tuple of 1D arrays, each representing the coordinates of an axis.
-    """
-    return tz.pipe(
-        coords,
-        tz.curried.map(
-            # +1 because arange does not include the stop value
-            lambda coord: (
-                np.arange(min(np.ceil(coord)), max(np.floor(coord) + 1), 1)
-                if len(coord) != 0
-                else []
-            )
-        ),
-        tuple,
-        lambda coords: np.meshgrid(*coords, indexing="ij"),
-        tuple,
-    )
-
-
-@logger_wraps()
-@curry
-def _get_spaced_coords(spacing: np.number, length: int) -> list[np.number]:
-    """
-    Return list of coordinates with specified length spaced by spacing
-    """
-    return tz.pipe(
-        [0] + [spacing] * (length - 1),
-        tz.curried.accumulate(add),
-        list,
-    )
 
 
 @logger_wraps()
@@ -120,8 +83,9 @@ def make_isotropic(
         for old_size, old_spacing, in zip(array.shape, spacings)
     ]
 
-    img = tz.pipe(
+    return tz.pipe(
         array,
+        # sitk don't work with bool datatypes in mask array
         lambda arr: arr.astype(np.float32),
         # sitk moves (H, W, D) to (D, W, H) >:( move axis here so img is (H, W, D)
         lambda arr: np.moveaxis(arr, 1, 0),  # width to first axis
@@ -129,13 +93,8 @@ def make_isotropic(
             len(arr.shape) == 3, np.moveaxis(arr, -1, 0), arr  # depth to first axis
         ),
         lambda arr: sitk.GetImageFromArray(arr),
-    )
-    # cannot do functionally, sitk sucks
-    img.SetOrigin((0, 0, 0))  # truncates to (0, 0) if array is 2D
-    img.SetSpacing(spacings)
-
-    return tz.pipe(
-        img,
+        call_method("SetOrigin", (0, 0, 0)),
+        call_method("SetSpacing", spacings),
         lambda img: sitk.Resample(
             img,
             new_size,

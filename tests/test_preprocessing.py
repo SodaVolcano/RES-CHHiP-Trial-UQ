@@ -9,8 +9,6 @@ Mask = uncertainty.data.mask.Mask
 PatientScan = uncertainty.data.patient_scan.PatientScan
 load_patient_scan = uncertainty.data.nifti.load_patient_scan
 map_interval = uncertainty.data.preprocessing.map_interval
-_isotropic_grid = uncertainty.data.preprocessing._isotropic_grid
-_get_spaced_coords = uncertainty.data.preprocessing._get_spaced_coords
 make_isotropic = uncertainty.data.preprocessing.make_isotropic
 
 
@@ -85,105 +83,6 @@ class TestMapInterval:
 
         result = map_interval(from_range, to_range, array)
         np.testing.assert_array_almost_equal(result, expected)
-
-
-class Test_IsotropicGrid:
-
-    # Generates isotropic grid for 1D coordinate arrays
-    def test_generates_isotropic_grid_for_1d_coordinate_arrays(self):
-        coords = (np.array([0, 2, 4]),)
-        expected_output = (np.array([0, 1, 2, 3, 4]),)
-
-        result = _isotropic_grid(coords)
-        assert all(np.array_equal(r, e) for r, e in zip(result, expected_output))
-
-    # Generates isotropic grid for 1D coordinate arrays
-    def test_generates_isotropic_grid_for_1d_coordinate_arrays_float(self):
-        coords = (np.array([0.3, 1.0, 1.7, 2.4, 3.1, 3.8, 4.5, 5.2]),)
-        expected_output = (np.array([1, 2, 3, 4, 5]),)
-
-        result = _isotropic_grid(coords)
-        assert all(np.array_equal(r, e) for r, e in zip(result, expected_output))
-
-    # Empty coordinate arrays
-    def test_empty_coordinate_arrays(self):
-        coords = (np.array([]),)
-        expected_output = (np.array([]),)
-
-        result = _isotropic_grid(coords)
-        assert all(np.array_equal(r, e) for r, e in zip(result, expected_output))
-
-    # Handles negative coordinate values correctly
-    def test_handles_negative_coordinates_correctly(self):
-        coords = (np.array([-4, -2, 0]),)
-        expected_output = (np.array([-4, -3, -2, -1, 0]),)
-
-        result = _isotropic_grid(coords)
-        assert all(np.array_equal(r, e) for r, e in zip(result, expected_output))
-
-    # Generates isotropic grid for 3D coordinate arrays
-    def test_generates_isotropic_grid_for_3d_coordinate_arrays(self):
-        coords = (np.array([0, 2, 4]), np.array([1, 3, 5]), np.array([10, 20, 30]))
-        expected_output = tuple(
-            np.meshgrid(
-                np.arange(0, 5, dtype=float),
-                np.arange(1, 6, dtype=float),
-                np.arange(10, 31, dtype=float),
-                indexing="ij",
-            )
-        )
-
-        result = _isotropic_grid(coords)
-        assert all(np.array_equal(r, e) for r, e in zip(result, expected_output))
-
-    # Coordinate arrays with a single element
-    def test_generates_isotropic_grid_for_single_element_array(self):
-        coords = (np.array([5]),)
-        expected_output = (np.array([5]),)
-
-        result = _isotropic_grid(coords)
-        assert all(np.array_equal(r, e) for r, e in zip(result, expected_output))
-
-    # Coordinate arrays with repeating values
-    def test_coordinate_arrays_with_repeating_values(self):
-        coords = (np.array([0, 1, 1, 2, 2, 3]),)
-        expected_output = (np.array([0, 1, 2, 3]),)
-
-        result = _isotropic_grid(coords)
-        assert all(np.array_equal(r, e) for r, e in zip(result, expected_output))
-
-    # Handles mixed positive and negative coordinate values
-    def test_handles_mixed_positive_and_negative_coordinates(self):
-        coords = (np.array([-3, -1, 0, 2, 4]), np.array([-2, 0, 1, 3]))
-        expected_output = tuple(
-            np.meshgrid(
-                np.arange(-3, 5, dtype=float),
-                np.arange(-2, 4, dtype=float),
-                indexing="ij",
-            )
-        )
-
-        result = _isotropic_grid(coords)
-        assert all(np.array_equal(r, e) for r, e in zip(result, expected_output))
-
-
-class Test_GetSpacedCoords:
-
-    # Returns correct list of coordinates when given valid spacing and length
-    def test_returns_correct_coords_with_valid_spacing_and_length(self):
-        spacing = 2
-        length = 5
-        expected_result = [0, 2, 4, 6, 8]
-        result = _get_spaced_coords(spacing, length)
-        assert result == expected_result
-
-    # Handles zero spacing correctly
-    def test_handles_zero_spacing_correctly(self):
-        spacing = 0
-        length = 5
-        expected_result = [0, 0, 0, 0, 0]
-        result = _get_spaced_coords(spacing, length)
-        assert result == expected_result
 
 
 class TestMakeIsotropic:

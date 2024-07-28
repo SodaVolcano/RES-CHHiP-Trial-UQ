@@ -543,7 +543,9 @@ def save_dicom_scans_to_h5(
             )
 
             if valid_scan is None:
-                logger.error(f"Failed to load scan from {dicom_path}, load_patient_scan returned None")
+                logger.error(
+                    f"Failed to load scan from {dicom_path}, load_patient_scan returned None"
+                )
                 return
             if os.path.exists(os.path.join(save_dir, f"{valid_scan.patient_id}.h5")):
                 logger.warning(

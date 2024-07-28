@@ -34,6 +34,9 @@ You can deactivate the virtual environment by running `deactivate`.
 
 
 # Usage
+## Configuration
+Global configuration is defined in `uncertainty.common.constants`. You can pass in your own configuration/constants if you do not wish to use the preset values.
+
 ## Logging
 Logging is disable by default. To enable logging, add the following lines to your code and logs will be added to `logs/` each time the code is run. You can manually configure the logger if you do not wish to use the provided configurations.
 
