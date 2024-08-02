@@ -1,0 +1,36 @@
+[tool.poetry]
+name = "CHHiP-UQ"
+version = "0.1.0"
+description = "Python packages for the Uncertainty Quantification Project"
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.12"
+loguru = "^0.7.2"
+pytest = "^8.3.2"
+black = "^24.4.2"
+matplotlib = "^3.9.1"
+cytoolz = "^0.12.3"
+ipykernel = "^6.29.5"
+fastexcel = "^0.11.5"
+jupyter-black = "^0.3.4"
+isort = "^5.13.2"
+pathos = "^0.3.2"
+notebook = "^7.2.1"
+jupyter = "^1.0.0"
+tensorflow = "^2.17.0"
+rt-utils = "^1.2.7"
+tqdm = "^4.66.4"
+simpleitk = "^2.3.1"
+nibabel = "^5.2.1"
+pydicom = "^2.4.4"
+h5py = "^3.11.0"
+volumentations-3d = "^1.0.4"
+pytest-mock = "^3.14.0"
+
+[tool.isort]
+profile = "black"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

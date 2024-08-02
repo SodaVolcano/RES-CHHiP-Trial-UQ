@@ -3,12 +3,20 @@ Utility functions for model training, from model construction, data loading, and
 """
 
 from operator import methodcaller
+
+from scipy.fftpack import shift
 from tests.context import PatientScan
 from uncertainty.data.mask import get_organ_names, masks_as_array
-from uncertainty.data.preprocessing import filter_roi, find_organ_roi, map_interval
+from uncertainty.data.preprocessing import (
+    crop_nd,
+    filter_roi,
+    find_organ_roi,
+    map_interval,
+    shift_center,
+)
 from ..utils.logging import logger_wraps
 from ..utils.wrappers import curry
-from ..common.constants import model_config, HU_RANGE, ORGAN_MATCHES
+from ..common.constants import BODY_THRESH, model_config, HU_RANGE, ORGAN_MATCHES
 
 from typing import Callable, Iterable, Optional
 
@@ -18,6 +26,7 @@ import tensorflow.keras as keras
 import toolz as tz
 import toolz.curried as curried
 from scipy.ndimage import zoom
+import SimpleITK as sitk
 from volumentations import (
     Compose,
     Rotate,
@@ -75,28 +84,20 @@ def preprocess_data(
     Mask for multiple organs are stacked along the last dimension to have
     shape (height, width, depth, n_organs). Mask is `None` if not all organs are present.
     """
-
-    def get_zoom_factors(old_shape: tuple[int, int, int]) -> tuple[float, float, float]:
-        return tuple(
-            to / from_
-            for to, from_ in zip(
-                (
-                    config["input_height"],
-                    config["input_width"],
-                    config["input_depth"],
-                    config["input_dim"],
-                ),
-                old_shape,
-            )
-        )
+    # use same centroid for both volume and mask
+    centroid = np.mean(np.argwhere(scan.volume > BODY_THRESH), axis=0)
 
     def preprocess_volume(scan: PatientScan) -> np.ndarray:
         return tz.pipe(
             scan.volume,
-            # lambda v: zoom(
-            #    v,
-            #    get_zoom_factors(v.shape),
-            # ),
+            shift_center(centroid=centroid),
+            crop_nd(
+                new_shape=(
+                    config["input_height"],
+                    config["input_width"],
+                    config["input_depth"],
+                )
+            ),
             lambda vol: np.clip(vol, *HU_RANGE),
             map_interval(HU_RANGE, (0, 1)),
             lambda vol: vol.astype(np.float32),
@@ -121,13 +122,22 @@ def preprocess_data(
             return None
 
         return tz.pipe(
-            names,
-            masks_as_array(scan.masks[""]),
-            # lambda m: zoom(
-            #    m,
-            #    get_zoom_factors(m.shape),
-            #    order=1,
-            # ),
+            scan.masks[""],
+            masks_as_array(organ_ordering=names),
+            lambda arr: np.moveaxis(arr, -1, 0),  # to allow map()
+            curried.map(shift_center(centroid=centroid)),
+            curried.map(
+                crop_nd(
+                    new_shape=(
+                        config["input_height"],
+                        config["input_width"],
+                        config["input_depth"],
+                        1,
+                    )
+                )
+            ),
+            list,
+            lambda masks: np.stack(masks, axis=-1),
             lambda mask: mask.astype(np.float32),
         )
 

@@ -4,25 +4,24 @@
     "python@3.12.4",
     // Used by tensorflow
     "stdenv.cc.cc.lib",
-    "black@24.4.2",
-    "github:GuillaumeDesforges/fix-python/"
+    "glibc@2.39-52",
+    "github:GuillaumeDesforges/fix-python/",
+    "poetry@1.8.3"
   ],
   "env": {
     "VENV_DIR": ".venv"
   },
   "shell": {
     "init_hook": [
-      ". $VENV_DIR/bin/activate",
-      // Check if requirements.txt was modified in the latest commit
-      "if git diff -U0 requirements.txt | grep -q 'requirements.txt'; then",
-      "    echo \"requirements.txt was modified. Installing dependencies...\"",
-      "    pip install -r requirements.txt -q",
+      "alias pytest=\"poetry run pytest\"",
+     "alias python=\"poetry run python\"",
+      "alias python3=\"poetry run python\"",
+      "alias py=\"poetry run python\"",
+      "alias py3=\"poetry run python\"",
+      "poetry install",
       // Python modules assume path for C/C++ libraries, use fix-python to change link
-      "    echo \"Fixing python paths...\"",
-      "    fix-python --venv .venv --libs .nix/libs.nix &> /dev/null",
-      "else",
-      "    echo \"requirements.txt was not modified. Skipping dependency installation.\"",
-      "fi",
+      "echo \"Fixing python paths...\"",
+      "fix-python --venv .venv --libs .nix/libs.nix &> /dev/null",
       // Change library path for tensorflow so it can import C++ library
       "export LD_LIBRARY_PATH=./.devbox/nix/profile/default/lib64:$LD_LIBRARY_PATH"
     ],

@@ -19,6 +19,9 @@ VALID_IDENTIFIER: Final[str] = "[a-zA-Z_][a-zA-Z0-9_]*"
 
 # Hounsfield Units (HU), intensity range for CT images
 HU_RANGE: Final[tuple[int, int]] = (-1000, 3000)
+# Threshold value (HU) to binarise the scan to get mask of the body
+# Used to center the image before image is cropped to shape
+BODY_THRESH = -500
 
 
 @memoize
@@ -26,10 +29,11 @@ def model_config() -> dict:
     config = {
         # --------- Data settings ---------
         "data_dir": "/content/gdrive/MyDrive/dataset/Data",
-        "input_width": 500,
-        "input_height": 500,
-        "input_depth": 360,
-        "input_dim": 3,  # Number of organs
+        # Data are formatted as (height, width, depth, dimension)
+        "input_height": 300,
+        "input_width": 400,
+        "input_depth": 160,
+        "input_dim": 3,  # Number of organs, mask only
         # ------- ConvolutionBlock settings  --------
         "kernel_size": (3, 3),
         "n_convolutions_per_block": 1,
