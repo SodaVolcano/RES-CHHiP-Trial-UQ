@@ -35,7 +35,7 @@ def model_config() -> dict:
         "input_depth": 160,
         "input_dim": 3,  # Number of organs, mask only
         # ------- ConvolutionBlock settings  --------
-        "kernel_size": (3, 3),
+        "kernel_size": (3, 3, 3),
         "n_convolutions_per_block": 1,
         "use_batch_norm": False,
         "activation": "gelu",

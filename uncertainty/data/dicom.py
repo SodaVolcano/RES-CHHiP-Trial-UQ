@@ -71,7 +71,7 @@ def _most_common_shape(
             if (not all(val == 1 for val in freq_dict.values()))
             else None
         ),
-    )
+    )  # type: ignore
 
 
 @curry
@@ -122,7 +122,7 @@ def _get_uniform_spacing(
         lambda spacings: (
             tuple(spacings[0]) if spacings and is_uniform(np.array(spacings)) else None
         ),
-    )
+    )  # type: ignore
 
 
 @tz.memoize
@@ -139,7 +139,7 @@ def _get_dicom_slices(dicom_path: str) -> Iterable[dicom.Dataset]:
         curried.filter(lambda dicom_file: float(dicom_file.SliceThickness) > 0),
         # Depth is from bottom up, reverse to be top down
         curried.sorted(key=_dicom_slice_order, reverse=True),
-    )
+    )  # type: ignore
 
 
 @logger_wraps()
@@ -194,13 +194,13 @@ def _load_rt_struct(dicom_path: str) -> Optional[rt_utils.RTStructBuilder]:
                 )
             )
         ),
-    )
+    )  # type: ignore
 
 
 @logger_wraps()
 @curry
 def _preprocess_volume(
-    array: np.array,
+    array: np.ndarray,
     spacings: tuple[float, float, float],
     intercept_slopes: Iterable[tuple[float, float]],
     method: str,
@@ -249,7 +249,7 @@ def _preprocess_mask(
             if name_mask_spacing_lst and name_mask_spacing_lst[0][2] is not None
             else None
         ),
-    )
+    )  # type: ignore
 
 
 # ============ Main functions ============
@@ -297,7 +297,7 @@ def load_patient_scan(
                 )
             )
         ),
-    )
+    )  # type: ignore
 
 
 @logger_wraps(level="INFO")
@@ -331,14 +331,14 @@ def load_patient_scans(
         dicom_collection_path,
         generate_full_paths(path_generator=os.listdir),
         curried.map(load_patient_scan(method=method, preprocess=preprocess)),
-    )
+    )  # type: ignore
 
 
 @logger_wraps(level="INFO")
 @curry
 def load_volume(
     dicom_path: str, method: str = "linear", preprocess: bool = True
-) -> Optional[np.array]:
+) -> Optional[np.ndarray]:
     """
     Load 3D volume of shape (H, W, D) from DICOM files in dicom_path
 
@@ -401,7 +401,7 @@ def load_volume(
                 else None
             )
         ),
-    )
+    )  # type: ignore
 
 
 @logger_wraps(level="INFO")
@@ -432,7 +432,7 @@ def load_all_volumes(
         dicom_collection_path,
         generate_full_paths(path_generator=os.listdir),
         curried.map(load_volume(method=method, preprocess=preprocess)),
-    )
+    )  # type: ignore
 
 
 @logger_wraps(level="INFO")
@@ -557,7 +557,9 @@ def save_dicom_scans_to_h5(
             logger.error(f"Failed to load scan from {dicom_path}, {e}")
 
     n_scans = len(os.listdir(dicom_path))
-    mapper = pmap(n_workers=n_workers) if n_workers > 1 else map
+    mapper = (
+        pmap(n_workers=n_workers) if n_workers is not None and n_workers > 1 else map
+    )
     tz.pipe(
         dicom_path,
         generate_full_paths(path_generator=os.listdir),

@@ -4,6 +4,7 @@ Define a U-Net model using Keras functional API
 Reference: https://github.com/christianversloot/machine-learning-articles/blob/main/how-to-build-a-u-net-for-image-segmentation-with-tensorflow-and-keras.md
 """
 
+from uncertainty import data
 from uncertainty.utils.logging import logger_wraps
 from ..common.constants import model_config
 from ..utils.wrappers import curry
@@ -28,11 +29,12 @@ def conv_layer(
     """Convolution followed by (optionally) BN and activation"""
     return tz.pipe(
         x,
-        layers.Conv2D(
+        layers.Conv3D(
             n_kernels,
             kernel_size,
             kernel_initializer=initializer,
             padding="same",  # Keep dimensions the same
+            data_format="channels_last",
         ),
         layers.BatchNormalization() if use_batch_norm else tz.identity,
         layers.Activation(activation),
@@ -67,7 +69,7 @@ def unet_encoder(x, config: dict = model_config()):
     levels = [
         lambda x: tz.pipe(
             x,
-            layers.MaxPool2D((2, 2), strides=(2, 2)),
+            layers.MaxPool3D((2, 2, 2), strides=(2, 2, 2), data_format="channels_last"),
             conv_block(n_kernels=config["n_kernels_per_block"][level], config=config),
         )
         for level in range(1, config["n_levels"])  # Exclude first block
@@ -93,14 +95,16 @@ def decoder_level(x, skip, n_kernels: int, config: dict = model_config()):
 
     return tz.pipe(
         x,
-        layers.Conv2DTranspose(
+        layers.Conv3DTranspose(
             n_kernels // 2,  # Halve dimensions because we are concatenating
             config["kernel_size"],
-            strides=(2, 2),
+            strides=(2, 2, 2),
             kernel_initializer=config["initializer"],
+            data_format="channels_last",
         ),
-        layers.CenterCrop(  # Crop to match size of skip connection
-            height=skip.shape[1], width=skip.shape[2]
+        layers.Cropping3D(  # Crop to match size of skip connection
+            cropping=skip.shape[1:-1],  # shape = (batch, H, W, D, channel)
+            data_format="channels_last",
         ),
         lambda cropped_x: layers.Concatenate(axis=-1)([skip, cropped_x]),
         conv_block(n_kernels=n_kernels, config=config),
@@ -125,11 +129,12 @@ def unet_decoder(x, skips, config: dict = model_config()):
     return tz.pipe(
         x,
         lambda x: tz.pipe(x, *levels),  # Run x through each decoder level
-        layers.Conv2D(  # Final 1x1 convolution
+        layers.Conv3D(  # Final 1x1 convolution
             config["n_kernels_last"],
-            kernel_size=(1, 1),
+            kernel_size=(1, 1, 1),
             kernel_initializer=config["initializer"],
             padding="same",
+            data_format="channels_last",
         ),
         (
             layers.Activation(config["final_layer_activation"])
@@ -146,7 +151,12 @@ def unet(config: dict = model_config()) -> Model:
     Construct a U-Net model
     """
     input_ = layers.Input(
-        shape=(config["input_height"], config["input_width"], config["input_dim"])
+        shape=(
+            config["input_height"],
+            config["input_width"],
+            config["input_depth"],
+            config["input_dim"],
+        )
     )
     return tz.pipe(
         input_,

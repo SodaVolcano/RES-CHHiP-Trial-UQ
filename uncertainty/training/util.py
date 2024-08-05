@@ -185,22 +185,20 @@ def construct_augmentor():
 @logger_wraps(level="INFO")
 @curry
 def augment_data(
-    dataset: Iterable[tuple[np.ndarray, np.ndarray]], augmentor: Compose
-) -> Iterable[tuple[np.ndarray, np.ndarray]]:
+    data: tuple[np.ndarray, np.ndarray], augmentor: Compose
+) -> tuple[np.ndarray, np.ndarray]:
     """
     Augment data using the provided augmentor
     """
     return tz.pipe(
-        dataset,
+        data,
         # Pack in dictionary to work with augmentor
-        curried.map(
-            lambda x: {
-                "image": x[0],
-                "mask": x[1],
-            }
-        ),
-        curried.map(lambda x: augmentor(**x)),
-        curried.map(lambda x: (x["image"], x["mask"])),
+        lambda x: {
+            "image": x[0],
+            "mask": x[1],
+        },
+        lambda x: augmentor(**x),
+        lambda x: (x["image"], x["mask"]),
     )
 
 
