@@ -6,38 +6,45 @@ The repository contains modules for loading DICOM and NIFTI files, preprocessing
 
 # Setup
 
-## Devbox + direnv
+## Devbox
 
 This is the recommended method for Linux and Mac OS as the resulting environment is isolated from the rest of the host environment.
 
-**Warning: `direnv` allow any arbitrary bash commands to be executed, please inspect `.envrc` before allowing direnv!**
-
 [Devbox](https://github.com/jetify-com/devbox) is used to create isolated development shells where the dependencies are declared in `devbox.json` file and are version-locked in `devbox.lock`. Dependencies and programs installed in the shell are only accessible in the shell. It is internally powered by Nix where the list of Nix packages can be found at [Nixhub.io](https://www.nixhub.io/).
 
-First, install [Devbox](https://github.com/jetify-com/devbox). Then, from the top-most directory of the project, run the following command to let Devbox install the required dependencies locally, run pip to install the requirements, and activate the virtual environment.
+First, install [Devbox](https://github.com/jetify-com/devbox). Then, from the top-most directory of the project, run the following command to let Devbox install the required dependencies locally, install the requirements, and activate the virtual environment.
 
 ```bash
 devbox shell
+exit # Exit the devbox shell
 ```
 
-## pip
+## Poetry
 
-Using python version 3.12.4, run the following commands.
+Poetry is used to manage and configure Python dependencies. You can run the following command.
 
 ```bash
-python3 -m venv venv   # Create a virtual environment folder
-source venv/bin/activate   # on Mac OS and Linux, OR
-venv\Scripts\activate      # On Windows
-pip install -r /path/to/requirements.txt   # Install python dependencies
-```
+poetry shell   # Enter the poetry venv environment
+poetry install  # Install the dependencies
 
-You can deactivate the virtual environment by running `deactivate`.
+exit # Exit the poetry shell
+```
 
 # Usage
 
+## Example Usages
+
+Example usages of the functions in `uncertainty` is found under `usages/`.
+
 ## Configuration
 
-Global configuration is defined in `uncertainty.common.constants`. You can pass in your own configuration/constants if you do not wish to use the preset values.
+The project provides preset configurations. You can pass in your own configuration/constants if you do not wish to use the preset values.
+
+| Configuration      | Defined in                  |
+| ------------------ | --------------------------- |
+| Model architecture | `uncertainty.models.config` |
+| Global constants   | `uncertainty.constants`     |
+| Logger             | `uncertainty.utils.logging` |
 
 ## Logging
 
