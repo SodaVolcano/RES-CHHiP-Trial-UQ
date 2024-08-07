@@ -100,60 +100,6 @@ class TestLoadVolume:
         result = load_volume(gen_path())
         assert result is None
 
-    @pytest.mark.skip(reason="Assume all have same shape since we filter by thickness")
-    # directory contains DICOM files with different shapes
-    def test_loads_3d_volume_with_most_common_shape(self, mocker):
-        # Mock the list_files function to return a list of file paths with different shapes
-        mocker.patch(
-            PATCH_LIST_FILES,
-            return_value=["file1.dcm", "file2.dcm", "file3.dcm"],
-        )
-
-        # Mock the dicom.dcmread function to return mock DICOM objects with different shapes
-        mock_dicom1 = pydicom.Dataset()
-        mock_dicom1.SOPClassUID = c.CT_IMAGE
-        mock_dicom1.Rows = 512
-        mock_dicom1.Columns = 512
-        mock_dicom1._pixel_array = np.zeros((512, 512))
-        mock_dicom1.PixelSpacing = [0.5, 0.5]
-        mock_dicom1.SliceThickness = 1.0
-        mock_dicom1.ImageOrientationPatient = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0]
-        mock_dicom1.ImagePositionPatient = [-200.0, 200.0, -50.0]
-        mock_dicom1.RescaleSlope = 1.0
-        mock_dicom1.RescaleIntercept = 0.0
-
-        mock_dicom2 = pydicom.Dataset()
-        mock_dicom2.SOPClassUID = c.CT_IMAGE
-        mock_dicom2.Rows = 256
-        mock_dicom2.Columns = 256
-        mock_dicom2._pixel_array = np.zeros((256, 256))
-        mock_dicom2.PixelSpacing = [0.5, 0.5]
-        mock_dicom2.SliceThickness = 1.0
-        mock_dicom2.ImageOrientationPatient = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0]
-        mock_dicom2.ImagePositionPatient = [-200.0, 200.0, -48.0]
-        mock_dicom2.RescaleSlope = 1.0
-        mock_dicom2.RescaleIntercept = 0.0
-
-        mock_dicom3 = pydicom.Dataset()
-        mock_dicom3.SOPClassUID = c.CT_IMAGE
-        mock_dicom3.Rows = 512
-        mock_dicom3.Columns = 512
-        mock_dicom3._pixel_array = np.zeros((512, 412))
-        mock_dicom3.PixelSpacing = [0.5, 0.5]
-        mock_dicom3.SliceThickness = 1.0
-        mock_dicom3.ImageOrientationPatient = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0]
-        mock_dicom3.ImagePositionPatient = [-200.0, 200.0, -49.0]
-        mock_dicom3.RescaleSlope = 1.0
-        mock_dicom3.RescaleIntercept = 0.0
-
-        mocker.patch(PATCH_DCMREAD, side_effect=[mock_dicom1, mock_dicom2, mock_dicom3])
-
-        # Call the load_volume function
-        volume = load_volume(gen_path())
-
-        # Assert the volume shape is as expected (using the most common shape)
-        assert volume.shape == (512, 412, 2)
-
 
 class Test_LoadRtStruct:
     # Successfully loads RTStructBuilder from a valid DICOM RT struct file

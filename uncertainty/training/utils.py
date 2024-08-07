@@ -2,9 +2,6 @@
 Utility functions for model training, from model construction, data loading, and training loop
 """
 
-from operator import methodcaller
-
-from scipy.fftpack import shift
 from tests.context import PatientScan
 from uncertainty.data.mask import get_organ_names, masks_as_array
 from uncertainty.data.preprocessing import (
@@ -25,8 +22,6 @@ from tensorflow.python.keras import Model
 import tensorflow.keras as keras
 import toolz as tz
 import toolz.curried as curried
-from scipy.ndimage import zoom
-import SimpleITK as sitk
 from volumentations import (
     Compose,
     Rotate,

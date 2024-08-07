@@ -179,6 +179,25 @@ def find_organ_roi(organ: str, roi_lst: list[str]) -> Optional[str]:
     )  # type: ignore
 
 
+def center_box_slice(
+    background_shape: Sequence[int], box_shape: Sequence[int]
+) -> tuple[slice, ...]:
+    """
+    Return slices from imposing box of specific shape in the center of background
+
+    The centered box is obtained when slices is used to index the background array
+    """
+    return tuple(
+        [
+            slice(bg_mid - box_mid, bg_mid + box_mid)
+            for bg_mid, box_mid in zip(
+                np.floor_divide(background_shape, 2), np.floor_divide(box_shape, 2)
+            )
+        ]
+    )
+
+
+@curry
 def enlarge_array(
     array: np.ndarray, scale: int, fill: Literal["min", "max"] | int = "min"
 ) -> np.ndarray:
@@ -190,13 +209,15 @@ def enlarge_array(
     the new array.
     """
     fill_map = {"min": np.min(array), "max": np.max(array)}
+    new_shape = tuple(np.multiply(array.shape, scale))
     big_array = np.full(
-        np.multiply(array.shape, scale),
+        new_shape,
         fill if isinstance(fill, int) else fill_map[fill],
         dtype=array.dtype,
     )
-    slices = [slice(dim, 2 * dim) for dim in array.shape]
-    big_array[*slices] = array
+    slices = center_box_slice(new_shape, array.shape)
+    big_array[slices] = array
+
     return big_array
 
 
@@ -231,8 +252,11 @@ def crop_nd(array: np.ndarray, new_shape: Tuple[int]):
 
     https://stackoverflow.com/questions/39382412/crop-center-portion-of-a-numpy-image
     """
-    array = enlarge_array(array, 2)
-    start = tuple(map(lambda a, da: a // 2 - da // 2, array.shape, new_shape))
-    end = tuple(map(operator.add, start, new_shape))
-    slices = tuple(map(slice, start, end))
-    return array[slices]
+    SCALE = 2
+    slices = center_box_slice(tuple(np.multiply(array.shape, SCALE)), new_shape)
+
+    return tz.pipe(
+        array,
+        enlarge_array(scale=SCALE, fill="min"),
+        lambda arr: arr[slices],
+    )
