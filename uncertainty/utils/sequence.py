@@ -66,4 +66,4 @@ def growby_accum[
         fs,
         curried.cons(init),  # [init, f1, f2, ...]
         curried.accumulate(lambda x, f: f(x)),
-    )
+    )  # type: ignore

@@ -85,10 +85,11 @@ def Encoder(x: tf.Tensor, config: dict = model_config()):
     Pass input through encoder and return (output, skip_connections)
     """
     levels = [
-        lambda x: tz.pipe(
+        # need to bind n_kernels because all lambdas share same variable `level`
+        lambda x, n_kernels=config["n_kernels_per_block"][level]: tz.pipe(
             x,
             layers.MaxPool3D((2, 2, 2), strides=(2, 2, 2), data_format="channels_last"),
-            ConvBlock(n_kernels=config["n_kernels_per_block"][level], config=config),
+            ConvBlock(n_kernels=n_kernels, config=config),
         )
         for level in range(1, config["n_levels"])  # Exclude first block
     ]
@@ -123,7 +124,7 @@ def DecoderLevel(
             data_format="channels_last",
         ),
         # Crop skip to same size as x, x's last dim is half of skip's last dim
-        CentreCrop3D(skip.shape[1:-1] + (skip.shape[-1] // 2,)),  # type: ignore
+        CentreCrop3D(skip.shape[1:]),  # type: ignore
         lambda cropped_x: layers.Concatenate(axis=-1)([skip, cropped_x]),
         ConvBlock(n_kernels=n_kernels, config=config),
     )
