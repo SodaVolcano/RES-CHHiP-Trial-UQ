@@ -15,7 +15,7 @@ from uncertainty.utils.logging import logger_wraps
 
 from ..utils.wrappers import curry
 from ..utils.common import call_method, conditional, unpack_args
-from ..common import constants as c
+from .. import constants as c
 
 
 @logger_wraps()

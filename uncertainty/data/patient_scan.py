@@ -1,10 +1,15 @@
 import os
-from typing import List, NamedTuple, Optional
+from typing import Generator, List, NamedTuple, Optional
 import numpy as np
 from loguru import logger
 import h5py
 
+from uncertainty.utils.path import generate_full_paths
+
 from .mask import Mask, get_organ_names
+
+import toolz as tz
+from toolz import curried
 
 
 class PatientScan(NamedTuple):
@@ -65,6 +70,18 @@ def from_h5(file_path: str) -> Optional[PatientScan]:
     except Exception as e:
         logger.error(f"Error loading PatientScan from {file_path}: {e}")
         return None
+
+
+def from_h5_dir(dir_path: str) -> Generator[Optional[PatientScan], None, None]:
+    """
+    Load all PatientScan objects from h5 files in dir_path
+
+    None is returned in place of an object if an error occurs
+    """
+    return tz.pipe(
+        generate_full_paths(dir_path, os.listdir),
+        curried.map(from_h5),
+    )
 
 
 def save_h5(scan: PatientScan, save_dir: str) -> None:

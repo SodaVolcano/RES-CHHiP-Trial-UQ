@@ -22,7 +22,7 @@ from ..utils.path import list_files, generate_full_paths
 from ..utils.wrappers import curry
 from ..utils.logging import logger_wraps
 from ..utils.parallel import pmap
-from ..common import constants as c
+from .. import constants as c
 
 # ============ Helper functions ============
 
@@ -427,7 +427,7 @@ def load_mask(dicom_path: str, preprocess: bool = True) -> Optional[Mask]:
         curried.map(
             unpack_args(lambda name, mask: (_standardise_roi_name(name), mask))
         ),
-        conditional(preprocess, _preprocess_mask(dicom_path=dicom_path), tz.identity),
+        _preprocess_mask(dicom_path=dicom_path) if preprocess else tz.identity,
         lambda name_mask_lst: Mask(dict(name_mask_lst) if name_mask_lst else {}),
     )  # type: ignore
 

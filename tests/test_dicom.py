@@ -9,7 +9,7 @@ from uncertainty.data.mask import get_organ_mask, get_organ_names
 from .context import gen_path, uncertainty
 
 load_volume = uncertainty.data.dicom.load_volume
-c = uncertainty.common.constants
+c = uncertainty.constants
 _load_rt_struct = uncertainty.data.dicom._load_rt_struct
 load_mask = uncertainty.data.dicom.load_mask
 load_patient_scan = uncertainty.data.dicom.load_patient_scan

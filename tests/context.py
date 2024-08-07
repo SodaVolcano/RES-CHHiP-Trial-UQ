@@ -15,7 +15,7 @@ import uncertainty
 # Import aliases
 Mask = uncertainty.data.mask.Mask
 PatientScan = uncertainty.data.patient_scan.PatientScan
-c = uncertainty.common.constants
+c = uncertainty.constants
 
 # utils
 list_files = uncertainty.utils.path.list_files

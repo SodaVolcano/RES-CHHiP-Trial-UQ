@@ -1,5 +1,5 @@
 """
-Utility functions for model training, from model construction, data loading, and training loop
+Functions for hanlding dataset
 """
 
 from tests.context import PatientScan
@@ -13,13 +13,12 @@ from uncertainty.data.preprocessing import (
 )
 from ..utils.logging import logger_wraps
 from ..utils.wrappers import curry
-from ..common.constants import BODY_THRESH, model_config, HU_RANGE, ORGAN_MATCHES
+from ..constants import BODY_THRESH, HU_RANGE, ORGAN_MATCHES
+from ..models.config import model_config
 
-from typing import Callable, Iterable, Optional
+from typing import Iterable, Optional
 
 import numpy as np
-from tensorflow.python.keras import Model
-import tensorflow.keras as keras
 import toolz as tz
 import toolz.curried as curried
 from volumentations import (
@@ -30,42 +29,6 @@ from volumentations import (
     GaussianNoise,
     RandomGamma,
 )
-
-
-@logger_wraps(level="INFO")
-@curry
-def construct_model(
-    model_constructor: Callable[[dict], Model],
-    batches_per_epoch: int,
-    config: dict = model_config(),
-    show_model_info: bool = True,
-):
-    """
-    Initialise model, set learning schedule and loss function and plot model
-    """
-    model = model_constructor(config)
-
-    # Model outputs are logits, loss must apply softmax before computing loss
-    loss = config["loss"](from_logits=config["final_layer_activation"] is None)
-
-    # Number of iterations (batches) to pass before decreasing learning rate
-    boundaries = [
-        int(config["n_epochs"] * percentage * batches_per_epoch)
-        for percentage in config["lr_schedule_percentages"]
-    ]
-    lr_schedule = config["lr_scheduler"](boundaries, config["lr_schedule_values"])
-
-    model.compile(
-        loss=loss,
-        optimizer=keras.optimizers.Adam(learning_rate=lr_schedule),
-        metrics=config["metrics"],
-    )
-
-    if show_model_info:
-        keras.utils.plot_model(model, to_file="unet.png")
-        model.summary()
-
-    return model
 
 
 @logger_wraps(level="INFO")
@@ -157,7 +120,7 @@ def preprocess_dataset(
         dataset,
         curried.map(preprocess_data(config=config)),
         curried.filter(lambda x: x[1] is not None),
-    )
+    )  # type: ignore
 
 
 @logger_wraps(level="INFO")

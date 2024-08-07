@@ -8,15 +8,14 @@ from typing import Sequence
 import tensorflow as tf
 from uncertainty.data.preprocessing import crop_nd
 from ..utils.logging import logger_wraps
-from ..common.constants import model_config
+from ..models.config import model_config
 from ..utils.wrappers import curry
 from ..utils.sequence import growby_accum
 from ..utils.common import unpack_args
 
 import toolz as tz
-from toolz import curried
-from tensorflow.keras import layers, Model
-from tensorflow import keras
+from tensorflow.keras import layers, Model  # type: ignore
+from tensorflow import keras  # type: ignore
 
 
 class CentreCrop3D(keras.layers.Layer):
