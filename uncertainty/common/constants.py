@@ -31,11 +31,11 @@ def model_config() -> dict:
         # --------- Data settings ---------
         "data_dir": "/content/gdrive/MyDrive/dataset/Data",
         # Data are formatted as (height, width, depth, dimension)
-        # Ensure each dimension is divisible by 2 ** (n_levels - 1)
-        # because it's divided by 2 (n_levels - 1) times
-        "input_height": (2**n_levels) * 19,
-        "input_width": (2**n_levels) * 25,
-        "input_depth": (2**n_levels) * 10,
+        # Ensure each dimension is divisible by 2 ** (n_levels - 1) so no row is discarded
+        # because it's divided by 2 (n_levels - 1) times in the U-Net
+        "input_height": (2**n_levels) * 10,
+        "input_width": (2**n_levels) * 13,
+        "input_depth": (2**n_levels) * 5,
         "input_dim": 3,  # Number of organs, mask only
         # ------- ConvolutionBlock settings  --------
         "kernel_size": (3, 3, 3),

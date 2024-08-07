@@ -85,7 +85,7 @@ def preprocess_data(
     def preprocess_volume(scan: PatientScan) -> np.ndarray:
         return tz.pipe(
             scan.volume,
-            shift_center(centroid=centroid),
+            shift_center(points=centroid),
             crop_nd(
                 new_shape=(
                     config["input_height"],
@@ -120,7 +120,7 @@ def preprocess_data(
             scan.masks[""],
             masks_as_array(organ_ordering=names),
             lambda arr: np.moveaxis(arr, -1, 0),  # to allow map()
-            curried.map(shift_center(centroid=centroid)),
+            curried.map(shift_center(points=centroid)),
             curried.map(
                 crop_nd(
                     new_shape=(

@@ -222,7 +222,7 @@ def enlarge_array(
 
 
 @curry
-def shift_center(array: np.ndarray, point: Sequence[int]) -> np.ndarray:
+def shift_center(array: np.ndarray, points: Sequence[int]) -> np.ndarray:
     """
     Move a point in the array to the center of the array
     """
@@ -241,7 +241,7 @@ def shift_center(array: np.ndarray, point: Sequence[int]) -> np.ndarray:
             lambda slices: enlarged_arr[*slices],
         )  # type: ignore
 
-    new_pos = [round(dim / 2 - point[i]) for i, dim in enumerate(array.shape)]
+    new_pos = [round(dim / 2 - points[i]) for i, dim in enumerate(array.shape)]
     return shift(enlarge_array(array, 3), new_pos)
 
 
