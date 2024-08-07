@@ -161,6 +161,8 @@ def filter_roi(
     )
 
 
+@logger_wraps()
+@curry
 def find_organ_roi(organ: str, roi_lst: list[str]) -> Optional[str]:
     """
     Find a unique ROI name in the list that contains the organ names (possibly multiple)
@@ -179,6 +181,8 @@ def find_organ_roi(organ: str, roi_lst: list[str]) -> Optional[str]:
     )  # type: ignore
 
 
+@logger_wraps()
+@curry
 def center_box_slice(
     background_shape: Sequence[int], box_shape: Sequence[int]
 ) -> tuple[slice, ...]:
@@ -187,16 +191,18 @@ def center_box_slice(
 
     The centered box is obtained when slices is used to index the background array
     """
+    ceil_divide = lambda x, y: np.ceil(np.divide(x, y)).astype(int)
     return tuple(
         [
             slice(bg_mid - box_mid, bg_mid + box_mid)
             for bg_mid, box_mid in zip(
-                np.floor_divide(background_shape, 2), np.floor_divide(box_shape, 2)
+                ceil_divide(background_shape, 2), ceil_divide(box_shape, 2)
             )
         ]
     )
 
 
+@logger_wraps()
 @curry
 def enlarge_array(
     array: np.ndarray, scale: int, fill: Literal["min", "max"] | int = "min"
@@ -221,6 +227,7 @@ def enlarge_array(
     return big_array
 
 
+@logger_wraps()
 @curry
 def shift_center(array: np.ndarray, points: Sequence[int]) -> np.ndarray:
     """
@@ -245,18 +252,22 @@ def shift_center(array: np.ndarray, points: Sequence[int]) -> np.ndarray:
     return shift(enlarge_array(array, 3), new_pos)
 
 
+@logger_wraps()
 @curry
-def crop_nd(array: np.ndarray, new_shape: Tuple[int]):
+def crop_nd(array: np.ndarray, new_shape: Tuple[int], pad: bool = False):
     """
-    Center-crop the array into the new_shape, or pad with zero if new_shape is bigger
-
-    https://stackoverflow.com/questions/39382412/crop-center-portion-of-a-numpy-image
+    Center-crop the array into the new_shape, pad with min value if needed
     """
-    SCALE = 2
-    slices = center_box_slice(tuple(np.multiply(array.shape, SCALE)), new_shape)
+    SCALE = 2 if pad else 1
+    slices = tz.pipe(
+        array.shape,
+        lambda s: np.multiply(s, SCALE),
+        tuple,
+        center_box_slice(box_shape=new_shape),
+    )
 
     return tz.pipe(
         array,
-        enlarge_array(scale=SCALE, fill="min"),
+        enlarge_array(scale=SCALE, fill="min") if pad else tz.identity,
         lambda arr: arr[slices],
     )

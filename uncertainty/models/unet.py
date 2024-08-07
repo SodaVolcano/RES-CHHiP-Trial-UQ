@@ -4,6 +4,8 @@ Define a U-Net model using Keras functional API
 Reference: https://github.com/christianversloot/machine-learning-articles/blob/main/how-to-build-a-u-net-for-image-segmentation-with-tensorflow-and-keras.md
 """
 
+from typing import Sequence
+import tensorflow as tf
 from uncertainty.data.preprocessing import crop_nd
 from ..utils.logging import logger_wraps
 from ..common.constants import model_config
@@ -12,13 +14,30 @@ from ..utils.sequence import growby_accum
 from ..utils.common import unpack_args
 
 import toolz as tz
+from toolz import curried
 from tensorflow.keras import layers, Model
+from tensorflow import keras
+
+
+class CentreCrop3D(keras.layers.Layer):
+    """
+    Crop the input tensor to the new shape
+    """
+
+    def __init__(self, new_shape: tf.TensorShape) -> None:
+        """new_shape is the shape of a single instance"""
+        super(CentreCrop3D, self).__init__()
+        self.out_shape = new_shape
+
+    def call(self, inputs):
+        new_shape = (inputs.shape[0],) + self.out_shape
+        return crop_nd(inputs, new_shape)
 
 
 @logger_wraps(level="INFO")
 @curry
-def conv_layer(
-    x,
+def ConvLayer(
+    x: tf.Tensor,
     n_kernels: int,
     kernel_size: tuple[int, ...],
     initializer: str,
@@ -42,12 +61,12 @@ def conv_layer(
 
 @logger_wraps(level="INFO")
 @curry
-def conv_block(x, n_kernels, config: dict = model_config()):
+def ConvBlock(x: tf.Tensor, n_kernels: int, config: dict = model_config()):
     """Pass input through n convolution layers"""
     return tz.pipe(
         x,
         *[
-            conv_layer(
+            ConvLayer(
                 n_kernels=n_kernels,
                 kernel_size=config["kernel_size"],
                 initializer=config["initializer"],
@@ -61,7 +80,7 @@ def conv_block(x, n_kernels, config: dict = model_config()):
 
 @logger_wraps(level="INFO")
 @curry
-def unet_encoder(x, config: dict = model_config()):
+def Encoder(x: tf.Tensor, config: dict = model_config()):
     """
     Pass input through encoder and return (output, skip_connections)
     """
@@ -69,15 +88,15 @@ def unet_encoder(x, config: dict = model_config()):
         lambda x: tz.pipe(
             x,
             layers.MaxPool3D((2, 2, 2), strides=(2, 2, 2), data_format="channels_last"),
-            conv_block(n_kernels=config["n_kernels_per_block"][level], config=config),
+            ConvBlock(n_kernels=config["n_kernels_per_block"][level], config=config),
         )
         for level in range(1, config["n_levels"])  # Exclude first block
     ]
 
     return tz.pipe(
         x,
-        conv_block(n_kernels=config["n_kernels_init"], config=config),
-        # Repeatedly apply downsample and conv_block to input to get skip connection list
+        ConvBlock(n_kernels=config["n_kernels_init"], config=config),
+        # Repeatedly apply downsample and ConvBlock to input to get skip connection list
         growby_accum(fs=levels),
         list,
         # last element is from bottleneck so exclude from skip connections
@@ -87,7 +106,9 @@ def unet_encoder(x, config: dict = model_config()):
 
 @logger_wraps(level="INFO")
 @curry
-def decoder_level(x, skip, n_kernels: int, config: dict = model_config()):
+def DecoderLevel(
+    x: tf.Tensor, skip: tf.Tensor, n_kernels: int, config: dict = model_config()
+):
     """
     One level of decoder path: upsample, crop, concat with skip, and convolve the input
     """
@@ -101,22 +122,23 @@ def decoder_level(x, skip, n_kernels: int, config: dict = model_config()):
             kernel_initializer=config["initializer"],
             data_format="channels_last",
         ),
-        crop_nd(new_shape=skip.shape[1:-1]),  # Crop to match size of skip connection
+        # Crop skip to same size as x, x's last dim is half of skip's last dim
+        CentreCrop3D(skip.shape[1:-1] + (skip.shape[-1] // 2,)),  # type: ignore
         lambda cropped_x: layers.Concatenate(axis=-1)([skip, cropped_x]),
-        conv_block(n_kernels=n_kernels, config=config),
+        ConvBlock(n_kernels=n_kernels, config=config),
     )
 
 
 @logger_wraps(level="INFO")
 @curry
-def unet_decoder(x, skips, config: dict = model_config()):
+def Decoder(x: tf.Tensor, skips: Sequence[tf.Tensor], config: dict = model_config()):
     """
     Pass input through decoder consisting of upsampling and return output
     """
     # skips and config is in descending order, reverse to ascending
     levels = reversed(
         [
-            decoder_level(skip=skip, n_kernels=n_kernels)
+            DecoderLevel(skip=skip, n_kernels=n_kernels)
             # Ignore first block (bottleneck)
             for skip, n_kernels in (zip(skips, config["n_kernels_per_block"][1:]))
         ]
@@ -142,7 +164,7 @@ def unet_decoder(x, skips, config: dict = model_config()):
 
 @logger_wraps(level="INFO")
 @curry
-def unet(config: dict = model_config()) -> Model:
+def UNet(config: dict = model_config()) -> Model:
     """
     Construct a U-Net model
     """
@@ -152,11 +174,12 @@ def unet(config: dict = model_config()) -> Model:
             config["input_width"],
             config["input_depth"],
             config["input_dim"],
-        )
+        ),
+        batch_size=config["batch_size"],
     )
     return tz.pipe(
         input_,
-        unet_encoder(config=config),
-        unpack_args(unet_decoder(config=config)),
+        Encoder(config=config),
+        unpack_args(Decoder(config=config)),
         lambda output: Model(input_, output, name="U-Net"),
     )

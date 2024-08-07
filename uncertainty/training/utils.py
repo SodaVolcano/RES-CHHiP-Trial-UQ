@@ -91,7 +91,8 @@ def preprocess_data(
                     config["input_height"],
                     config["input_width"],
                     config["input_depth"],
-                )
+                ),
+                pad=True,
             ),
             lambda vol: np.clip(vol, *HU_RANGE),
             map_interval(HU_RANGE, (0, 1)),
@@ -128,7 +129,8 @@ def preprocess_data(
                         config["input_width"],
                         config["input_depth"],
                         1,
-                    )
+                    ),
+                    pad=True,
                 )
             ),
             list,
