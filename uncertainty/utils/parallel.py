@@ -2,7 +2,8 @@
 Overload for embarrassingly parallel tasks
 """
 
-from typing import Generator, Literal, Optional
+from multiprocessing.pool import IMapIterator
+from typing import Any, Generator, Literal, Optional
 from .wrappers import curry
 from pathos.multiprocessing import ProcessingPool, ThreadingPool
 
@@ -14,7 +15,7 @@ def pmap(
     *iterables,
     n_workers: Optional[int] = None,
     executor: Literal["pool", "thread"] = "pool",
-) -> Generator:
+) -> IMapIterator | Generator[Any, None, None] | Any:
     """
     Parallel map function using Pool or Thread
 

@@ -8,8 +8,6 @@ from uncertainty.data.mask import get_organ_mask, get_organ_names
 
 from .context import gen_path, uncertainty
 
-_most_common_shape = uncertainty.data.dicom._most_common_shape
-_filter_by_most_common_shape = uncertainty.data.dicom._filter_by_most_common_shape
 load_volume = uncertainty.data.dicom.load_volume
 c = uncertainty.common.constants
 _load_rt_struct = uncertainty.data.dicom._load_rt_struct
@@ -34,95 +32,7 @@ PATCH_GET_DICOM_SLICES = "uncertainty.data.dicom._get_dicom_slices"
 PATCH_PMAP = "uncertainty.data.dicom.pmap"
 
 
-class Test_MostCommonShape:
-
-    # returns the most common shape for a list of DICOM files with uniform shapes
-    def test_most_common_shape_uniform(self):
-        dicom_files = [pydicom.Dataset(), pydicom.Dataset(), pydicom.Dataset()]
-        for d in dicom_files:
-            d.Rows, d.Columns = 512, 512
-
-        assert _most_common_shape(dicom_files) == (512, 512)
-
-    # handles an empty iterable of DICOM files gracefully
-    def test_most_common_shape_empty(self):
-        dicom_files = []
-
-        assert _most_common_shape(dicom_files) == None
-
-    # correctly identifies the most common shape when there are multiple shapes with different frequencies
-    def test_correctly_identifies_most_common_shape(self):
-        dicom_files = [
-            pydicom.Dataset(),
-            pydicom.Dataset(),
-            pydicom.Dataset(),
-            pydicom.Dataset(),
-            pydicom.Dataset(),
-        ]
-        dicom_files[0].Rows, dicom_files[0].Columns = 512, 512
-        dicom_files[1].Rows, dicom_files[1].Columns = 256, 206
-        dicom_files[2].Rows, dicom_files[2].Columns = 512, 512
-        dicom_files[3].Rows, dicom_files[3].Columns = 256, 256
-        dicom_files[4].Rows, dicom_files[4].Columns = 512, 512
-
-        assert _most_common_shape(dicom_files) == (512, 512)
-
-    # manages cases where all DICOM files have unique shapes
-    def test_unique_shapes(self):
-        dicom_files = [pydicom.Dataset(), pydicom.Dataset(), pydicom.Dataset()]
-        for d in dicom_files:
-            d.Rows, d.Columns = np.random.randint(1, 1000), np.random.randint(1, 1000)
-
-        assert _most_common_shape(dicom_files) == None
-
-    # Check that cached result is returned
-    def test_most_common_shape_caching(self):
-        dicom_files = [pydicom.Dataset(), pydicom.Dataset(), pydicom.Dataset()]
-        for d in dicom_files:
-            d.Rows, d.Columns = 512, 512
-
-        # First call without caching
-        result_without_caching = _most_common_shape(dicom_files)
-
-        # Second call with caching
-        result_with_caching = _most_common_shape(dicom_files)
-
-        assert result_without_caching == result_with_caching
-
-
-class Test_FilterByMostCommonShape:
-
-    # filters DICOM files to only include those with the most common shape
-    def test_filters_by_most_common_shape(self):
-        dicom_files = [
-            pydicom.Dataset(),
-            pydicom.Dataset(),
-            pydicom.Dataset(),
-            pydicom.Dataset(),
-        ]
-        dicom_files[0].Rows, dicom_files[0].Columns = 512, 512
-        dicom_files[1].Rows, dicom_files[1].Columns = 512, 512
-        dicom_files[2].Rows, dicom_files[2].Columns = 256, 256
-        dicom_files[3].Rows, dicom_files[3].Columns = 512, 512
-
-        filtered_files = list(_filter_by_most_common_shape(dicom_files))
-        assert len(filtered_files) == 3
-        for d in filtered_files:
-            assert (d.Rows, d.Columns) == (512, 512)
-
-    # Return an empty list if no DICOM files are provided
-    def test_return_empty_list(self):
-        dicom_files = [pydicom.Dataset(), pydicom.Dataset(), pydicom.Dataset()]
-        dicom_files[0].Rows, dicom_files[0].Columns = 512, 512
-        dicom_files[1].Rows, dicom_files[1].Columns = 256, 256
-        dicom_files[2].Rows, dicom_files[2].Columns = 128, 128
-
-        result = list(_filter_by_most_common_shape(dicom_files))
-        assert len(result) == 0
-
-
 class TestLoadVolume:
-
     # correctly loads a 3D volume from a directory of DICOM files
     def test_loads_3d_volume_correctly(self, mocker):
         # Mock the list_files function to return a list of file paths
@@ -246,7 +156,6 @@ class TestLoadVolume:
 
 
 class Test_LoadRtStruct:
-
     # Successfully loads RTStructBuilder from a valid DICOM RT struct file
     def test_loads_rtstructbuilder_successfully(self, mocker):
         dicom_path = gen_path()
@@ -289,7 +198,6 @@ class Test_LoadRtStruct:
 
 
 class TestLoadMask:
-
     # Successfully load a mask when valid DICOM path is provided
     def test_load_mask_success(self, mocker):
         dicom_path = gen_path()
@@ -391,7 +299,6 @@ class TestLoadMask:
 
 
 class TestLoadPatientScan:
-
     # Successfully loads a PatientScan with valid DICOM files
     def test_loads_patient_scan_with_valid_dicom_files(self, mocker):
         # Mocking the list_files function to return a list of DICOM file paths
@@ -517,7 +424,6 @@ class TestLoadPatientScan:
 
 
 class TestLoadPatientScans:
-
     # Successfully loads multiple PatientScan objects from a directory with valid DICOM files
     def test_loads_multiple_patient_scans_successfully(self, mocker):
         # Mock the os.listdir to return a list of directories
@@ -591,7 +497,6 @@ class TestLoadPatientScans:
 
 
 class TestLoadAllMasks:
-
     # Successfully loads masks from a directory containing valid DICOM files
     def test_loads_masks_from_valid_dicom_directory(self, mocker):
         dicom_collection_path = gen_path()

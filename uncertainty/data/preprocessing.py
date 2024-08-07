@@ -2,9 +2,9 @@
 Collection of functions to preprocess numpy arrays
 """
 
-from operator import add, methodcaller
+from operator import sub
 import operator
-from typing import Iterable, Literal, Optional, Tuple
+from typing import Iterable, Literal, Optional, Sequence, Tuple
 
 import SimpleITK as sitk
 import numpy as np
@@ -176,44 +176,52 @@ def find_organ_roi(organ: str, roi_lst: list[str]) -> Optional[str]:
         # encase [min(...)] in list as we will use lst[0] later
         lambda names: [min(names, key=len)] if len(names) > 1 else names,
         lambda name: None if name == [] else name[0],
-    )
+    )  # type: ignore
 
 
 def enlarge_array(
     array: np.ndarray, scale: int, fill: Literal["min", "max"] | int = "min"
 ) -> np.ndarray:
     """
-    Enlarge an array by scale by padding with zero
+    Enlarge an array by scale by padding with zero, min or max value
 
     If `fill` is a number, that number will be used to pad the array. If it
     is "min" or "max", then the min/max value from the array is used to pad
     the new array.
     """
-    x, y, z = array.shape
     fill_map = {"min": np.min(array), "max": np.max(array)}
     big_array = np.full(
         np.multiply(array.shape, scale),
-        fill if type(fill) == int else fill_map[fill],
+        fill if isinstance(fill, int) else fill_map[fill],
         dtype=array.dtype,
     )
-    big_array[x : 2 * x, y : 2 * y, z : 2 * z] = array
+    slices = [slice(dim, 2 * dim) for dim in array.shape]
+    big_array[*slices] = array
     return big_array
 
 
 @curry
-def shift_center(array: np.ndarray, centroid: Tuple[np.number, ...]) -> np.ndarray:
+def shift_center(array: np.ndarray, point: Sequence[int]) -> np.ndarray:
     """
-    Given the centroid of the object/mass, move it to the center of the array
+    Move a point in the array to the center of the array
     """
-    x, y, z = array.shape
 
-    def shift(arr, dx, dy, dz):
-        x_new, y_new, z_new = x - dx, y - dy, z - dz
-        return arr[x_new : x_new + x, y_new : y_new + y, z_new : z_new + z]
+    def shift(enlarged_arr: np.ndarray, d_dims: Iterable[int]) -> np.ndarray:
+        """
+        d_dims is the difference between the new and old dimensions
+        """
+        return tz.pipe(
+            zip(array.shape, d_dims),
+            curried.map(lambda x: (x[0], x[0] - x[1])),  # (dim_old, dim_new)
+            curried.map(
+                lambda x: slice(x[1], x[1] + x[0])
+            ),  # [dim_new:dim_new + dim_old]
+            list,
+            lambda slices: enlarged_arr[*slices],
+        )  # type: ignore
 
-    new_pos = [round(dim / 2 - centroid[i]) for i, dim in enumerate(array.shape)]
-
-    return shift(enlarge_array(array, 3), *new_pos)
+    new_pos = [round(dim / 2 - point[i]) for i, dim in enumerate(array.shape)]
+    return shift(enlarge_array(array, 3), new_pos)
 
 
 @curry
@@ -223,7 +231,7 @@ def crop_nd(array: np.ndarray, new_shape: Tuple[int]):
 
     https://stackoverflow.com/questions/39382412/crop-center-portion-of-a-numpy-image
     """
-    array = enlarge_array(array, 3)
+    array = enlarge_array(array, 2)
     start = tuple(map(lambda a, da: a // 2 - da // 2, array.shape, new_shape))
     end = tuple(map(operator.add, start, new_shape))
     slices = tuple(map(slice, start, end))

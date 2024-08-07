@@ -26,13 +26,16 @@ BODY_THRESH = -500
 
 @memoize
 def model_config() -> dict:
+    n_levels: Final[int] = 5  # used to calculate input shape
     config = {
         # --------- Data settings ---------
         "data_dir": "/content/gdrive/MyDrive/dataset/Data",
         # Data are formatted as (height, width, depth, dimension)
-        "input_height": 300,
-        "input_width": 400,
-        "input_depth": 160,
+        # Ensure each dimension is divisible by 2 ** (n_levels - 1)
+        # because it's divided by 2 (n_levels - 1) times
+        "input_height": (2**n_levels) * 19,
+        "input_width": (2**n_levels) * 25,
+        "input_depth": (2**n_levels) * 10,
         "input_dim": 3,  # Number of organs, mask only
         # ------- ConvolutionBlock settings  --------
         "kernel_size": (3, 3, 3),
@@ -43,7 +46,7 @@ def model_config() -> dict:
         # Number of kernels in first level of Encoder, doubles/halves at each level in Encoder/Decoder
         "n_kernels_init": 64,
         # Number of resolutions/blocks; height of U-Net
-        "n_levels": 5,
+        "n_levels": n_levels,
         # Number of class to predict
         "n_kernels_last": 1,
         # Use sigmoid if using binary crossentropy, softmax if using categorical crossentropy

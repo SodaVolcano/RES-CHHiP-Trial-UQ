@@ -53,52 +53,6 @@ def _dicom_slice_order(dicom_file: dicom.Dataset) -> np.ndarray:
 
 
 @logger_wraps()
-def _most_common_shape(
-    dicom_files: Iterable[dicom.Dataset],
-) -> Optional[tuple[int, int]]:
-    """
-    Most common shape of DICOM files in dicom_files
-
-    None is returned if all DICOM files have unique shapes
-    """
-    return tz.pipe(
-        dicom_files,
-        curried.map(lambda f: (f.Rows, f.Columns)),
-        tz.frequencies,
-        lambda freq_dict: (
-            max(freq_dict, key=freq_dict.get)
-            # Return None if all DICOM files have unique shapes
-            if (not all(val == 1 for val in freq_dict.values()))
-            else None
-        ),
-    )  # type: ignore
-
-
-@curry
-def _filter_by_most_common_shape(
-    dicom_files: Iterable[dicom.Dataset],
-) -> Iterable[dicom.Dataset]:
-    """
-    Filter list of DICOM files by most common shape if exist, else raise error
-
-    Moved to a separate function as _most_common_shape can only be called once on
-    an iterator
-    """
-    return tz.pipe(
-        dicom_files,
-        itertools.tee,  # Split into two iterators where one calculates shape
-        unpack_args(lambda it1, it2: (_most_common_shape(it1), it2)),
-        unpack_args(
-            lambda shape, it: (
-                dicom_file
-                for dicom_file in it
-                if (dicom_file.Rows, dicom_file.Columns) == shape
-            )
-        ),
-    )
-
-
-@logger_wraps()
 def _get_uniform_spacing(
     dicom_files: Iterable[dicom.Dataset],
 ) -> Optional[tuple[float, float, float]]:
@@ -145,10 +99,12 @@ def _get_dicom_slices(dicom_path: str) -> Iterable[dicom.Dataset]:
 @logger_wraps()
 @curry
 def _load_roi_mask(
-    rt_struct: rt_utils.RTStructBuilder,
+    rt_struct: rt_utils.RTStruct,
     name: str,
 ) -> Optional[tuple[str, Generator[np.ndarray, None, None]]]:
     """
+    Return name and generator of ROI mask for name in rt_struct
+
     Wrapper to get_roi_mask_by_name, delay execution and return None if exception is raised
     """
     try:
@@ -157,7 +113,7 @@ def _load_roi_mask(
             lambda mask: np.flip(mask, 2),  # Flip depth to be top-down in ascending
             lambda mask: np.flip(mask, 1),  # Flip width from right->left to left->right
             lambda mask: (name, mask),
-        )
+        )  # type: ignore
     except AttributeError as e:
         logger.warning(
             f"[WARNING]: Failed to load {name} ROI mask for {rt_struct.ds.PatientID}, ROI name present but ContourSequence is missing.",
@@ -171,7 +127,7 @@ def _load_roi_mask(
 
 
 @logger_wraps()
-def _load_rt_struct(dicom_path: str) -> Optional[rt_utils.RTStructBuilder]:
+def _load_rt_struct(dicom_path: str) -> Optional[rt_utils.RTStruct]:
     """
     Create RTStructBuilder from DICOM RT struct file in dicom_path
 
@@ -473,7 +429,7 @@ def load_mask(dicom_path: str, preprocess: bool = True) -> Optional[Mask]:
         ),
         conditional(preprocess, _preprocess_mask(dicom_path=dicom_path), tz.identity),
         lambda name_mask_lst: Mask(dict(name_mask_lst) if name_mask_lst else {}),
-    )
+    )  # type: ignore
 
 
 @logger_wraps(level="INFO")
@@ -504,9 +460,6 @@ def load_all_masks(
         generate_full_paths(dicom_collection_path, os.listdir),
         curried.map(load_mask(preprocess=preprocess)),
     )
-
-
-print()
 
 
 @logger_wraps(level="INFO")

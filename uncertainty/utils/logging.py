@@ -62,6 +62,7 @@ def logger_wraps(*, entry=True, exit=True, level="DEBUG"):
 
         @wraps(func)
         def wrapped(*args, **kwargs):
+            result = None
             logger_ = logger.opt(depth=1)
             if entry:
                 logger.log(

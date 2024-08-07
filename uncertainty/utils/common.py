@@ -3,8 +3,7 @@ Collection of common utility functions
 """
 
 from copy import deepcopy
-from itertools import takewhile
-from typing import Callable, Generator, Optional, TypeVar
+from typing import Callable, Optional
 
 from .wrappers import curry
 

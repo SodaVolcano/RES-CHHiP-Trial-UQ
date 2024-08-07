@@ -19,15 +19,12 @@
       "alias py=\"poetry run python\"",
       "alias py3=\"poetry run python\"",
       "echo \"Setting flags to allow Python C extension compilation\"",
-            "export NIX_CFLAGS_COMPILE=\"$NIX_CFLAGS_COMPILE $(cat $(dirname $(which clang))/../nix-support/libcxx-cxxflags)\"",
-            // Change library path for tensorflow so it can import C++ library
+      // Change library path for tensorflow so it can import C++ library
       "export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:./.devbox/nix/profile/default/lib",
       "poetry install",
       // Python modules assume path for C/C++ libraries, use fix-python to change link
       "echo \"Fixing python paths...\"",
       "fix-python --venv .venv --libs .nix/libs.nix &> /dev/null",
-
-
     ],
     "scripts": {}
   }

@@ -2,7 +2,7 @@
 Data type Mask and functions that operate on Mask
 """
 
-from typing import NamedTuple
+from typing import NamedTuple, override
 import numpy as np
 
 from uncertainty.utils.wrappers import curry
@@ -48,7 +48,7 @@ def get_organ_names(mask: Mask) -> list[str]:
 
 
 @curry
-def masks_as_array(mask: Mask, organ_ordering: list[str]) -> np.array:
+def masks_as_array(mask: Mask, organ_ordering: list[str]) -> np.ndarray:
     """
     Return array of N masks with shape `(H, W, D, n_organs)`, ordered by `organ_ordering`
     """

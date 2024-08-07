@@ -4,15 +4,14 @@ Define a U-Net model using Keras functional API
 Reference: https://github.com/christianversloot/machine-learning-articles/blob/main/how-to-build-a-u-net-for-image-segmentation-with-tensorflow-and-keras.md
 """
 
-from uncertainty import data
-from uncertainty.utils.logging import logger_wraps
+from uncertainty.data.preprocessing import crop_nd
+from ..utils.logging import logger_wraps
 from ..common.constants import model_config
 from ..utils.wrappers import curry
 from ..utils.sequence import growby_accum
 from ..utils.common import unpack_args
 
 import toolz as tz
-from toolz import curried
 from tensorflow.keras import layers, Model
 
 
@@ -102,10 +101,7 @@ def decoder_level(x, skip, n_kernels: int, config: dict = model_config()):
             kernel_initializer=config["initializer"],
             data_format="channels_last",
         ),
-        layers.Cropping3D(  # Crop to match size of skip connection
-            cropping=skip.shape[1:-1],  # shape = (batch, H, W, D, channel)
-            data_format="channels_last",
-        ),
+        crop_nd(new_shape=skip.shape[1:-1]),  # Crop to match size of skip connection
         lambda cropped_x: layers.Concatenate(axis=-1)([skip, cropped_x]),
         conv_block(n_kernels=n_kernels, config=config),
     )
