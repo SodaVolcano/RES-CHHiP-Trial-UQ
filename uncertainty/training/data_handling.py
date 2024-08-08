@@ -2,6 +2,7 @@
 Functions for hanlding dataset
 """
 
+import tensorflow as tf
 from tests.context import PatientScan
 from uncertainty.data.mask import get_organ_names, masks_as_array
 from uncertainty.data.preprocessing import (
@@ -141,7 +142,7 @@ def construct_augmentor():
     return Compose(
         [
             Rotate((-10, 10), (-10, 10), (-10, 10), p=0.5),
-            ElasticTransform((0, 0.25), interpolation=2, p=0.1),
+            # ElasticTransform((0, 0.25), interpolation=2, p=0.1),
             Flip(0, p=0.2),
             Flip(1, p=0.2),
             Flip(2, p=0.2),
@@ -155,21 +156,20 @@ def construct_augmentor():
 @logger_wraps(level="INFO")
 @curry
 def augment_data(
-    data: tuple[np.ndarray, np.ndarray], augmentor: Compose
+    image: np.ndarray, masks: np.ndarray, augmentor: Compose
 ) -> tuple[np.ndarray, np.ndarray]:
     """
     Augment data using the provided augmentor
     """
     return tz.pipe(
-        data,
         # Pack in dictionary to work with augmentor
-        lambda x: {
-            "image": x[0],
-            "mask": x[1],
+        {
+            "image": image,
+            "mask": masks,
         },
         lambda x: augmentor(**x),
         lambda x: (x["image"], x["mask"]),
-    )
+    )  # type: ignore
 
 
 @logger_wraps(level="INFO")

@@ -48,7 +48,7 @@ def model_config() -> ModelConfig:
         # because it's divided by two (n_levels - 1) times in the U-Net
         "input_height": (2**n_levels) * 10,
         "input_width": (2**n_levels) * 13,
-        "input_depth": (2**n_levels) * 5,
+        "input_depth": (2**n_levels) * 6,
         "input_channel": 3,  # Number of organs, mask only
         # ------- ConvolutionBlock settings  --------
         "kernel_size": (3, 3, 3),

@@ -8,7 +8,7 @@ from typing import Sequence
 import tensorflow as tf
 from uncertainty.data.preprocessing import crop_nd
 from ..utils.logging import logger_wraps
-from ..models.config import model_config
+from ..models.config import ModelConfig, model_config
 from ..utils.wrappers import curry
 from ..utils.sequence import growby_accum
 from ..utils.common import unpack_args
@@ -60,7 +60,7 @@ def ConvLayer(
 
 @logger_wraps(level="INFO")
 @curry
-def ConvBlock(x: tf.Tensor, n_kernels: int, config: dict = model_config()):
+def ConvBlock(x: tf.Tensor, n_kernels: int, config: ModelConfig = model_config()):
     """Pass input through n convolution layers"""
     return tz.pipe(
         x,
@@ -79,7 +79,7 @@ def ConvBlock(x: tf.Tensor, n_kernels: int, config: dict = model_config()):
 
 @logger_wraps(level="INFO")
 @curry
-def Encoder(x: tf.Tensor, config: dict = model_config()):
+def Encoder(x: tf.Tensor, config: ModelConfig = model_config()):
     """
     Pass input through encoder and return (output, skip_connections)
     """
@@ -107,7 +107,7 @@ def Encoder(x: tf.Tensor, config: dict = model_config()):
 @logger_wraps(level="INFO")
 @curry
 def DecoderLevel(
-    x: tf.Tensor, skip: tf.Tensor, n_kernels: int, config: dict = model_config()
+    x: tf.Tensor, skip: tf.Tensor, n_kernels: int, config: ModelConfig = model_config()
 ):
     """
     One level of decoder path: upsample, crop, concat with skip, and convolve the input
@@ -131,7 +131,9 @@ def DecoderLevel(
 
 @logger_wraps(level="INFO")
 @curry
-def Decoder(x: tf.Tensor, skips: Sequence[tf.Tensor], config: dict = model_config()):
+def Decoder(
+    x: tf.Tensor, skips: Sequence[tf.Tensor], config: ModelConfig = model_config()
+):
     """
     Pass input through decoder consisting of upsampling and return output
     """
@@ -164,7 +166,7 @@ def Decoder(x: tf.Tensor, skips: Sequence[tf.Tensor], config: dict = model_confi
 
 @logger_wraps(level="INFO")
 @curry
-def UNet(config: dict = model_config()) -> Model:
+def UNet(config: ModelConfig = model_config()) -> Model:
     """
     Construct a U-Net model
     """
