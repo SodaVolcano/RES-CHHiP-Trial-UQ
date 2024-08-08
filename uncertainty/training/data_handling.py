@@ -16,7 +16,7 @@ from ..utils.wrappers import curry
 from ..constants import BODY_THRESH, HU_RANGE, ORGAN_MATCHES
 from ..models.config import model_config
 
-from typing import Iterable, Optional
+from typing import Iterable, Optional, TypedDict
 
 import numpy as np
 import toolz as tz
@@ -31,10 +31,20 @@ from volumentations import (
 )
 
 
+PreprocessDataDict = TypedDict(
+    "PreprocessDataDict",
+    {
+        "input_height": int,
+        "input_width": int,
+        "input_depth": int,
+    },
+)
+
+
 @logger_wraps(level="INFO")
 @curry
 def preprocess_data(
-    scan: PatientScan, config: dict = model_config()
+    scan: PatientScan, config: PreprocessDataDict = model_config()
 ) -> tuple[np.ndarray, Optional[np.ndarray]]:
     """
     Preprocess a PatientScan object into (volume, masks) pairs
@@ -107,7 +117,7 @@ def preprocess_data(
 @logger_wraps(level="INFO")
 @curry
 def preprocess_dataset(
-    dataset: Iterable[PatientScan], config: dict = model_config()
+    dataset: Iterable[PatientScan], config: PreprocessDataDict = model_config()
 ) -> Iterable[tuple[np.ndarray, np.ndarray]]:
     """
     Preprocess a dataset of PatientScan objects into (volume, masks) pairs

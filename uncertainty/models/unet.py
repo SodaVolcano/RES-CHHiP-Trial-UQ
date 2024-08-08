@@ -173,7 +173,7 @@ def UNet(config: dict = model_config()) -> Model:
             config["input_height"],
             config["input_width"],
             config["input_depth"],
-            config["input_dim"],
+            config["input_channel"],
         ),
         batch_size=config["batch_size"],
     )

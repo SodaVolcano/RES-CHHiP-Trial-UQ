@@ -135,6 +135,11 @@ class TestCenterBoxSlice:
         result = center_box_slice(background_shape, box_shape)
         assert result == expected_slices
 
+    def test_box_odd_shape(self):
+        result = center_box_slice((15, 15, 9), (5, 5, 3))
+        expected = (slice(5, 10), slice(5, 10), slice(3, 6))
+        assert result == expected
+
 
 class TestEnlargeArray:
 
@@ -182,6 +187,12 @@ class TestEnlargeArray:
     def test_enlarge_array_scale_1_fill_integer(self):
         expected = np.array([[1, 2], [3, 4]])
         result = enlarge_array(expected, 1, 0)
+        assert np.array_equal(result, expected)
+
+    def test_enlarge_array_scale_3_odd_depth(self):
+        array = np.zeros((5, 5, 3))
+        expected = np.zeros((15, 15, 9))
+        result = enlarge_array(array, 3, "min")
         assert np.array_equal(result, expected)
 
 

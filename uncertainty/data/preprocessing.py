@@ -2,8 +2,6 @@
 Collection of functions to preprocess numpy arrays
 """
 
-from operator import sub
-import operator
 from typing import Iterable, Literal, Optional, Sequence, Tuple
 
 import SimpleITK as sitk
@@ -14,7 +12,7 @@ from toolz import curried
 from uncertainty.utils.logging import logger_wraps
 
 from ..utils.wrappers import curry
-from ..utils.common import call_method, conditional, unpack_args
+from ..utils.common import call_method, conditional
 from .. import constants as c
 
 
@@ -191,13 +189,11 @@ def center_box_slice(
 
     The centered box is obtained when slices is used to index the background array
     """
-    ceil_divide = lambda x, y: np.ceil(np.divide(x, y)).astype(int)
     return tuple(
         [
-            slice(bg_mid - box_mid, bg_mid + box_mid)
-            for bg_mid, box_mid in zip(
-                ceil_divide(background_shape, 2), ceil_divide(box_shape, 2)
-            )
+            # add 1 if box_shape is odd because floor_divide rounds down
+            slice(bg_mid - box // 2, bg_mid + box // 2 + int(box % 2 == 1))
+            for bg_mid, box in zip(np.floor_divide(background_shape, 2), box_shape)
         ]
     )
 
@@ -249,7 +245,7 @@ def shift_center(array: np.ndarray, points: Sequence[int]) -> np.ndarray:
         )  # type: ignore
 
     new_pos = [round(dim / 2 - points[i]) for i, dim in enumerate(array.shape)]
-    return shift(enlarge_array(array, 3), new_pos)
+    return shift(enlarge_array(array, 3), new_pos)  # breaks if not scale 3
 
 
 @logger_wraps()
