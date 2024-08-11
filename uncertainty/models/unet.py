@@ -6,31 +6,16 @@ Reference: https://github.com/christianversloot/machine-learning-articles/blob/m
 
 from typing import Sequence
 import tensorflow as tf
-from uncertainty.data.preprocessing import crop_nd
 from ..utils.logging import logger_wraps
-from ..models.config import ModelConfig, model_config
+from .config import configuration
+from ._config_types import Configuration
 from ..utils.wrappers import curry
 from ..utils.sequence import growby_accum
-from ..utils.common import unpack_args
+from ..utils.common import conditional, unpack_args
+from .layers import CentreCrop3D, MCDropout
 
 import toolz as tz
-from tensorflow.keras import layers, Model  # type: ignore
-from tensorflow import keras  # type: ignore
-
-
-class CentreCrop3D(keras.layers.Layer):
-    """
-    Crop the input tensor to the new shape
-    """
-
-    def __init__(self, new_shape: tf.TensorShape) -> None:
-        """new_shape is the shape of a single instance"""
-        super(CentreCrop3D, self).__init__()
-        self.out_shape = new_shape
-
-    def call(self, inputs):
-        new_shape = (inputs.shape[0],) + self.out_shape
-        return crop_nd(inputs, new_shape)
+from keras import layers, Model
 
 
 @logger_wraps(level="INFO")
@@ -42,6 +27,8 @@ def ConvLayer(
     initializer: str,
     use_batch_norm: bool,
     activation: str,
+    dropout_rate: float,
+    mc_dropout: bool,
 ):
     """Convolution followed by (optionally) BN and activation"""
     return tz.pipe(
@@ -55,12 +42,22 @@ def ConvLayer(
         ),
         layers.BatchNormalization() if use_batch_norm else tz.identity,
         layers.Activation(activation),
+        conditional(
+            mc_dropout,
+            MCDropout(dropout_rate),
+            layers.Dropout(dropout_rate),
+        ),
     )
 
 
 @logger_wraps(level="INFO")
 @curry
-def ConvBlock(x: tf.Tensor, n_kernels: int, config: ModelConfig = model_config()):
+def ConvBlock(
+    x: tf.Tensor,
+    n_kernels: int,
+    mc_dropout: bool,
+    config: Configuration = configuration(),
+):
     """Pass input through n convolution layers"""
     return tz.pipe(
         x,
@@ -71,6 +68,8 @@ def ConvBlock(x: tf.Tensor, n_kernels: int, config: ModelConfig = model_config()
                 initializer=config["initializer"],
                 use_batch_norm=config["use_batch_norm"],
                 activation=config["activation"],
+                dropout_rate=config["dropout_rate"],
+                mc_dropout=mc_dropout,
             )
             for _ in range(config["n_convolutions_per_block"])
         ]
@@ -79,7 +78,7 @@ def ConvBlock(x: tf.Tensor, n_kernels: int, config: ModelConfig = model_config()
 
 @logger_wraps(level="INFO")
 @curry
-def Encoder(x: tf.Tensor, config: ModelConfig = model_config()):
+def Encoder(x: tf.Tensor, mc_dropout: bool, config: Configuration = configuration()):
     """
     Pass input through encoder and return (output, skip_connections)
     """
@@ -88,7 +87,7 @@ def Encoder(x: tf.Tensor, config: ModelConfig = model_config()):
         lambda x, n_kernels=config["n_kernels_per_block"][level]: tz.pipe(
             x,
             layers.MaxPool3D((2, 2, 2), strides=(2, 2, 2), data_format="channels_last"),
-            ConvBlock(n_kernels=n_kernels, config=config),
+            ConvBlock(n_kernels=n_kernels, mc_dropout=mc_dropout, config=config),
         )
         for level in range(1, config["n_levels"])  # Exclude first block
     ]
@@ -107,7 +106,11 @@ def Encoder(x: tf.Tensor, config: ModelConfig = model_config()):
 @logger_wraps(level="INFO")
 @curry
 def DecoderLevel(
-    x: tf.Tensor, skip: tf.Tensor, n_kernels: int, config: ModelConfig = model_config()
+    x: tf.Tensor,
+    skip: tf.Tensor,
+    n_kernels: int,
+    mc_dropout: bool,
+    config: Configuration = configuration(),
 ):
     """
     One level of decoder path: upsample, crop, concat with skip, and convolve the input
@@ -125,14 +128,17 @@ def DecoderLevel(
         # Crop skip to same size as x, x's last dim is half of skip's last dim
         CentreCrop3D(skip.shape[1:]),  # type: ignore
         lambda cropped_x: layers.Concatenate(axis=-1)([skip, cropped_x]),
-        ConvBlock(n_kernels=n_kernels, config=config),
+        ConvBlock(n_kernels=n_kernels, mc_dropout=mc_dropout, config=config),
     )
 
 
 @logger_wraps(level="INFO")
 @curry
 def Decoder(
-    x: tf.Tensor, skips: Sequence[tf.Tensor], config: ModelConfig = model_config()
+    x: tf.Tensor,
+    skips: Sequence[tf.Tensor],
+    mc_dropout: bool,
+    config: Configuration = configuration(),
 ):
     """
     Pass input through decoder consisting of upsampling and return output
@@ -140,7 +146,7 @@ def Decoder(
     # skips and config is in descending order, reverse to ascending
     levels = reversed(
         [
-            DecoderLevel(skip=skip, n_kernels=n_kernels)
+            DecoderLevel(skip=skip, mc_dropout=mc_dropout, n_kernels=n_kernels)
             # Ignore first block (bottleneck)
             for skip, n_kernels in (zip(skips, config["n_kernels_per_block"][1:]))
         ]
@@ -166,9 +172,14 @@ def Decoder(
 
 @logger_wraps(level="INFO")
 @curry
-def UNet(config: ModelConfig = model_config()) -> Model:
+def UNet(mc_dropout: bool = False, config: Configuration = configuration()) -> Model:
     """
     Construct a U-Net model
+
+    Parameters
+    ----------
+    mc_dropout : bool
+        Create a MC Dropout U-Net, dropout is enabled during testing
     """
     input_ = layers.Input(
         shape=(
@@ -181,7 +192,7 @@ def UNet(config: ModelConfig = model_config()) -> Model:
     )
     return tz.pipe(
         input_,
-        Encoder(config=config),
-        unpack_args(Decoder(config=config)),
+        Encoder(mc_dropout=mc_dropout, config=config),
+        unpack_args(Decoder(mc_dropout=mc_dropout, config=config)),
         lambda output: Model(input_, output, name="U-Net"),
-    )
+    )  # type: ignore

@@ -13,11 +13,6 @@
   },
   "shell": {
     "init_hook": [
-      "alias pytest=\"poetry run pytest\"",
-     "alias python=\"poetry run python\"",
-      "alias python3=\"poetry run python\"",
-      "alias py=\"poetry run python\"",
-      "alias py3=\"poetry run python\"",
       // Change library path for tensorflow so it can import C++ library
       "export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:./.devbox/nix/profile/default/lib",
       "poetry install",

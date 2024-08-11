@@ -1,10 +1,8 @@
 from toolz import curried
 from unittest import mock
-import pytest
 import numpy as np
 import pydicom
 
-from uncertainty.data.mask import get_organ_mask, get_organ_names
 
 from .context import gen_path, uncertainty
 
@@ -17,6 +15,8 @@ load_patient_scans = uncertainty.data.dicom.load_patient_scans
 load_all_masks = uncertainty.data.dicom.load_all_masks
 Mask = uncertainty.data.mask.Mask
 PatientScan = uncertainty.data.patient_scan.PatientScan
+get_organ_mask = uncertainty.data.mask.get_organ_mask
+get_organ_names = uncertainty.data.mask.get_organ_names
 
 # Patch paths
 PATCH_LIST_FILES = "uncertainty.data.dicom.list_files"

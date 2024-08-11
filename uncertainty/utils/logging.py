@@ -71,7 +71,7 @@ def logger_wraps(*, entry=True, exit=True, level="DEBUG"):
                 )
                 result = func(*args, **kwargs)
             if exit:
-                logger.log(level, f"Exiting '{name}' (result={result}")
+                logger.log(level, f"Exiting '{name}' (result={result})")
             return result
 
         return wrapped
