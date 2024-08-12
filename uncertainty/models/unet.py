@@ -101,7 +101,9 @@ def Encoder(x: tf.Tensor, mc_dropout: bool, config: Configuration):
 
     return tz.pipe(
         x,
-        ConvBlock(n_kernels=config["n_kernels_init"], config=config),
+        ConvBlock(
+            n_kernels=config["n_kernels_init"], mc_dropout=mc_dropout, config=config
+        ),
         # Repeatedly apply downsample and ConvBlock to input to get skip connection list
         growby_accum(fs=levels),
         list,
@@ -153,7 +155,9 @@ def Decoder(
     # skips and config is in descending order, reverse to ascending
     levels = reversed(
         [
-            DecoderLevel(skip=skip, mc_dropout=mc_dropout, n_kernels=n_kernels)
+            DecoderLevel(
+                skip=skip, mc_dropout=mc_dropout, n_kernels=n_kernels, config=config
+            )
             # Ignore first block (bottleneck)
             for skip, n_kernels in (zip(skips, config["n_kernels_per_block"][1:]))
         ]
