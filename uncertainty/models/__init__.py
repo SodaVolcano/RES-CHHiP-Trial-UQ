@@ -1,6 +1,5 @@
 from .construct_model import construct_model
-from .unet_mcdropout import MCDropoutUNet
-from .unet import UNet
+from .unet import UNet, MCDropoutUNet
 
 __all__ = [
     "construct_model",

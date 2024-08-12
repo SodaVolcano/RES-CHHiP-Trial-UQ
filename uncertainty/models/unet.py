@@ -28,6 +28,8 @@ def ConvLayer(
     activation: str,
     dropout_rate: float,
     mc_dropout: bool,
+    bn_epsilon: float,
+    bn_momentum: float,
 ):
     """Convolution followed by (optionally) BN and activation"""
     return tz.pipe(
@@ -39,7 +41,11 @@ def ConvLayer(
             padding="same",  # Keep dimensions the same
             data_format="channels_last",
         ),
-        layers.BatchNormalization() if use_batch_norm else tz.identity,
+        conditional(
+            use_batch_norm,
+            layers.BatchNormalization(epsilon=bn_epsilon, momentum=bn_momentum),
+            tz.identity,
+        ),
         layers.Activation(activation),
         conditional(
             mc_dropout,
@@ -69,6 +75,8 @@ def ConvBlock(
                 activation=config["activation"],
                 dropout_rate=config["dropout_rate"],
                 mc_dropout=mc_dropout,
+                bn_epsilon=config["batch_norm_epsilon"],
+                bn_momentum=config["batch_norm_decay"],
             )
             for _ in range(config["n_convolutions_per_block"])
         ]
@@ -171,32 +179,40 @@ def Decoder(
 
 @logger_wraps(level="INFO")
 @curry
-def _GenericUNet(mc_dropout: bool, config: Configuration) -> Model:
+def _GenericUNet(
+    input_: tf.Tensor, mc_dropout: bool, config: Configuration
+) -> tf.Tensor:
     """
-    Construct a U-Net model
+    Pass input to U-Net and return the output
 
     Parameters
     ----------
     mc_dropout : bool
         Create a MC Dropout U-Net, dropout is enabled during testing
     """
-    input_ = layers.Input(
-        shape=(
-            config["input_height"],
-            config["input_width"],
-            config["input_depth"],
-            config["input_channel"],
-        ),
-        batch_size=config["batch_size"],
-    )
+
     return tz.pipe(
         input_,
         Encoder(mc_dropout=mc_dropout, config=config),
         unpack_args(Decoder(mc_dropout=mc_dropout, config=config)),
-        lambda output: Model(input_, output, name="U-Net"),
     )  # type: ignore
 
 
 @logger_wraps(level="INFO")
-def UNet(config: Configuration = configuration()) -> Model:
-    return _GenericUNet(mc_dropout=False, config=config)
+def UNet(
+    input_: tf.Tensor, config: Configuration = configuration()
+) -> tuple[tf.Tensor, str]:
+    """
+    Pass input to U-Net and return the output and model name
+    """
+    return _GenericUNet(input_, mc_dropout=False, config=config), "UNet"
+
+
+@logger_wraps(level="INFO")
+def MCDropoutUNet(
+    input_: tf.Tensor, config: Configuration = configuration()
+) -> tuple[tf.Tensor, str]:
+    """
+    Pass input to MC Dropout U-Net and return the output and model name
+    """
+    return _GenericUNet(input_, mc_dropout=True, config=config), "MCDropoutUNet"

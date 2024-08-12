@@ -3,23 +3,44 @@ from typing import Callable
 from ..config import configuration, Configuration
 from ..utils.logging import logger_wraps
 
-from keras import Model
 import keras
+import tensorflow as tf
 from toolz import curry
 
 
 @logger_wraps(level="INFO")
 @curry
 def construct_model(
-    model_constructor: Callable[[Configuration], Model],
+    model_fn: Callable[[tf.Tensor, Configuration], tf.Tensor],
     batches_per_epoch: int,
     config=configuration(),
     show_model_info: bool = True,
 ):
     """
-    Initialise model, set learning schedule and loss function and plot model
+    Initialise model, set learning schedule and loss function and visualise model
+
+    Parameters
+    ----------
+    model_fn : Callable[[tf.Tensor, Configuration], tf.Tensor]
+        Function that passes an input tensor through a model and returns the output tensor
+    batches_per_epoch : int
+        Number of batches per epoch
+    config : Configuration (optional)
+        Configuration object
+    show_model_info : bool
+        Whether to print model summary and output a diagram of the model. Default is True
     """
-    model = model_constructor(config)
+    input_ = keras.layers.Input(
+        shape=(
+            config["input_height"],
+            config["input_width"],
+            config["input_depth"],
+            config["input_channel"],
+        ),
+        batch_size=config["batch_size"],
+    )
+    output, name = model_fn(input_, config)  # type: ignore
+    model = keras.Model(input_, output, name=name)
 
     # Model outputs are logits, loss must apply softmax before computing loss
     loss = config["loss"](from_logits=config["final_layer_activation"] is None)  # type: ignore
