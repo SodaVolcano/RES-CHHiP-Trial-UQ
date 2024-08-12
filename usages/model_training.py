@@ -10,7 +10,7 @@ from uncertainty.training.data_handling import (
     preprocess_dataset,
     construct_augmentor,
 )
-from uncertainty.models.config import model_config
+from uncertainty.config import configuration
 import tensorflow as tf
 
 
@@ -20,7 +20,7 @@ def main(data_path: str, datatype: Literal["dicom", "h5"]):
         "h5": from_h5_dir,
     }
     aug = construct_augmentor()
-    config = model_config()
+    config = configuration()
 
     @tf.numpy_function(Tout=(tf.float32, tf.float32))  # type: ignore
     def augmentation(x: np.ndarray, y: np.ndarray):

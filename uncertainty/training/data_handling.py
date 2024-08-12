@@ -2,22 +2,22 @@
 Functions for hanlding dataset
 """
 
-import tensorflow as tf
-from tests.context import PatientScan
-from uncertainty.data.mask import get_organ_names, masks_as_array
-from uncertainty.data.preprocessing import (
+from ..data.mask import get_organ_names, masks_as_array
+from ..data.patient_scan import PatientScan
+from ..data.preprocessing import (
     crop_nd,
     filter_roi,
     find_organ_roi,
     map_interval,
     shift_center,
 )
+from .._config_types import Configuration
 from ..utils.logging import logger_wraps
 from ..utils.wrappers import curry
 from ..constants import BODY_THRESH, HU_RANGE, ORGAN_MATCHES
-from ..models.config import model_config
+from ..config import configuration
 
-from typing import Iterable, Optional, TypedDict
+from typing import Iterable, Optional
 
 import numpy as np
 import toolz as tz
@@ -32,20 +32,10 @@ from volumentations import (
 )
 
 
-PreprocessDataDict = TypedDict(
-    "PreprocessDataDict",
-    {
-        "input_height": int,
-        "input_width": int,
-        "input_depth": int,
-    },
-)
-
-
 @logger_wraps(level="INFO")
 @curry
 def preprocess_data(
-    scan: PatientScan, config: PreprocessDataDict = model_config()
+    scan: PatientScan, config: Configuration = configuration()
 ) -> tuple[np.ndarray, Optional[np.ndarray]]:
     """
     Preprocess a PatientScan object into (volume, masks) pairs
@@ -118,7 +108,7 @@ def preprocess_data(
 @logger_wraps(level="INFO")
 @curry
 def preprocess_dataset(
-    dataset: Iterable[PatientScan], config: PreprocessDataDict = model_config()
+    dataset: Iterable[PatientScan], config: Configuration = configuration()
 ) -> Iterable[tuple[np.ndarray, np.ndarray]]:
     """
     Preprocess a dataset of PatientScan objects into (volume, masks) pairs
@@ -142,7 +132,7 @@ def construct_augmentor():
     return Compose(
         [
             Rotate((-10, 10), (-10, 10), (-10, 10), p=0.5),
-            # ElasticTransform((0, 0.25), interpolation=2, p=0.1),
+            ElasticTransform((0, 0.25), interpolation=2, p=0.1),
             Flip(0, p=0.2),
             Flip(1, p=0.2),
             Flip(2, p=0.2),

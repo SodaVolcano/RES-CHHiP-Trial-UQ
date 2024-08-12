@@ -7,8 +7,7 @@ Reference: https://github.com/christianversloot/machine-learning-articles/blob/m
 from typing import Sequence
 import tensorflow as tf
 from ..utils.logging import logger_wraps
-from .config import configuration
-from ._config_types import Configuration
+from ..config import configuration, Configuration
 from ..utils.wrappers import curry
 from ..utils.sequence import growby_accum
 from ..utils.common import conditional, unpack_args
@@ -56,7 +55,7 @@ def ConvBlock(
     x: tf.Tensor,
     n_kernels: int,
     mc_dropout: bool,
-    config: Configuration = configuration(),
+    config: Configuration,
 ):
     """Pass input through n convolution layers"""
     return tz.pipe(
@@ -78,7 +77,7 @@ def ConvBlock(
 
 @logger_wraps(level="INFO")
 @curry
-def Encoder(x: tf.Tensor, mc_dropout: bool, config: Configuration = configuration()):
+def Encoder(x: tf.Tensor, mc_dropout: bool, config: Configuration):
     """
     Pass input through encoder and return (output, skip_connections)
     """
@@ -110,7 +109,7 @@ def DecoderLevel(
     skip: tf.Tensor,
     n_kernels: int,
     mc_dropout: bool,
-    config: Configuration = configuration(),
+    config: Configuration,
 ):
     """
     One level of decoder path: upsample, crop, concat with skip, and convolve the input
@@ -138,7 +137,7 @@ def Decoder(
     x: tf.Tensor,
     skips: Sequence[tf.Tensor],
     mc_dropout: bool,
-    config: Configuration = configuration(),
+    config: Configuration,
 ):
     """
     Pass input through decoder consisting of upsampling and return output
@@ -172,7 +171,7 @@ def Decoder(
 
 @logger_wraps(level="INFO")
 @curry
-def UNet(mc_dropout: bool = False, config: Configuration = configuration()) -> Model:
+def _GenericUNet(mc_dropout: bool, config: Configuration) -> Model:
     """
     Construct a U-Net model
 
@@ -196,3 +195,8 @@ def UNet(mc_dropout: bool = False, config: Configuration = configuration()) -> M
         unpack_args(Decoder(mc_dropout=mc_dropout, config=config)),
         lambda output: Model(input_, output, name="U-Net"),
     )  # type: ignore
+
+
+@logger_wraps(level="INFO")
+def UNet(config: Configuration = configuration()) -> Model:
+    return _GenericUNet(mc_dropout=False, config=config)

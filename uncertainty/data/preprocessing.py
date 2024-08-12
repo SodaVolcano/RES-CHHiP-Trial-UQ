@@ -9,8 +9,7 @@ import numpy as np
 import toolz as tz
 from toolz import curried
 
-from uncertainty.utils.logging import logger_wraps
-
+from ..utils.logging import logger_wraps
 from ..utils.wrappers import curry
 from ..utils.common import call_method, conditional
 from .. import constants as c

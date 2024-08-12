@@ -1,6 +1,39 @@
-from typing import Final
+from typing import Final, TypedDict
 import keras
-from ._config_types import Configuration
+
+
+Configuration = TypedDict(
+    "Configuration",
+    {
+        "data_dir": str,
+        "input_height": int,
+        "input_width": int,
+        "input_depth": int,
+        "input_channel": int,
+        "kernel_size": tuple[int, int, int],
+        "n_convolutions_per_block": int,
+        "use_batch_norm": bool,
+        "batch_norm_decay": float,
+        "batch_norm_epsilon": float,
+        "activation": str,
+        "dropout_rate": float,
+        "n_kernels_init": int,
+        "n_levels": int,
+        "n_kernels_last": int,
+        "final_layer_activation": str,
+        "n_kernels_per_block": list[int],
+        "model_checkpoint_path": str,
+        "n_epochs": int,
+        "batch_size": int,
+        "metrics": list[str],
+        "initializer": str,
+        "optimizer": type[keras.optimizers.Optimizer],
+        "loss": type[keras.losses.Loss],
+        "lr_scheduler": type[keras.optimizers.schedules.LearningRateSchedule],
+        "lr_schedule_percentages": list[float],
+        "lr_schedule_values": list[float],
+    },
+)
 
 
 def data_config(n_levels: int) -> dict[str, int | str]:
@@ -34,9 +67,11 @@ def unet_config(n_levels: int) -> dict[str, int | str | list[int]]:
         # ------- ConvolutionBlock settings  --------
         "kernel_size": (3, 3, 3),
         "n_convolutions_per_block": 1,
-        "use_batch_norm": False,
         "activation": "gelu",
         "dropout_rate": 0.5,
+        "use_batch_norm": False,
+        "batch_norm_decay": 0.9,
+        "batch_norm_epsilon": 1e-5,
         # ------- Encoder/Decoder settings -------
         # Number of kernels in first level of Encoder, doubles/halves at each level in Encoder/Decoder
         "n_kernels_init": 64,

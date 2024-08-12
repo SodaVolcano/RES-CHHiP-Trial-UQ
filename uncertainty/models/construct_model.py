@@ -1,7 +1,6 @@
 from typing import Callable
 
-from ._config_types import Configuration
-from .config import configuration
+from ..config import configuration, Configuration
 from ..utils.logging import logger_wraps
 
 from keras import Model
