@@ -7,24 +7,25 @@
     "stdenv.cc.cc.lib",   // used by tensorflow
     "stdenv@latest",
     "glibc@2.39-52",
-    "coreutils@9.5"   // md5sum
+    "coreutils@9.5",   // md5sum
+    "graphviz@10.0.1"  // used by pydot (used by keras plot_model)
   ],
   "env": {
     "VENV_DIR": ".venv"
   },
   "shell": {
     "init_hook": [
-      // Change library path for tensorflow so it can import C++ library
-      "export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:./.devbox/nix/profile/default/lib",
       "lockfile_hash_before=$(md5sum poetry.lock)",
       "install_output=$(poetry install)",   // check length of poetry install
       "lockfile_hash_after=$(md5sum poetry.lock)",
 
-       "if [\"$lockfile_hash_before\" != \"$lockfile_hash_after\" || ${#install_output} -gt 10000 ]; then",
+       "if [[ $lockfile_hash_before != $lockfile_hash_after || ${#install_output} -gt 10000 ]] then",
       "    echo \"poetry.lock was modified or a fresh install was done, fixing python paths...\"", 
       // Python modules assume path for C/C++ libraries, use fix-python to change link
       "    fix-python --venv .venv --libs .nix/libs.nix &> /dev/null",
-      "fi"
+      "fi",
+      // Change library path for tensorflow so it can import C++ library
+      "export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:./.devbox/nix/profile/default/lib"
     ],
     "scripts": {
       "fix-python": "fix-python --venv .venv --libs .nix/libs.nix"

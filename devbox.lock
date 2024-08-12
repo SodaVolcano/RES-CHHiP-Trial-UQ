@@ -143,6 +143,54 @@
         }
       }
     },
+    "graphviz@10.0.1": {
+      "last_modified": "2024-07-31T08:48:38Z",
+      "resolved": "github:NixOS/nixpkgs/c3392ad349a5227f4a3464dce87bcc5046692fce#graphviz",
+      "source": "devbox-search",
+      "version": "10.0.1",
+      "systems": {
+        "aarch64-darwin": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/8gp7gkb4mcl77cmvk3l8cn7b7cjn17ld-graphviz-10.0.1",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/8gp7gkb4mcl77cmvk3l8cn7b7cjn17ld-graphviz-10.0.1"
+        },
+        "aarch64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/5x1rmz1d492wyanrbzkp5mwdm69wn33f-graphviz-10.0.1",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/5x1rmz1d492wyanrbzkp5mwdm69wn33f-graphviz-10.0.1"
+        },
+        "x86_64-darwin": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/61yjifwb1zmp122skq1g3iypc1sm9bpy-graphviz-10.0.1",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/61yjifwb1zmp122skq1g3iypc1sm9bpy-graphviz-10.0.1"
+        },
+        "x86_64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/1pcqrbjs03ngdwkaisc3j1qap99j72ig-graphviz-10.0.1",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/1pcqrbjs03ngdwkaisc3j1qap99j72ig-graphviz-10.0.1"
+        }
+      }
+    },
     "poetry@1.8.3": {
       "last_modified": "2024-07-26T16:03:07Z",
       "plugin_version": "0.0.4",
