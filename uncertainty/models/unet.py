@@ -14,7 +14,7 @@ from ..utils.common import conditional, unpack_args
 from .layers import CentreCrop3D, MCDropout
 
 import toolz as tz
-from keras import layers, Model
+from keras import layers
 
 
 @logger_wraps(level="INFO")

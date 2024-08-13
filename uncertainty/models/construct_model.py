@@ -11,7 +11,7 @@ from toolz import curry
 @logger_wraps(level="INFO")
 @curry
 def construct_model(
-    model_fn: Callable[[tf.Tensor, Configuration], tf.Tensor],
+    model_fn: Callable[[tf.Tensor, Configuration], tf.Tensor | list[tf.Tensor]],
     batches_per_epoch: int,
     config=configuration(),
     show_model_info: bool = True,
@@ -39,7 +39,7 @@ def construct_model(
         ),
         batch_size=config["batch_size"],
     )
-    output, name = model_fn(input_, config)  # type: ignore
+    output, name = model_fn(input_, config=config)  # type: ignore
     model = keras.Model(input_, output, name=name)
 
     # Model outputs are logits, loss must apply softmax before computing loss
@@ -59,7 +59,7 @@ def construct_model(
     )
 
     if show_model_info:
-        keras.utils.plot_model(model, to_file="unet.png")
+        keras.utils.plot_model(model, to_file=f"{name}.png")
         model.summary()
 
     return model

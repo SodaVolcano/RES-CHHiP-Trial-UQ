@@ -10,6 +10,7 @@ Configuration = TypedDict(
         "input_width": int,
         "input_depth": int,
         "input_channel": int,
+        "output_channel": int,
         "kernel_size": tuple[int, int, int],
         "n_convolutions_per_block": int,
         "use_batch_norm": bool,
@@ -51,10 +52,11 @@ def data_config(n_levels: int) -> dict[str, int | str]:
     return {
         "data_dir": "",
         # Data are formatted as (height, width, depth, dimension)
-        "input_height": (2**n_levels) * 10,
-        "input_width": (2**n_levels) * 13,
-        "input_depth": (2**n_levels) * 6,
-        "input_channel": 3,  # Number of organs, mask only
+        "input_height": (2**n_levels) * 12,
+        "input_width": (2**n_levels) * 15,
+        "input_depth": (2**n_levels) * 8,
+        "input_channel": 1,  # Volume
+        "output_channel": 3,  # Mask; number of organs, mask only
     }
 
 
@@ -118,6 +120,6 @@ def configuration() -> Configuration:
     """
     Preset configuration for U-Net model
     """
-    n_levels: Final[int] = 5  # used to calculate input shape
+    n_levels: Final[int] = 2  # WARNING: used to calculate input shape
 
     return data_config(n_levels) | unet_config(n_levels) | training_config()  # type: ignore

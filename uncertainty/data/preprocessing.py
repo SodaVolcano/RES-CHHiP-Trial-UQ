@@ -180,13 +180,13 @@ def find_organ_roi(organ: str, roi_lst: list[str]) -> Optional[str]:
 
 @logger_wraps()
 @curry
-def center_box_slice(
+def centre_box_slice(
     background_shape: Sequence[int], box_shape: Sequence[int]
 ) -> tuple[slice, ...]:
     """
-    Return slices from imposing box of specific shape in the center of background
+    Return slices from imposing box of specific shape in the centre of background
 
-    The centered box is obtained when slices is used to index the background array
+    The centred box is obtained when slices is used to index the background array
     """
     return tuple(
         [
@@ -216,7 +216,7 @@ def enlarge_array(
         fill if isinstance(fill, int) else fill_map[fill],
         dtype=array.dtype,
     )
-    slices = center_box_slice(new_shape, array.shape)
+    slices = centre_box_slice(new_shape, array.shape)
     big_array[slices] = array
 
     return big_array
@@ -224,9 +224,9 @@ def enlarge_array(
 
 @logger_wraps()
 @curry
-def shift_center(array: np.ndarray, points: Sequence[int]) -> np.ndarray:
+def shift_centre(array: np.ndarray, points: Sequence[int]) -> np.ndarray:
     """
-    Move a point in the array to the center of the array
+    Move a point in the array to the centre of the array
     """
 
     def shift(enlarged_arr: np.ndarray, d_dims: Iterable[int]) -> np.ndarray:
@@ -251,14 +251,14 @@ def shift_center(array: np.ndarray, points: Sequence[int]) -> np.ndarray:
 @curry
 def crop_nd(array: np.ndarray, new_shape: Tuple[int], pad: bool = False):
     """
-    Center-crop the array into the new_shape, pad with min value if needed
+    Centre-crop the array into the new_shape, pad with min value if needed
     """
     SCALE = 2 if pad else 1
     slices = tz.pipe(
         array.shape,
         lambda s: np.multiply(s, SCALE),
         tuple,
-        center_box_slice(box_shape=new_shape),
+        centre_box_slice(box_shape=new_shape),
     )
 
     return tz.pipe(

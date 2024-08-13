@@ -11,9 +11,9 @@ PatientScan = uncertainty.data.patient_scan.PatientScan
 load_patient_scan = uncertainty.data.nifti.load_patient_scan
 map_interval = uncertainty.data.preprocessing.map_interval
 make_isotropic = uncertainty.data.preprocessing.make_isotropic
-center_box_slice = uncertainty.data.preprocessing.center_box_slice
+centre_box_slice = uncertainty.data.preprocessing.centre_box_slice
 enlarge_array = uncertainty.data.preprocessing.enlarge_array
-shift_center = uncertainty.data.preprocessing.shift_center
+shift_centre = uncertainty.data.preprocessing.shift_centre
 
 
 class TestMapInterval:
@@ -117,14 +117,14 @@ class TestMakeIsotropic:
         np.testing.assert_array_almost_equal(result, expected_output)
 
 
-class TestCenterBoxSlice:
+class TestcentreBoxSlice:
 
-    # Returns correct slices for a centered box within a larger background
-    def test_centered_box_within_larger_background(self):
+    # Returns correct slices for a centreed box within a larger background
+    def test_centreed_box_within_larger_background(self):
         background_shape = (10, 10)
         box_shape = (4, 4)
         expected_slices = (slice(3, 7), slice(3, 7))
-        result = center_box_slice(background_shape, box_shape)
+        result = centre_box_slice(background_shape, box_shape)
         assert result == expected_slices
 
     # Box shape larger than background shape
@@ -132,11 +132,11 @@ class TestCenterBoxSlice:
         background_shape = (4, 4)
         box_shape = (10, 10)
         expected_slices = (slice(-3, 7), slice(-3, 7))
-        result = center_box_slice(background_shape, box_shape)
+        result = centre_box_slice(background_shape, box_shape)
         assert result == expected_slices
 
     def test_box_odd_shape(self):
-        result = center_box_slice((15, 15, 9), (5, 5, 3))
+        result = centre_box_slice((15, 15, 9), (5, 5, 3))
         expected = (slice(5, 10), slice(5, 10), slice(3, 6))
         assert result == expected
 
@@ -196,10 +196,10 @@ class TestEnlargeArray:
         assert np.array_equal(result, expected)
 
 
-class TestShiftCenter:
+class TestShiftcentre:
 
-    # Shifts a point to the center of a 2D array correctly
-    def test_shift_point_to_center_2d_array(self):
+    # Shifts a point to the centre of a 2D array correctly
+    def test_shift_point_to_centre_2d_array(self):
 
         axes = (6, 2)  # Width and height of the ellipse
         angle = 150.0  # Angle of rotation of the ellipse
@@ -213,14 +213,14 @@ class TestShiftCenter:
         img = np.zeros((20, 20), dtype=np.uint8)
         cv2.ellipse(img, (13, 3), axes, angle, start_angle, end_angle, color, -1)
 
-        result = shift_center(img, np.mean(np.argwhere(img), axis=0))
+        result = shift_centre(img, np.mean(np.argwhere(img), axis=0))
         np.testing.assert_array_equal(result, expected)
 
-    # Shifts a point to the center of a 3D array correctly
-    def test_shift_point_to_center_3d_array(self):
-        def create_3d_sphere(shape: tuple, center: tuple, radius: int) -> np.ndarray:
+    # Shifts a point to the centre of a 3D array correctly
+    def test_shift_point_to_centre_3d_array(self):
+        def create_3d_sphere(shape: tuple, centre: tuple, radius: int) -> np.ndarray:
             z, y, x = np.ogrid[: shape[0], : shape[1], : shape[2]]
-            cz, cy, cx = center
+            cz, cy, cx = centre
             return (z - cz) ** 2 + (y - cy) ** 2 + (x - cx) ** 2 <= radius**2
 
         # Parameters
@@ -229,5 +229,5 @@ class TestShiftCenter:
 
         img = create_3d_sphere(shape, (15, 7, 12), radius)
         expected = create_3d_sphere(shape, (10, 10, 10), radius)
-        result = shift_center(img, np.mean(np.argwhere(img), axis=0))
+        result = shift_centre(img, np.mean(np.argwhere(img), axis=0))
         assert np.array_equal(result, expected)

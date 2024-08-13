@@ -3,15 +3,18 @@ Load and save folders of DICOM files to h5 files.
 """
 
 import argparse
-
-from uncertainty.data.dicom import save_dicom_scans_to_h5
-from loguru import logger
-from uncertainty.utils.logging import config_logger
+import sys
+from typing import override
 
 
 def main(
     dicom_path: str, save_path: str, preprocess: bool, n_workers: int, logging: bool
 ):
+    # only import the function if it's needed - tensorflow takes some time
+    from uncertainty.data.dicom import save_dicom_scans_to_h5
+    from loguru import logger
+    from uncertainty.utils.logging import config_logger
+
     if logging:
         logger.enable("uncertainty")
         config_logger()
@@ -22,7 +25,19 @@ def main(
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
+
+    class HelpfulParser(argparse.ArgumentParser):
+        """
+        Print help message when an error occurs.
+        """
+
+        @override
+        def error(self, message):
+            sys.stderr.write("error: %s\n" % message)
+            self.print_help()
+            sys.exit(2)
+
+    parser = HelpfulParser(
         description="Load and save folders of DICOM files to h5 files."
     )
     parser.add_argument(
@@ -36,19 +51,19 @@ if __name__ == "__main__":
     parser.add_argument(
         "--preprocess",
         action="store_true",
-        help="Whether to preprocess the volume and the masks (convert to the HU scale and make them isotropic). Will take significant resources.",
+        help="Whether to preprocess the volume and the masks (convert to the HU scale and make them isotropic). Will take significant resources. Default is True.",
         default=True,
     )
     parser.add_argument(
         "--workers",
         type=int,
         default=1,
-        help="Number of worker processes to use. Set to 1 to disable multiprocessing.",
+        help="Number of worker processes to use. Set to 1 to disable multiprocessing. Default is 1.",
     )
     parser.add_argument(
         "--logging",
         action="store_true",
-        help="Enable logging, output is saved to /logs.",
+        help="Enable logging, output is saved to /logs. Default is False.",
         default=True,
     )
 

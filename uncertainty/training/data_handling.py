@@ -9,13 +9,12 @@ from ..data.preprocessing import (
     filter_roi,
     find_organ_roi,
     map_interval,
-    shift_center,
+    shift_centre,
 )
-from .._config_types import Configuration
 from ..utils.logging import logger_wraps
 from ..utils.wrappers import curry
 from ..constants import BODY_THRESH, HU_RANGE, ORGAN_MATCHES
-from ..config import configuration
+from ..config import configuration, Configuration
 
 from typing import Iterable, Optional
 
@@ -27,7 +26,7 @@ from volumentations import (
     Rotate,
     ElasticTransform,
     Flip,
-    GaussianNoise,
+    Transpose,
     RandomGamma,
 )
 
@@ -49,12 +48,13 @@ def preprocess_data(
     def preprocess_volume(scan: PatientScan) -> np.ndarray:
         return tz.pipe(
             scan.volume,
-            shift_center(points=centroid),
+            shift_centre(points=centroid),
             crop_nd(
                 new_shape=(
                     config["input_height"],
                     config["input_width"],
                     config["input_depth"],
+                    config["input_channel"],
                 ),
                 pad=True,
             ),
@@ -85,14 +85,14 @@ def preprocess_data(
             scan.masks[""],
             masks_as_array(organ_ordering=names),
             lambda arr: np.moveaxis(arr, -1, 0),  # to allow map()
-            curried.map(shift_center(points=centroid)),
+            curried.map(shift_centre(points=centroid)),
             curried.map(
                 crop_nd(
                     new_shape=(
                         config["input_height"],
                         config["input_width"],
                         config["input_depth"],
-                        1,
+                        1,  # this is a single mask
                     ),
                     pad=True,
                 )
@@ -125,21 +125,24 @@ def preprocess_dataset(
 
 
 @logger_wraps(level="INFO")
-def construct_augmentor():
+def construct_augmentor(p: float = 1.0) -> Compose:
     """
-    Preset augmentor to apply rotation, elastic transformation, flips, noise and gamma adjustments
+    Preset augmentor to apply rotation, elastic transformation, flips, and gamma adjustments
+
+    Parameters
+    ---------
+    targets: list[list]
+        Target to apply augmentation to, e.g. [['image'], ['mask]]
     """
     return Compose(
         [
-            Rotate((-10, 10), (-10, 10), (-10, 10), p=0.5),
-            ElasticTransform((0, 0.25), interpolation=2, p=0.1),
+            Rotate((-15, 15), (-15, 15), (-15, 15), p=0.5),
+            ElasticTransform((0, 0.20), interpolation=1, p=0.2),
             Flip(0, p=0.2),
             Flip(1, p=0.2),
-            Flip(2, p=0.2),
-            GaussianNoise(var_limit=(0, 5), p=0.2),
             RandomGamma(gamma_limit=(80, 120), p=0.2),
         ],
-        p=1.0,
+        p=p,
     )
 
 

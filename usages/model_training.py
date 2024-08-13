@@ -22,7 +22,7 @@ def main(data_path: str, datatype: Literal["dicom", "h5"]):
     aug = construct_augmentor()
     config = configuration()
 
-    @tf.numpy_function(Tout=(tf.float32, tf.float32))  # type: ignore
+    @tf.py_function(Tout=(tf.float32, tf.float32))  # type: ignore
     def augmentation(x: np.ndarray, y: np.ndarray):
         """Wrap in tf.numpy_function to apply augmentor to numpy arrays"""
         return augment_data(x, y, aug)
@@ -38,7 +38,7 @@ def main(data_path: str, datatype: Literal["dicom", "h5"]):
             lambda: dataset_it,
             output_signature=(
                 tf.TensorSpec(shape=(config["input_height"], config["input_width"], config["input_depth"]), dtype=tf.float32),  # type: ignore
-                tf.TensorSpec(shape=(config["input_height"], config["input_width"], config["input_depth"], config["input_channel"]), dtype=tf.float32),  # type: ignore
+                tf.TensorSpec(shape=(config["input_height"], config["input_width"], config["input_depth"], config["output_channel"]), dtype=tf.float32),  # type: ignore
             ),
         )
         .repeat()
