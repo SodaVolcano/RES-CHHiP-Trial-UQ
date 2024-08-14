@@ -137,7 +137,7 @@ def construct_augmentor(p: float = 1.0) -> Compose:
     return Compose(
         [
             Rotate((-15, 15), (-15, 15), (-15, 15), p=0.5),
-            ElasticTransform((0, 0.20), interpolation=1, p=0.2),
+            ElasticTransform((0, 0.15), interpolation=1, p=0.2),
             Flip(0, p=0.2),
             Flip(1, p=0.2),
             RandomGamma(gamma_limit=(80, 120), p=0.2),

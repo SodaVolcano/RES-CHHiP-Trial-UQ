@@ -71,7 +71,7 @@ def unet_config(n_levels: int) -> dict[str, int | str | list[int]]:
         "n_convolutions_per_block": 1,
         "activation": "gelu",
         "dropout_rate": 0.5,
-        "use_batch_norm": True,
+        "use_batch_norm": False,
         "batch_norm_decay": 0.9,
         "batch_norm_epsilon": 1e-5,
         # ------- Encoder/Decoder settings -------
@@ -120,6 +120,6 @@ def configuration() -> Configuration:
     """
     Preset configuration for U-Net model
     """
-    n_levels: Final[int] = 2  # WARNING: used to calculate input shape
+    n_levels: Final[int] = 3  # WARNING: used to calculate input shape
 
     return data_config(n_levels) | unet_config(n_levels) | training_config()  # type: ignore

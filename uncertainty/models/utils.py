@@ -1,9 +1,16 @@
+"""
+Utility functions for working with models
+"""
+
 from typing import Callable
+
+from uncertainty.models.layers import MCDropout
 
 from ..config import configuration, Configuration
 from ..utils.logging import logger_wraps
 
 import keras
+from keras import layers
 import tensorflow as tf
 from toolz import curry
 
@@ -17,7 +24,7 @@ def construct_model(
     show_model_info: bool = True,
 ):
     """
-    Initialise model, set learning schedule and loss function and visualise model
+    Initialise, set learning schedule and loss function and visualise model
 
     Parameters
     ----------
@@ -63,3 +70,31 @@ def construct_model(
         model.summary()
 
     return model
+
+
+def remove_mcdropout(model: keras.Model) -> keras.Model:
+    """
+    Remove MCDropout layers from a U-Net model
+
+    **Warning**: Only works for a U-Net with encoder blocks
+    ending in layer MCDropout -> MaxPooling3D and decoder blocks
+    beginning with Concatenate
+    """
+    inputs = model.input
+    x = inputs
+    skips = []
+
+    # Go through each layer and connect the layers, skipping MCDropout
+    for layer1, layer2 in zip(model.layers[1:], model.layers[2:]):
+        if isinstance(layer1, layers.Concatenate):
+            x = layer1([x, skips.pop()])
+        elif isinstance(layer1, MCDropout) and isinstance(layer2, layers.MaxPooling3D):
+            skips.append(x)
+        elif not isinstance(layer1, MCDropout):
+            x = layer1(x)
+    x = model.layers[-1](x)
+
+    new_model = keras.Model(inputs, x)
+    new_model.compile(optimizer=model.optimizer, loss=model.loss, metrics=model.metrics)
+
+    return new_model
