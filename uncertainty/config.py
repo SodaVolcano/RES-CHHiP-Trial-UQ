@@ -1,6 +1,8 @@
-from typing import Final, TypedDict
-import keras
-
+from typing import Callable, Final, TypedDict
+from pyparsing import C
+from torch import nn
+from torch import optim
+import torch
 
 Configuration = TypedDict(
     "Configuration",
@@ -11,26 +13,25 @@ Configuration = TypedDict(
         "input_depth": int,
         "input_channel": int,
         "output_channel": int,
-        "kernel_size": tuple[int, int, int],
+        "kernel_size": int,
         "n_convolutions_per_block": int,
         "use_batch_norm": bool,
         "batch_norm_decay": float,
         "batch_norm_epsilon": float,
-        "activation": str,
+        "activation": Callable[..., nn.Module],
         "dropout_rate": float,
         "n_kernels_init": int,
         "n_levels": int,
         "n_kernels_last": int,
-        "final_layer_activation": str,
-        "n_kernels_per_block": list[int],
+        "final_layer_activation": Callable[..., nn.Module] | None,
         "model_checkpoint_path": str,
         "n_epochs": int,
         "batch_size": int,
         "metrics": list[str],
-        "initializer": str,
-        "optimizer": type[keras.optimizers.Optimizer],
-        "loss": type[keras.losses.Loss],
-        "lr_scheduler": type[keras.optimizers.schedules.LearningRateSchedule],
+        "initializer": Callable[..., torch.Tensor],
+        "optimizer": Callable[..., nn.Module],
+        "loss": Callable[..., nn.Module],
+        "lr_scheduler": type[optim.lr_scheduler.LRScheduler],
         "lr_schedule_percentages": list[float],
         "lr_schedule_values": list[float],
     },
@@ -60,39 +61,32 @@ def data_config(n_levels: int) -> dict[str, int | str]:
     }
 
 
-def unet_config(n_levels: int) -> dict[str, int | str | list[int]]:
+def unet_config(n_levels: int) -> dict[str, int | float | str | type[nn.Module]]:
     """
     Preset configuration for U-Net model
     """
 
-    config = {
+    return {
         # ------- ConvolutionBlock settings  --------
-        "kernel_size": (3, 3, 3),
+        "kernel_size": 3,
         "n_convolutions_per_block": 1,
-        "activation": "gelu",
+        "activation": nn.GELU,
         "dropout_rate": 0.5,
         "use_batch_norm": False,
         "batch_norm_decay": 0.9,
         "batch_norm_epsilon": 1e-5,
         # ------- Encoder/Decoder settings -------
-        # Number of kernels in first level of Encoder, doubles/halves at each level in Encoder/Decoder
+        # Number of kernels in the output of the first level of Encoder
+        # doubles/halves at each level in Encoder/Decoder
         "n_kernels_init": 64,
         # Number of resolutions/blocks; height of U-Net
         "n_levels": n_levels,
         # Number of class to predict
         "n_kernels_last": 1,
         # Use sigmoid if using binary crossentropy, softmax if using categorical crossentropy
-        # Note if using softmax, n_kernels_last should be equal to number of classes (e.g. 2 for binary segmentation)
-        # If None, loss will use from_logits=True
-        "final_layer_activation": "sigmoid",
-        "n_kernels_per_block": [],  # Calculated in the next line
+        # Set to None to disable
+        "final_layer_activation": nn.Sigmoid,
     }
-    # Explicitly calculate number of kernels per block (for Encoder)
-    config["n_kernels_per_block"] = [
-        config["n_kernels_init"] * (2**block_level)
-        for block_level in range(config["n_levels"])
-    ]
-    return config
 
 
 def training_config() -> dict[str, int | str | list[int | float | str] | type]:
@@ -104,11 +98,11 @@ def training_config() -> dict[str, int | str | list[int | float | str] | type]:
         "n_epochs": 1,
         "batch_size": 32,
         "metrics": ["accuracy"],
-        "initializer": "he_normal",  # For kernel initialisation
-        "optimizer": keras.optimizers.Adam,
-        "loss": keras.losses.BinaryCrossentropy,
+        "initializer": nn.init.xavier_normal_,  # type: ignore
+        "optimizer": optim.Adam,
+        "loss": nn.BCELoss,
         # Learning rate scheduler, decrease learning rate at certain epochs
-        "lr_scheduler": keras.optimizers.schedules.PiecewiseConstantDecay,
+        "lr_scheduler": optim.lr_scheduler.StepLR,
         # Percentage of training where learning rate is decreased
         "lr_schedule_percentages": [0.2, 0.5, 0.8],
         # Gradually decrease learning rate, starting at first value
@@ -120,6 +114,6 @@ def configuration() -> Configuration:
     """
     Preset configuration for U-Net model
     """
-    n_levels: Final[int] = 3  # WARNING: used to calculate input shape
+    n_levels: Final[int] = 2  # WARNING: used to calculate input shape
 
     return data_config(n_levels) | unet_config(n_levels) | training_config()  # type: ignore
