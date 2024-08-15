@@ -61,6 +61,7 @@ class ConvLayer(nn.Module):
                 out_channels=out_channels,
                 kernel_size=kernel_size,
                 padding=1,
+                bias=False,
             ),
             nn.BatchNorm3d(out_channels, eps=bn_epsilon, momentum=bn_momentum)
             if use_batch_norm
@@ -234,7 +235,7 @@ class Decoder(nn.Module):
                 in_channels=config["n_kernels_init"],
                 out_channels=config["n_kernels_last"],
                 kernel_size=1,
-                # padding=1,
+                bias=False,
             ),
             config["final_layer_activation"]()
             if config["final_layer_activation"]
@@ -256,3 +257,13 @@ class UNet(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         encoded, skips = self.encoder(x)
         return self.decoder(encoded, skips)
+
+
+class MCDropoutUNet(UNet):
+    def eval(self):
+        # Apply dropout during evaluation
+        super().train()
+        for module in self.children():
+            if isinstance(module, nn.Dropout):
+                module.train(mode=False)
+        return self
