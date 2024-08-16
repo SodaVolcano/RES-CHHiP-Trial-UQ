@@ -34,7 +34,7 @@ from volumentations import (
 @curry
 def preprocess_data(
     scan: PatientScan, config: Configuration = configuration()
-) -> tuple[torch.Tensor, Optional[torch.Tensor]]:
+) -> tuple[np.ndarray, Optional[np.ndarray]]:
     """
     Preprocess a PatientScan object into (volume, masks) pairs of shape (C, H, W, D)
 
@@ -64,7 +64,7 @@ def preprocess_data(
             lambda vol: np.clip(vol, *HU_RANGE),
             map_interval(HU_RANGE, (0, 1)),
             curry(np.expand_dims)(axis=0),  # to (channel, height, width, depth)
-            lambda vol: torch.tensor(vol, dtype=torch.float32),
+            lambda vol: np.astype(vol, np.float32),
         )
 
     def preprocess_mask(scan: PatientScan) -> Optional[np.ndarray]:
@@ -89,7 +89,7 @@ def preprocess_data(
             scan.masks[""],
             masks_as_array(organ_ordering=names),
             lambda arr: np.moveaxis(arr, -1, 0),  # to (organ, height, width, depth)
-            lambda mask: torch.tensor(mask, dtype=torch.float32),
+            lambda mask: np.astype(mask, np.float32),
         )  # type: ignore
 
     volume_mask = tz.juxt(preprocess_volume, preprocess_mask)(scan)
@@ -108,6 +108,7 @@ def preprocess_data(
             mask_name="mask",
         ),
         from_torchio_subject,
+        curried.map(lambda x: x.numpy()),
         list,
     )  # type: ignore
 
@@ -136,10 +137,12 @@ def construct_augmentor(p: float = 1.0) -> Compose:
     """
     Preset augmentor to apply rotation, elastic transformation, flips, and gamma adjustments
 
+    Using Volumentations-3D here because torchio is a pain to work with
+
     Parameters
     ---------
-    targets: list[list]
-        Target to apply augmentation to, e.g. [['image'], ['mask]]
+    p: float
+        Probability of applying the augmentor
     """
     return Compose(
         [
