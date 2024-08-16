@@ -114,6 +114,6 @@ def configuration() -> Configuration:
     """
     Preset configuration for U-Net model
     """
-    n_levels: Final[int] = 2  # WARNING: used to calculate input shape
+    n_levels: Final[int] = 5  # WARNING: used to calculate input shape
 
     return data_config(n_levels) | unet_config(n_levels) | training_config()  # type: ignore

@@ -206,6 +206,7 @@ class UpConvBlock(nn.Module):
 
     def forward(self, x: torch.Tensor, skip: torch.Tensor) -> torch.Tensor:
         x = self.up(x)
+        # use last 3 dimensions in (N, C, D, H, W) format
         diff_dims = [skip.size(i) - x.size(i) for i in range(2, 5)]
         # left, right, top, bottom, front, back
         bounds = tz.interleave(
@@ -243,7 +244,7 @@ class Decoder(nn.Module):
         )
 
     def forward(self, x: torch.Tensor, skips: List[torch.Tensor]) -> torch.Tensor:
-        for level, skip in zip(self.levels, skips):
+        for level, skip in zip(self.levels, reversed(skips)):
             x = level(x, skip)
         return self.last_conv(x)
 
