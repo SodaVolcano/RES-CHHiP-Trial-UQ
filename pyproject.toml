@@ -18,7 +18,6 @@ isort = "^5.13.2"
 pathos = "^0.3.2"
 notebook = "^7.2.1"
 jupyter = "^1.0.0"
-tensorflow = "^2.17.0"
 rt-utils = "^1.2.7"
 tqdm = "^4.66.4"
 simpleitk = "^2.3.1"
@@ -32,6 +31,7 @@ graphviz = "^0.20.3"
 torch = "^2.4.0"
 torchvision = "^0.19.0"
 torchviz = "^0.0.2"
+torchio = { version = "^0.18.90", python = ">=3.12,<3.13" }
 
 [tool.isort]
 profile = "black"

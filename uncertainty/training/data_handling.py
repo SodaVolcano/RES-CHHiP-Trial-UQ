@@ -2,14 +2,13 @@
 Functions for hanlding dataset
 """
 
+import torch
 from ..data.mask import get_organ_names, masks_as_array
 from ..data.patient_scan import PatientScan
 from ..data.preprocessing import (
-    crop_nd,
     filter_roi,
     find_organ_roi,
     map_interval,
-    shift_centre,
 )
 from ..utils.logging import logger_wraps
 from ..utils.wrappers import curry
@@ -21,12 +20,12 @@ from typing import Iterable, Optional
 import numpy as np
 import toolz as tz
 import toolz.curried as curried
+import torchio as tio
 from volumentations import (
     Compose,
     Rotate,
     ElasticTransform,
     Flip,
-    Transpose,
     RandomGamma,
 )
 
@@ -35,32 +34,37 @@ from volumentations import (
 @curry
 def preprocess_data(
     scan: PatientScan, config: Configuration = configuration()
-) -> tuple[np.ndarray, Optional[np.ndarray]]:
+) -> tuple[torch.Tensor, Optional[torch.Tensor]]:
     """
-    Preprocess a PatientScan object into (volume, masks) pairs
+    Preprocess a PatientScan object into (volume, masks) pairs of shape (C, H, W, D)
 
-    Mask for multiple organs are stacked along the last dimension to have
-    shape (height, width, depth, n_organs). Mask is `None` if not all organs are present.
+    Mask for multiple organs are stacked along the first dimension to have
+    shape (organ, height, width, depth). Mask is `None` if not all organs are present.
     """
-    # use same centroid for both volume and mask
-    centroid = np.mean(np.argwhere(scan.volume > BODY_THRESH), axis=0)
+
+    def to_torchio_subject(volume_mask: tuple[np.ndarray, np.ndarray]) -> tio.Subject:
+        # Allow centre crop from torchio
+        # volume and mask should have shape (C, H, W, D)
+        return tio.Subject(
+            volume=tio.ScalarImage(tensor=volume_mask[0]),
+            mask=tio.LabelMap(
+                # ignore channel dimension from volume_mask[0]
+                tensor=tio.CropOrPad(volume_mask[0].shape[1:], padding_mode="minimum")(  # type: ignore
+                    volume_mask[1]
+                ),
+            ),
+        )
+
+    def from_torchio_subject(subject: tio.Subject) -> tuple[np.ndarray, np.ndarray]:
+        return subject["volume"].data, subject["mask"].data
 
     def preprocess_volume(scan: PatientScan) -> np.ndarray:
         return tz.pipe(
             scan.volume,
-            shift_centre(points=centroid),
-            crop_nd(
-                new_shape=(
-                    config["input_height"],
-                    config["input_width"],
-                    config["input_depth"],
-                    config["input_channel"],
-                ),
-                pad=True,
-            ),
             lambda vol: np.clip(vol, *HU_RANGE),
             map_interval(HU_RANGE, (0, 1)),
-            lambda vol: vol.astype(np.float32),
+            curry(np.expand_dims)(axis=0),  # to (channel, height, width, depth)
+            lambda vol: torch.tensor(vol, dtype=torch.float32),
         )
 
     def preprocess_mask(scan: PatientScan) -> Optional[np.ndarray]:
@@ -84,25 +88,28 @@ def preprocess_data(
         return tz.pipe(
             scan.masks[""],
             masks_as_array(organ_ordering=names),
-            lambda arr: np.moveaxis(arr, -1, 0),  # to allow map()
-            curried.map(shift_centre(points=centroid)),
-            curried.map(
-                crop_nd(
-                    new_shape=(
-                        config["input_height"],
-                        config["input_width"],
-                        config["input_depth"],
-                        1,  # this is a single mask
-                    ),
-                    pad=True,
-                )
-            ),
-            list,
-            lambda masks: np.stack(masks, axis=-1),
-            lambda mask: mask.astype(np.float32),
-        )
+            lambda arr: np.moveaxis(arr, -1, 0),  # to (organ, height, width, depth)
+            lambda mask: torch.tensor(mask, dtype=torch.float32),
+        )  # type: ignore
 
-    return tz.juxt(preprocess_volume, preprocess_mask)(scan)
+    volume_mask = tz.juxt(preprocess_volume, preprocess_mask)(scan)
+    if volume_mask[1] is None:
+        return volume_mask
+    return tz.pipe(
+        volume_mask,
+        to_torchio_subject,
+        tio.CropOrPad(
+            (
+                config["input_height"],
+                config["input_width"],
+                config["input_depth"],
+            ),
+            padding_mode="minimum",
+            mask_name="mask",
+        ),
+        from_torchio_subject,
+        list,
+    )  # type: ignore
 
 
 @logger_wraps(level="INFO")

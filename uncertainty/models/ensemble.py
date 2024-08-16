@@ -2,45 +2,49 @@
 An ensemble of models
 """
 
-from itertools import repeat
-from uncertainty.utils.common import unpack_args
-from ..utils.wrappers import curry
-from ..utils.logging import logger_wraps
-from ..config import Configuration, configuration
-
-
 from typing import Callable
+from torch import nn, vmap
+import torch
+from torch.func import stack_module_state, functional_call  # type: ignore
 
-import tensorflow as tf
-import toolz as tz
-from toolz import curried
 
-
-@logger_wraps(level="INFO")
-@curry
-def DeepEnsemble(
-    input_: tf.Tensor,
-    ensemble_size: int,
-    model_fn: Callable[[tf.Tensor, Configuration], tuple[tf.Tensor, str]],
-    config: Configuration = configuration(),
-) -> tuple[list[tf.Tensor], str]:
+class DeepEnsemble(nn.Module):
     """
-    Pass input through an ensemble of models and return the ensemble output and name
-
-    Parameters
-    ----------
-    ensemble_size : int
-        The number of models in the ensemble
-    model_fn : Callable[[tf.Tensor, Configuration], tuple[tf.Tensor, str]]
-        Function that passes an input tensor through a model and returns the output tensor and model name
+    An ensemble of models, produces multiple outputs from each member
     """
-    return tz.pipe(
-        input_,
-        lambda x: repeat(x, ensemble_size),
-        curried.map(lambda x: model_fn(x, config)),
-        lambda out_names: zip(*out_names),  # separate outputs and names
-        tuple,
-        unpack_args(
-            lambda outputs, names: (outputs, f"{names[0]}DeepEnsemble{ensemble_size}"),
-        ),
-    )  # type: ignore
+
+    def __init__(
+        self,
+        model: Callable[..., nn.Module] | list[nn.Module],
+        ensemble_size: int,
+        *args,
+        **kwargs
+    ):
+        """
+        An ensemble of models
+
+        Parameters
+        ----------
+        ensemble_size : int
+            The number of models in the ensemble
+        model : Callable[..., nn.Module] | list[nn.Module]
+            A callable PyTorch model class, or a list of PyTorch models
+        *args, **kwargs : list, dict
+            Additional arguments to pass to the model_fn
+        """
+        super().__init__()
+        self.models = (
+            [model(*args, **kwargs) for _ in range(ensemble_size)]
+            if isinstance(model, Callable)
+            else model
+        )
+        self.ensemble_params, self.ensemble_buffers = stack_module_state(self.models)
+
+    def forward(self, x: torch.Tensor) -> list[torch.Tensor]:
+        def call_model(params: dict, buffers: dict, x: torch.Tensor) -> torch.Tensor:
+            return functional_call(self.models[0], (params, buffers), (x,))
+
+        # each model should have different randomness (dropout)
+        return vmap(call_model, in_dims=(0, 0, None), randomness="different")(
+            self.ensemble_params, self.ensemble_buffers, x
+        )

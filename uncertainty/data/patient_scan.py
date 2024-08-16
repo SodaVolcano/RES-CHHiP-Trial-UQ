@@ -1,5 +1,5 @@
 import os
-from typing import Generator, List, NamedTuple, Optional
+from typing import Generator, Iterable, List, NamedTuple, Optional
 import numpy as np
 from loguru import logger
 import h5py
@@ -72,7 +72,7 @@ def from_h5(file_path: str) -> Optional[PatientScan]:
         return None
 
 
-def from_h5_dir(dir_path: str) -> Generator[Optional[PatientScan], None, None]:
+def from_h5_dir(dir_path: str) -> Iterable[Optional[PatientScan]]:
     """
     Load all PatientScan objects from h5 files in dir_path
 

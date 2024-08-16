@@ -1,222 +1,306 @@
 """
-Define a U-Net model using Keras functional API
+Define a U-Net model
 
-Reference: https://github.com/christianversloot/machine-learning-articles/blob/main/how-to-build-a-u-net-for-image-segmentation-with-tensorflow-and-keras.md
+References: 
+    https://github.com/christianversloot/machine-learning-articles/blob/main/how-to-build-a-u-net-for-image-segmentation-with-tensorflow-and-keras.md
+    https://github.com/milesial/Pytorch-UNet/tree/master
 """
 
-from typing import Sequence
-import tensorflow as tf
-from ..utils.logging import logger_wraps
-from ..config import configuration, Configuration
-from ..utils.wrappers import curry
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from typing import Callable, List, Tuple
+
+from ..config import Configuration
 from ..utils.sequence import growby_accum
-from ..utils.common import conditional, unpack_args
-from .layers import CentreCrop3D, MCDropout
-
 import toolz as tz
-from keras import layers
 
 
-@logger_wraps(level="INFO")
-@curry
-def ConvLayer(
-    x: tf.Tensor,
-    n_kernels: int,
-    kernel_size: tuple[int, ...],
-    initializer: str,
-    use_batch_norm: bool,
-    activation: str,
-    dropout_rate: float,
-    mc_dropout: bool,
-    bn_epsilon: float,
-    bn_momentum: float,
-):
-    """Convolution followed by (optionally) BN and activation"""
-    return tz.pipe(
-        x,
-        layers.Conv3D(
-            n_kernels,
-            kernel_size,
-            kernel_initializer=initializer,
-            padding="same",  # Keep dimensions the same
-            data_format="channels_last",
-        ),
-        conditional(
-            use_batch_norm,
-            layers.BatchNormalization(epsilon=bn_epsilon, momentum=bn_momentum),
-            tz.identity,
-        ),
-        layers.Activation(activation),
-        conditional(
-            mc_dropout,
-            MCDropout(dropout_rate),
-            layers.Dropout(dropout_rate),
-        ),
-    )
-
-
-@logger_wraps(level="INFO")
-@curry
-def ConvBlock(
-    x: tf.Tensor,
-    n_kernels: int,
-    mc_dropout: bool,
-    config: Configuration,
-):
-    """Pass input through n convolution layers"""
-    return tz.pipe(
-        x,
-        *[
-            ConvLayer(
-                n_kernels=n_kernels,
-                kernel_size=config["kernel_size"],
-                initializer=config["initializer"],
-                use_batch_norm=config["use_batch_norm"],
-                activation=config["activation"],
-                dropout_rate=config["dropout_rate"],
-                mc_dropout=mc_dropout,
-                bn_epsilon=config["batch_norm_epsilon"],
-                bn_momentum=config["batch_norm_decay"],
-            )
-            for _ in range(config["n_convolutions_per_block"])
-        ]
-    )
-
-
-@logger_wraps(level="INFO")
-@curry
-def Encoder(x: tf.Tensor, mc_dropout: bool, config: Configuration):
+class ConvLayer(nn.Module):
     """
-    Pass input through encoder and return (output, skip_connections)
+    Single convolution layer: Conv3D -> [BN] -> Activation -> Dropout
     """
-    levels = [
-        # need to bind n_kernels because all lambdas share same variable `level`
-        lambda x, n_kernels=config["n_kernels_per_block"][level]: tz.pipe(
-            x,
-            layers.MaxPool3D((2, 2, 2), strides=(2, 2, 2), data_format="channels_last"),
-            ConvBlock(n_kernels=n_kernels, mc_dropout=mc_dropout, config=config),
+
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        kernel_size: int,
+        use_batch_norm: bool,
+        activation: Callable[..., nn.Module],
+        dropout_rate: float,
+        bn_epsilon: float,
+        bn_momentum: float,
+    ):
+        """
+        Convolution layer: Conv3D -> [BN] -> Activation -> Dropout
+
+        Parameters
+        ----------
+        in_channels : int
+            Number of input channels
+        out_channels : int
+            Number of output channels
+        kernel_size : int
+            Kernel size for convolution
+        use_batch_norm : bool
+            Whether to use batch normalisation
+        activation : Callable[..., nn.Module]
+            Function returning an activation module, e.g. `nn.ReLU`
+        dropout_rate : float
+            Dropout rate
+        bn_epsilon : float
+            Epsilon for batch normalisation, small constant added to the variance
+            to avoid division by zero
+        bn_momentum : float
+            Momentum for batch normalisation, controls update rate of running
+            mean and variance during inference. Mean and variance are used to
+            normalise inputs during inference.
+        """
+        super().__init__()
+
+        self.layers = nn.Sequential(
+            nn.Conv3d(
+                in_channels=in_channels,
+                out_channels=out_channels,
+                kernel_size=kernel_size,
+                padding=1,
+                bias=False,
+            ),
+            nn.BatchNorm3d(out_channels, eps=bn_epsilon, momentum=bn_momentum)
+            if use_batch_norm
+            else nn.Identity(),
+            activation(),
+            nn.Dropout(dropout_rate, inplace=True),
         )
-        for level in range(1, config["n_levels"])  # Exclude first block
-    ]
 
-    return tz.pipe(
-        x,
-        ConvBlock(
-            n_kernels=config["n_kernels_init"], mc_dropout=mc_dropout, config=config
-        ),
-        # Repeatedly apply downsample and ConvBlock to input to get skip connection list
-        growby_accum(fs=levels),
-        list,
-        # last element is from bottleneck so exclude from skip connections
-        lambda skip_inputs: (skip_inputs[-1], skip_inputs[:-1]),
-    )
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.layers(x)
 
 
-@logger_wraps(level="INFO")
-@curry
-def DecoderLevel(
-    x: tf.Tensor,
-    skip: tf.Tensor,
-    n_kernels: int,
-    mc_dropout: bool,
-    config: Configuration,
-):
+class ConvBlock(nn.Module):
     """
-    One level of decoder path: upsample, crop, concat with skip, and convolve the input
+    A group of convolution layers, each consisting of Conv3D -> [BN] -> Activation -> Dropout
     """
 
-    return tz.pipe(
-        x,
-        layers.Conv3DTranspose(
-            n_kernels // 2,  # Halve dimensions because we are concatenating
-            config["kernel_size"],
-            strides=(2, 2, 2),
-            kernel_initializer=config["initializer"],
-            data_format="channels_last",
-        ),
-        # Crop skip to same size as x, x's last dim is half of skip's last dim
-        CentreCrop3D(skip.shape[1:]),  # type: ignore
-        lambda cropped_x: layers.Concatenate(axis=-1)([skip, cropped_x]),
-        ConvBlock(n_kernels=n_kernels, mc_dropout=mc_dropout, config=config),
-    )
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        n_convolutions: int,
+        config: Configuration,
+    ):
+        """
+        Multiple convolution layers in a single level of the U-Net
+
+        Parameters
+        ----------
+        in_channels : int
+            Number of input channels
+        out_channels : int
+            Number of output channels
+        n_convolutions : int
+            Number of convolution layers. A convolution layer consists of
+            Conv3D -> [BN] -> Activation -> Dropout
+        config : Configuration
+            Dictionary containing configuration parameters
+        """
+        super().__init__()
+
+        self.layers = nn.Sequential(
+            *[
+                ConvLayer(
+                    in_channels=in_channels if i == 0 else out_channels,
+                    out_channels=out_channels,
+                    kernel_size=config["kernel_size"],
+                    use_batch_norm=config["use_batch_norm"],
+                    activation=config["activation"],
+                    dropout_rate=config["dropout_rate"],
+                    bn_epsilon=config["batch_norm_epsilon"],
+                    bn_momentum=config["batch_norm_decay"],
+                )
+                for i in range(n_convolutions)
+            ]
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.layers(x)
 
 
-@logger_wraps(level="INFO")
-@curry
-def Decoder(
-    x: tf.Tensor,
-    skips: Sequence[tf.Tensor],
-    mc_dropout: bool,
-    config: Configuration,
-):
+class DownConvBlock(nn.Module):
     """
-    Pass input through decoder consisting of upsampling and return output
+    A downconvolution block, downsample -> conv block
     """
-    # skips and config is in descending order, reverse to ascending
-    levels = reversed(
-        [
-            DecoderLevel(
-                skip=skip, mc_dropout=mc_dropout, n_kernels=n_kernels, config=config
-            )
-            # Ignore first block (bottleneck)
-            for skip, n_kernels in (zip(skips, config["n_kernels_per_block"][1:]))
-        ]
-    )
 
-    return tz.pipe(
-        x,
-        lambda x: tz.pipe(x, *levels),  # Run x through each decoder level
-        layers.Conv3D(  # Final 1x1 convolution
-            config["n_kernels_last"],
-            kernel_size=(1, 1, 1),
-            kernel_initializer=config["initializer"],
-            padding="same",
-            data_format="channels_last",
-        ),
-        (
-            layers.Activation(config["final_layer_activation"])
+    def __init__(self, level: int, config: Configuration):
+        """
+        A single down convolution block, downsample -> conv block
+
+        Parameters
+        ----------
+        level : int
+            Level in the U-Net (0-indexed)
+        """
+        super().__init__()
+        self.layer = nn.Sequential(
+            nn.MaxPool3d(kernel_size=2, stride=(2, 2, 2)),
+            ConvBlock(
+                in_channels=config["n_kernels_init"] * 2 ** (level - 1),
+                out_channels=config["n_kernels_init"] * 2**level,
+                n_convolutions=config["n_convolutions_per_block"],
+                config=config,
+            ),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.layer(x)
+
+
+class Encoder(nn.Module):
+    """
+    U-Net Encoder, conv block -> downconv blocks... -> (output, skip_connections)
+    """
+
+    def __init__(
+        self,
+        config: Configuration,
+    ):
+        """
+        Encoder branch of U-Net, returns (output, skip_connections)
+
+        Parameters
+        ----------
+        config: Configuration
+            Dictionary containing configuration parameters
+        """
+        super().__init__()
+
+        self.levels = nn.ModuleList(
+            [
+                DownConvBlock(
+                    level=level,
+                    config=config,
+                )
+                for level in range(1, config["n_levels"])
+            ]
+        )
+
+        self.init_block = ConvBlock(
+            in_channels=config["input_channel"],
+            out_channels=config["n_kernels_init"],
+            n_convolutions=config["n_convolutions_per_block"],
+            config=config,
+        )
+
+    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, List[torch.Tensor]]:
+        return tz.pipe(
+            x,
+            self.init_block,
+            growby_accum(fs=self.levels),
+            list,
+            # last element is from bottleneck so exclude from skip connections
+            lambda skip_inputs: (skip_inputs[-1], skip_inputs[:-1]),
+        )  # type: ignore
+
+
+class UpConvBlock(nn.Module):
+    """
+    Upconvolution block, (input, skip_connections) -> upsample -> concat -> conv block
+    """
+
+    def __init__(self, level: int, config: Configuration) -> None:
+        super().__init__()
+        self.up = nn.ConvTranspose3d(
+            in_channels=config["n_kernels_init"] * 2 ** (level + 1),
+            out_channels=config["n_kernels_init"] * 2**level,
+            kernel_size=config["kernel_size"],
+            stride=(2, 2, 2),
+        )
+        self.conv = ConvBlock(
+            # in_channel is doubled because skip connection is concatenated to input
+            in_channels=config["n_kernels_init"] * 2 ** (level + 1),
+            out_channels=config["n_kernels_init"] * 2**level,
+            n_convolutions=config["n_convolutions_per_block"],
+            config=config,
+        )
+
+    def forward(self, x: torch.Tensor, skip: torch.Tensor) -> torch.Tensor:
+        x = self.up(x)
+        # use last 3 dimensions in (N, C, D, H, W) format
+        diff_dims = [skip.size(i) - x.size(i) for i in range(2, 5)]
+        # left, right, top, bottom, front, back
+        bounds = tz.interleave(
+            [
+                [dim // 2 for dim in diff_dims],
+                [dim - dim // 2 for dim in diff_dims],
+            ]
+        )
+        x = F.pad(x, list(bounds))
+        x = torch.cat([skip, x], dim=1)
+        return self.conv(x)
+
+
+class Decoder(nn.Module):
+    """
+    U-Net Decoder, upconv blocks... -> 1x1 conv -> (output)
+    """
+
+    def __init__(self, config: Configuration):
+        super().__init__()
+        self.levels = nn.ModuleList(
+            [
+                UpConvBlock(level=level, config=config)
+                # is zero-indexed so max level is n_levels - 1, -1 again for bottleneck
+                for level in range(config["n_levels"] - 2, -1, -1)
+            ]
+        )
+
+        self.last_conv = nn.Sequential(
+            nn.Conv3d(
+                in_channels=config["n_kernels_init"],
+                out_channels=config["n_kernels_last"],
+                kernel_size=1,
+                bias=False,
+            ),
+            config["final_layer_activation"]()
             if config["final_layer_activation"]
-            else tz.identity
-        ),
-    )
+            else nn.Identity(),
+        )
+
+    def forward(self, x: torch.Tensor, skips: List[torch.Tensor]) -> torch.Tensor:
+        for level, skip in zip(self.levels, reversed(skips)):
+            x = level(x, skip)
+        return self.last_conv(x)
 
 
-@logger_wraps(level="INFO")
-@curry
-def _GenericUNet(
-    input_: tf.Tensor, mc_dropout: bool, config: Configuration
-) -> tf.Tensor:
+class UNet(nn.Module):
     """
-    Pass input to U-Net and return the output
+    A U-shaped architecture for image segmentation
 
-    Parameters
-    ----------
-    mc_dropout : bool
-        Create a MC Dropout U-Net, dropout is enabled during testing
+    Consists of N resolution levels and divided into the Encoder
+    and Decoder branches. The Encoder downsamples and convolves
+    the input image in each level to extract features, while the
+    Decoder upsamples and concatenates output from the previous
+    level with the corresponding output from the Encoder of the
+    same level and then apply convolutions. A final 1x1 convolution
+    produces the final output.
     """
 
-    return tz.pipe(
-        input_,
-        Encoder(mc_dropout=mc_dropout, config=config),
-        unpack_args(Decoder(mc_dropout=mc_dropout, config=config)),
-    )  # type: ignore
+    def __init__(self, config: Configuration):
+        super().__init__()
+        self.encoder = Encoder(config)
+        self.decoder = Decoder(config)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        encoded, skips = self.encoder(x)
+        return self.decoder(encoded, skips)
 
 
-@logger_wraps(level="INFO")
-def UNet(
-    input_: tf.Tensor, config: Configuration = configuration()
-) -> tuple[tf.Tensor, str]:
-    """
-    Pass input to U-Net and return the output and model name
-    """
-    return _GenericUNet(input_, mc_dropout=False, config=config), "UNet"
-
-
-@logger_wraps(level="INFO")
-def MCDropoutUNet(
-    input_: tf.Tensor, config: Configuration = configuration()
-) -> tuple[tf.Tensor, str]:
-    """
-    Pass input to MC Dropout U-Net and return the output and model name
-    """
-    return _GenericUNet(input_, mc_dropout=True, config=config), "MCDropoutUNet"
+class MCDropoutUNet(UNet):
+    def eval(self):
+        # Apply dropout during evaluation
+        super().train()
+        for module in self.children():
+            if isinstance(module, nn.Dropout):
+                module.train(mode=False)
+        return self
