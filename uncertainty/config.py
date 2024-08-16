@@ -99,7 +99,7 @@ def training_config() -> dict[str, int | str | list[int | float | str] | type]:
         "batch_size": 32,
         "metrics": ["accuracy"],
         "initializer": nn.init.xavier_normal_,  # type: ignore
-        "optimizer": optim.Adam,
+        "optimizer": optim.Adam,  # type: ignore
         "loss": nn.BCELoss,
         # Learning rate scheduler, decrease learning rate at certain epochs
         "lr_scheduler": optim.lr_scheduler.StepLR,
