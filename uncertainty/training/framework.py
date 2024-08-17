@@ -2,65 +2,72 @@
 List of functions for training, saving, and evaluating model
 """
 
+from itertools import islice
 from typing import Callable
+from arrow import get
 from loguru import logger
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
+from tqdm import tqdm
 
 
 def get_device() -> str:
     return (
         "cuda"
         if torch.cuda.is_available()
-        else "mps"
-        if torch.backends.mps.is_available()
-        else "cpu"
+        else "mps" if torch.backends.mps.is_available() else "cpu"
     )
 
 
-def epoch(dataloader: DataLoader, model: nn.Module, loss_fn: nn.Module, optimiser: torch.optim.Optimizer):  # type: ignore
+def train_one_epoch(
+    dataloader: DataLoader,
+    model: nn.Module,
+    n_batches: int,
+    loss_fn: nn.Module,
+    optimiser: torch.optim.Optimizer,  # type: ignore
+):
     """
-    Run a single epoch of training
+    Train the model on n_iter batches of an infinite DataLoader object
 
     Parameters
     ----------
     dataloader : DataLoader
-        DataLoader object containing training data
+        DataLoader object containing infinite stream of training data
     model : nn.Module
         Model to train
+    n_batches : int
+        Number of batches to train on for one epoch
     loss_fn : nn.Module
         Loss function
     optimiser : torch.optim.Optimizer
         Optimiser
     """
     device = get_device()
-    logger.info(f"Training on {device}")
 
     model.to(device)
     model.train()
-    for batch, (X, y) in enumerate(dataloader):
-        X, y = X.to(device), y.to(device)
+    pbar = tqdm(islice(dataloader, n_batches), total=n_batches)
+    for data in pbar:
+        X, y = data[0].to(device), data[1].to(device)
 
-        # prediction loss
+        optimiser.zero_grad()  # zero gradients for every batch
         pred = model(X)
         loss = loss_fn(pred, y)
         loss.backward()
         optimiser.step()
-        optimiser.zero_grad()
 
-        if batch % 100 == 0:
-            size = len(dataloader.dataset)  # type: ignore
-            loss, current = loss.item(), (batch + 1) * len(X)
-            logger.info(f"loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
+        pbar.set_description(f"loss: {loss.item():.4f}")
 
 
 def train(
     dataloader: DataLoader,
     model: nn.Module,
+    epochs: int,
+    n_batches_per_epoch: int,
     loss_fn: nn.Module,
     optimiser: torch.optim.Optimizer,  # type: ignore
-    epochs: int,
+    tolerance: float = 1e-3,
 ):
     """
     Train a model for a number of epochs
@@ -71,35 +78,41 @@ def train(
         DataLoader object containing training data
     model : nn.Module
         Model to train
+    epochs : int
+        Number of epochs to train for
+    n_batches_per_epoch : int
+        Number of batches to train on for one epoch
     loss_fn : nn.Module
         Loss function
     optimiser : torch.optim.Optimizer
         Optimiser used to update model parameters
-    epochs : int
-        Number of epochs to train for
+    tolerance : float
+        Minimum improvement in loss to continue training
     """
+    logger.info(f"Training on {get_device()}")
 
     for t in range(epochs):
         logger.info(f"Epoch {t+1}\n-------------------------------")
-        epoch(dataloader, model, loss_fn, optimiser)
+        train_one_epoch(dataloader, model, n_batches_per_epoch, loss_fn, optimiser)
+        # validate on new set, 1:5 of training, get avg loss of last N batches for training and valid
+        # early stopping
+        # save best model and at every N epochs
         test(dataloader, model, loss_fn)
     logger.info("Done!")
 
 
 def test(dataloader: DataLoader, model: nn.Module, loss_fn: nn.Module):
     device = get_device()
-    size = len(dataloader.dataset)  # type: ignore
-    num_batches = len(dataloader)
     model.eval()
+
     test_loss, correct = 0, 0
+    # Disable gradient computation and reduce memory consumption
     with torch.no_grad():
         for X, y in dataloader:
             X, y = X.to(device), y.to(device)
             pred = model(X)
             test_loss += loss_fn(pred, y).item()
             correct += (pred.argmax(1) == y).type(torch.float).sum().item()
-    test_loss /= num_batches
-    correct /= size
     logger.info(
         f"Test Error: \n Accuracy: {(100*correct):>0.1f}%, Avg loss: {test_loss:>8f} \n"
     )
@@ -112,6 +125,10 @@ def save_model(model: nn.Module, path: str = "./checkpoints/model.pth"):
 def load_model(
     model_fn: Callable[..., nn.Module], path: str = "./checkpoints/model.pth"
 ):
+    """
+    Load a model from a file with evaluation mode
+    """
     model = model_fn().to(get_device())
     model.load_state_dict(torch.load(path))
+    model.eval()
     return model

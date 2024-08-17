@@ -14,8 +14,10 @@ logs/
 *.dcm
 *.nii.gz
 
-.devbox/
-.nix/fix-python
+.devenv*
+devenv.local.nix
+.direnv
+.pre-commit-config.yaml
 logs/*
 
 # Byte-compiled / optimized / DLL files

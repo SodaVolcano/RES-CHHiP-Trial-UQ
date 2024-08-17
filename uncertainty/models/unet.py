@@ -67,9 +67,11 @@ class ConvLayer(nn.Module):
                 padding=1,
                 bias=False,
             ),
-            nn.BatchNorm3d(out_channels, eps=bn_epsilon, momentum=bn_momentum)
-            if use_batch_norm
-            else nn.Identity(),
+            (
+                nn.BatchNorm3d(out_channels, eps=bn_epsilon, momentum=bn_momentum)
+                if use_batch_norm
+                else nn.Identity()
+            ),
             activation(),
             nn.Dropout(dropout_rate, inplace=True),
         )
@@ -262,9 +264,11 @@ class Decoder(nn.Module):
                 kernel_size=1,
                 bias=False,
             ),
-            config["final_layer_activation"]()
-            if config["final_layer_activation"]
-            else nn.Identity(),
+            (
+                config["final_layer_activation"]()
+                if config["final_layer_activation"]
+                else nn.Identity()
+            ),
         )
 
     def forward(self, x: torch.Tensor, skips: List[torch.Tensor]) -> torch.Tensor:

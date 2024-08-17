@@ -69,11 +69,13 @@ def unet_config(n_levels: int) -> dict[str, int | float | str | type[nn.Module]]
     return {
         # ------- ConvolutionBlock settings  --------
         "kernel_size": 3,
-        "n_convolutions_per_block": 1,
+        "n_convolutions_per_block": 2,
         "activation": nn.GELU,
         "dropout_rate": 0.5,
-        "use_batch_norm": False,
+        "use_batch_norm": True,
+        # AKA momentum, how much of new batch's mean/variance are added to the running mean/variance
         "batch_norm_decay": 0.9,
+        # Small value to avoid division by zero
         "batch_norm_epsilon": 1e-5,
         # ------- Encoder/Decoder settings -------
         # Number of kernels in the output of the first level of Encoder
@@ -82,7 +84,7 @@ def unet_config(n_levels: int) -> dict[str, int | float | str | type[nn.Module]]
         # Number of resolutions/blocks; height of U-Net
         "n_levels": n_levels,
         # Number of class to predict
-        "n_kernels_last": 1,
+        "n_kernels_last": 3,
         # Use sigmoid if using binary crossentropy, softmax if using categorical crossentropy
         # Set to None to disable
         "final_layer_activation": nn.Sigmoid,
@@ -94,9 +96,10 @@ def training_config() -> dict[str, int | str | list[int | float | str] | type]:
     Preset configuration for training
     """
     return {
-        "model_checkpoint_path": "./checkpoints/checkpoint.model.keras",
-        "n_epochs": 1,
-        "batch_size": 32,
+        "model_checkpoint_path": "./checkpoints/model.pth",
+        "n_epochs": 20,
+        "n_batches_per_epoch": 100,
+        "batch_size": 64,
         "metrics": ["accuracy"],
         "initializer": nn.init.xavier_normal_,  # type: ignore
         "optimizer": optim.Adam,  # type: ignore

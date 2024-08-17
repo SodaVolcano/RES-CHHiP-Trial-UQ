@@ -2,7 +2,6 @@
 Functions for hanlding dataset
 """
 
-import torch
 from ..data.mask import get_organ_names, masks_as_array
 from ..data.patient_scan import PatientScan
 from ..data.preprocessing import (
