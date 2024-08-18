@@ -1,12 +1,11 @@
 from itertools import cycle, tee
-from typing import Iterable, Optional
+from typing import Callable, Iterable, Optional
 import torch
 from torch.utils.data import IterableDataset
 
 from ..data.patient_scan import PatientScan
 from .data_handling import preprocess_dataset
 import numpy as np
-from volumentations import Compose
 from toolz import curried
 import toolz as tz
 
@@ -15,7 +14,9 @@ class PatientScanDataset(IterableDataset):
     def __init__(
         self,
         patient_scans: Iterable["PatientScan"],
-        transform: Optional[Compose] = None,
+        transform: Optional[
+            Callable[[tuple[np.ndarray, np.ndarray]], tuple[np.ndarray, np.ndarray]]
+        ] = tz.identity,
     ):
         """
         Parameters
@@ -25,10 +26,9 @@ class PatientScanDataset(IterableDataset):
             (volume, masks) pairs. The volume and masks will have shape
             (H, W, D, C) where C is the number of channels which
             PatientScanDataset will convert to (C, H, W, D).
-        transform : Optional[Compose]
-            A Volumentations-3D Compose object to apply transformations to
-            the volume and masks (e.g. data augmentation). If None, no
-            transformations are applied.
+        transform : Optional[Callable]
+            A function that take in a (volume, masks) pair and returns a new
+            (volume, masks) pair. Default is the identity function.
         buffer_size : int
             Size of the buffer used by the Shuffler to randomly shuffle the dataset.
             Set to 1 to disable shuffling.
@@ -37,7 +37,7 @@ class PatientScanDataset(IterableDataset):
         self.data: Iterable[tuple[np.ndarray, np.ndarray]] = preprocess_dataset(
             patient_scans
         )
-        self.transform = transform if transform is not None else tz.identity
+        self.transform = transform
 
     def __iter__(self):  # type: ignore
         self.data, it = tee(self.data, 2)

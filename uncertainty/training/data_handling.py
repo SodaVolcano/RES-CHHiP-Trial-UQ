@@ -2,7 +2,6 @@
 Functions for hanlding dataset
 """
 
-from uncertainty.utils.common import apply_if_truthy
 from ..data.mask import get_organ_names, masks_as_array
 from ..data.patient_scan import PatientScan
 from ..data.preprocessing import (
@@ -15,19 +14,48 @@ from ..utils.wrappers import curry
 from ..constants import BODY_THRESH, HU_RANGE, ORGAN_MATCHES
 from ..config import configuration, Configuration
 
-from typing import Iterable, Optional
+from typing import Callable, Iterable, Optional
 
 import numpy as np
 import toolz as tz
 import toolz.curried as curried
 import torchio as tio
-from volumentations import (
+from torchio.transforms import (
     Compose,
-    Rotate,
-    ElasticTransform,
-    Flip,
+    RandomFlip,
+    RandomAffine,
+    RandomElasticDeformation,
+    RandomBlur,
     RandomGamma,
 )
+
+
+def to_torchio_subject(volume_mask: tuple[np.ndarray, np.ndarray]) -> tio.Subject:
+    """
+    Transform a (volume, mask) pair into a torchio Subject object
+
+    Parameters
+    ----------
+    volume_mask : tuple[np.ndarray, np.ndarray]
+        Tuple containing the volume and mask arrays, must have shape
+        (channel, height, width, depth)
+    """
+    return tio.Subject(
+        volume=tio.ScalarImage(tensor=volume_mask[0]),
+        mask=tio.LabelMap(
+            # ignore channel dimension from volume_mask[0]
+            tensor=tio.CropOrPad(volume_mask[0].shape[1:], padding_mode="minimum")(  # type: ignore
+                volume_mask[1]
+            ),
+        ),
+    )
+
+
+def from_torchio_subject(subject: tio.Subject) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Transform a torchio Subject object into a (volume, mask) pair
+    """
+    return subject["volume"].data, subject["mask"].data
 
 
 @logger_wraps(level="INFO")
@@ -43,22 +71,6 @@ def preprocess_data(
     """
     # Centre image using body mask and to (channel, height, width, depth)
     BODY_MASK = np.expand_dims(scan.volume > BODY_THRESH, axis=0)
-
-    def to_torchio_subject(volume_mask: tuple[np.ndarray, np.ndarray]) -> tio.Subject:
-        # Allow centre crop from torchio
-        # volume and mask should have shape (C, H, W, D)
-        return tio.Subject(
-            volume=tio.ScalarImage(tensor=volume_mask[0]),
-            mask=tio.LabelMap(
-                # ignore channel dimension from volume_mask[0]
-                tensor=tio.CropOrPad(volume_mask[0].shape[1:], padding_mode="minimum")(  # type: ignore
-                    volume_mask[1]
-                ),
-            ),
-        )
-
-    def from_torchio_subject(subject: tio.Subject) -> tuple[np.ndarray, np.ndarray]:
-        return subject["volume"].data, subject["mask"].data
 
     def torchio_crop_or_pad(
         volume_mask: tuple[np.ndarray, np.ndarray]
@@ -144,26 +156,36 @@ def preprocess_dataset(
 
 
 @logger_wraps(level="INFO")
-def construct_augmentor(p: float = 1.0) -> Compose:
+def augmentations(
+    p: float = 1.0,
+) -> Callable[[tuple[np.ndarray, np.ndarray]], tuple[np.ndarray, np.ndarray]]:
     """
-    Preset augmentor to apply rotation, elastic transformation, flips, and gamma adjustments
+    Returns a function to augment a (volume, masks) pair
 
-    Using Volumentations-3D here because torchio is a pain to work with
+    Augmentation involves flipping, affine transformations, elastic deformation,
+    blurring and gamma correction. All augmentations have a probability of 0.5
+    of applying meaning on average, around 3% of data will have no augmentations
+    applied.
 
     Parameters
     ---------
     p: float
-        Probability of applying the augmentor
+        Probability of applying the augmentor, default is 1.0
     """
-    return Compose(
-        [
-            Rotate((-15, 15), (-15, 15), (-15, 15), p=0.5),
-            ElasticTransform((0, 0.15), interpolation=1, p=0.2),
-            Flip(0, p=0.2),
-            Flip(1, p=0.2),
-            RandomGamma(gamma_limit=(80, 120), p=0.2),
-        ],
-        p=p,
+    return lambda arr: tz.pipe(
+        arr,
+        to_torchio_subject,
+        Compose(
+            [
+                RandomFlip(p=0.5),
+                RandomAffine(isotropic=True, p=0.5),
+                RandomElasticDeformation(p=0.5),
+                RandomBlur(p=0.5),
+                RandomGamma(p=0.5),
+            ],
+            p=p,
+        ),
+        from_torchio_subject,
     )
 
 
