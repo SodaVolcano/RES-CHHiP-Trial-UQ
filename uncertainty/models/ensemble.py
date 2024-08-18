@@ -50,7 +50,6 @@ class DeepEnsemble(nn.Module):
         )
 
 
-#
 class BatchEnsembleConv3D(nn.Module):
     """
     Convolution 3D using an ensemble of estimators with a shared weight matrix
@@ -86,7 +85,6 @@ class BatchEnsembleConv3D(nn.Module):
         dilation: int | tuple[int, int, int] = 1,
         bias: bool = True,
         device=None,
-        dtype=None,
     ):
         """
         Initialises a 3D convolutional layer for a batch ensemble
@@ -157,6 +155,7 @@ class BatchEnsembleConv3D(nn.Module):
             self.bias = nn.Parameter(torch.empty((n_estimators, out_channels)))
         else:
             self.register_parameter("bias", None)
+        self.init_weights()
 
     def init_weights(self, init_fn=None):
         """
@@ -174,7 +173,7 @@ class BatchEnsembleConv3D(nn.Module):
         if self.bias is not None:
             init_fn(self.bias)
 
-    def get_fast_weight_matrix(
+    def __get_fast_weight_matrix(
         self, weights: torch.Tensor, examples_per_estimator: int
     ) -> torch.Tensor:
         """
@@ -219,12 +218,107 @@ class BatchEnsembleConv3D(nn.Module):
         batch_size = x.shape[0]
         examples_per_estimator = batch_size // self.n_estimators
 
-        r_matrix = self.get_fast_weight_matrix(self.r_weights, examples_per_estimator)
-        s_matrix = self.get_fast_weight_matrix(self.s_weights, examples_per_estimator)
+        r_matrix = self.__get_fast_weight_matrix(self.r_weights, examples_per_estimator)
+        s_matrix = self.__get_fast_weight_matrix(self.s_weights, examples_per_estimator)
         bias = (
             None
             if self.bias is None
-            else self.get_fast_weight_matrix(self.bias, examples_per_estimator)
+            else self.__get_fast_weight_matrix(self.bias, examples_per_estimator)
         )
         # vectorised form, output = ((X * R)W) * S + bias where X is minibatch matrix
         return self.conv(x * r_matrix) * s_matrix + (bias if bias is not None else 0)
+
+    def get_estimator_fast_weights(
+        self, estimator: int
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """
+        Get the fast weight vectors for a specific estimator.
+
+        Parameters
+        ----------
+        estimator : int
+            Index of the estimator for which to return the fast weights.
+
+        Returns
+        -------
+        tuple[torch.Tensor, torch.Tensor]
+            Tuple containing the fast weight vectors for the input and output channels.
+        """
+        return self.r_weights[estimator], self.s_weights[estimator]
+
+    def get_shared_weights(self) -> torch.Tensor:
+        """
+        Get the shared weight matrix.
+        """
+        return self.conv.weight
+
+
+class CNNBatchEnsemble(nn.Module):
+    """
+    An ensemble of CNNs with shared weights
+
+    Caveats
+    -------
+    In training when passing a mini-batch of B examples, the mini-batch is
+    partitioned into smaller batches of `B // n_estimators` examples and
+    given to each member. The remaining examples are discarded. In
+    testing, you should duplicate the test batch `n_estimators` times.
+    """
+
+    def __init__(self, model: nn.Module, ensemble_size: int):
+        """
+        An ensemble of CNNs with shared weights
+
+        Parameters
+        ----------
+        model : nn.Module
+            The model to ensemble, Conv3d must be the only
+            trainable layer in the model
+        ensemble_size : int
+            The number of models in the ensemble
+        """
+        super().__init__()
+
+        # who care about code quality anyway
+
+        def get_all_parent_layers(net, type):
+            layers = []
+
+            for name, l in net.named_modules():
+                if isinstance(l, type):
+                    tokens = name.strip().split(".")
+
+                    layer = net
+                    for t in tokens[:-1]:
+                        if not t.isnumeric():
+                            layer = getattr(layer, t)
+                        else:
+                            layer = layer[int(t)]
+
+                    layers.append([layer, tokens[-1]])
+
+            return layers
+
+        def replace_conv3d(net):
+            for parent_layer, last_token in get_all_parent_layers(net, nn.Conv3d):
+                layer = getattr(parent_layer, last_token)
+                setattr(
+                    parent_layer,
+                    last_token,
+                    BatchEnsembleConv3D(
+                        layer.in_channels,
+                        layer.out_channels,
+                        layer.kernel_size,
+                        ensemble_size,
+                        layer.stride,
+                        layer.padding,
+                        layer.dilation,
+                        layer.bias,
+                    ),
+                )
+
+        self.model = model
+        replace_conv3d(self.model)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.model(x)
