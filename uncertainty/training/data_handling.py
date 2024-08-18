@@ -2,6 +2,7 @@
 Functions for hanlding dataset
 """
 
+from uncertainty.utils.common import apply_if_truthy
 from ..data.mask import get_organ_names, masks_as_array
 from ..data.patient_scan import PatientScan
 from ..data.preprocessing import (
@@ -40,6 +41,8 @@ def preprocess_data(
     Mask for multiple organs are stacked along the first dimension to have
     shape (organ, height, width, depth). Mask is `None` if not all organs are present.
     """
+    # Centre image using body mask and to (channel, height, width, depth)
+    BODY_MASK = np.expand_dims(scan.volume > BODY_THRESH, axis=0)
 
     def to_torchio_subject(volume_mask: tuple[np.ndarray, np.ndarray]) -> tio.Subject:
         # Allow centre crop from torchio
@@ -57,14 +60,38 @@ def preprocess_data(
     def from_torchio_subject(subject: tio.Subject) -> tuple[np.ndarray, np.ndarray]:
         return subject["volume"].data, subject["mask"].data
 
+    def torchio_crop_or_pad(
+        volume_mask: tuple[np.ndarray, np.ndarray]
+    ) -> tuple[np.ndarray, np.ndarray]:
+        return tz.pipe(
+            volume_mask,
+            to_torchio_subject,
+            tio.CropOrPad(
+                (
+                    config["input_height"],
+                    config["input_width"],
+                    config["input_depth"],
+                ),
+                padding_mode=np.min(volume_mask[0]),
+                mask_name="mask",
+            ),
+            from_torchio_subject,
+            lambda x: (x[0].numpy(), x[1].numpy()),
+        )
+
     def preprocess_volume(scan: PatientScan) -> np.ndarray:
         return tz.pipe(
             scan.volume,
+            lambda vol: np.expand_dims(
+                vol, axis=0
+            ),  # to (channel, height, width, depth)
+            lambda vol: (vol, BODY_MASK),
+            torchio_crop_or_pad,
+            tz.first,
             lambda vol: np.clip(vol, *HU_RANGE),
             map_interval(HU_RANGE, (0, 1)),
-            curry(np.expand_dims)(axis=0),  # to (channel, height, width, depth)
             lambda vol: np.astype(vol, np.float32),
-        )
+        )  # type: ignore
 
     def preprocess_mask(scan: PatientScan) -> Optional[np.ndarray]:
         """
@@ -88,28 +115,13 @@ def preprocess_data(
             scan.masks[""],
             masks_as_array(organ_ordering=names),
             lambda arr: np.moveaxis(arr, -1, 0),  # to (organ, height, width, depth)
+            lambda mask: (mask, BODY_MASK),
+            torchio_crop_or_pad,
+            tz.first,
             lambda mask: np.astype(mask, np.float32),
         )  # type: ignore
 
-    volume_mask = tz.juxt(preprocess_volume, preprocess_mask)(scan)
-    if volume_mask[1] is None:
-        return volume_mask
-    return tz.pipe(
-        volume_mask,
-        to_torchio_subject,
-        tio.CropOrPad(
-            (
-                config["input_height"],
-                config["input_width"],
-                config["input_depth"],
-            ),
-            padding_mode="minimum",
-            mask_name="mask",
-        ),
-        from_torchio_subject,
-        curried.map(lambda x: x.numpy()),
-        list,
-    )  # type: ignore
+    return tz.juxt(preprocess_volume, preprocess_mask)(scan)
 
 
 @logger_wraps(level="INFO")

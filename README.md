@@ -6,7 +6,7 @@ The repository contains modules for loading DICOM and NIFTI files, preprocessing
 
 # Setup
 
-## Devbox
+## Devbox (OUTDATED!!!)
 
 This is the recommended method for Linux and Mac OS as the resulting environment is isolated from the rest of the host environment.
 
