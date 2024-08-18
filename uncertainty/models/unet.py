@@ -302,9 +302,11 @@ class UNet(nn.Module):
 
 class MCDropoutUNet(UNet):
     def eval(self):
-        # Apply dropout during evaluation
-        super().train()
-        for module in self.children():
+        def activate_dropout(module):
             if isinstance(module, nn.Dropout):
-                module.train(mode=False)
+                module.train(True)
+
+        # Apply dropout during evaluation
+        super().eval()
+        self.apply(activate_dropout)
         return self
