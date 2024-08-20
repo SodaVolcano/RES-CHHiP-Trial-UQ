@@ -1,6 +1,7 @@
 .vscode/
-.data/
-.models/
+/data/
+/models/
+/lightning_logs/
 # prevent leaking sensitive image in ipynb and image output
 *.png
 *.jpg
@@ -18,7 +19,7 @@ logs/
 devenv.local.nix
 .direnv
 .pre-commit-config.yaml
-logs/*
+/logs/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

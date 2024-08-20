@@ -3,6 +3,7 @@ An ensemble of models
 """
 
 from typing import Callable
+from deprecated import deprecated
 from torch import nn, vmap
 import torch
 from torch.func import stack_module_state, functional_call  # type: ignore
@@ -50,6 +51,7 @@ class DeepEnsemble(nn.Module):
         )
 
 
+@deprecated(reason="Possibly broken, use DeepEnsemble instead")
 class BatchEnsembleConv3D(nn.Module):
     """
     Convolution 3D using an ensemble of estimators with a shared weight matrix
@@ -251,74 +253,3 @@ class BatchEnsembleConv3D(nn.Module):
         Get the shared weight matrix.
         """
         return self.conv.weight
-
-
-class CNNBatchEnsemble(nn.Module):
-    """
-    An ensemble of CNNs with shared weights
-
-    Caveats
-    -------
-    In training when passing a mini-batch of B examples, the mini-batch is
-    partitioned into smaller batches of `B // n_estimators` examples and
-    given to each member. The remaining examples are discarded. In
-    testing, you should duplicate the test batch `n_estimators` times.
-    """
-
-    def __init__(self, model: nn.Module, ensemble_size: int):
-        """
-        An ensemble of CNNs with shared weights
-
-        Parameters
-        ----------
-        model : nn.Module
-            The model to ensemble, Conv3d must be the only
-            trainable layer in the model
-        ensemble_size : int
-            The number of models in the ensemble
-        """
-        super().__init__()
-
-        # who care about code quality anyway
-
-        def get_all_parent_layers(net, type):
-            layers = []
-
-            for name, l in net.named_modules():
-                if isinstance(l, type):
-                    tokens = name.strip().split(".")
-
-                    layer = net
-                    for t in tokens[:-1]:
-                        if not t.isnumeric():
-                            layer = getattr(layer, t)
-                        else:
-                            layer = layer[int(t)]
-
-                    layers.append([layer, tokens[-1]])
-
-            return layers
-
-        def replace_conv3d(net):
-            for parent_layer, last_token in get_all_parent_layers(net, nn.Conv3d):
-                layer = getattr(parent_layer, last_token)
-                setattr(
-                    parent_layer,
-                    last_token,
-                    BatchEnsembleConv3D(
-                        layer.in_channels,
-                        layer.out_channels,
-                        layer.kernel_size,
-                        ensemble_size,
-                        layer.stride,
-                        layer.padding,
-                        layer.dilation,
-                        layer.bias,
-                    ),
-                )
-
-        self.model = model
-        replace_conv3d(self.model)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.model(x)

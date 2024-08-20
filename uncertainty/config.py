@@ -13,6 +13,7 @@ Configuration = TypedDict(
         "input_depth": int,
         "input_channel": int,
         "output_channel": int,
+        "val_split": float,
         "kernel_size": int,
         "n_convolutions_per_block": int,
         "use_batch_norm": bool,
@@ -30,13 +31,14 @@ Configuration = TypedDict(
         "metrics": list[str],
         "initialiser": Callable[..., torch.Tensor],
         "optimiser": Callable[..., nn.Module],
+        "optimiser_kwargs": dict[str, int | float | str],
         "loss": Callable[..., nn.Module],
         "lr_scheduler": type[optim.lr_scheduler.LRScheduler],
     },
 )
 
 
-def data_config(n_levels: int) -> dict[str, int | str]:
+def data_config(n_levels: int) -> dict[str, int | str | float]:
     """
     Preset configuration for data
 
@@ -59,6 +61,7 @@ def data_config(n_levels: int) -> dict[str, int | str]:
         "input_channel": 1,
         # Number of organs, mask only
         "output_channel": 3,
+        "val_split": 0.2,  # percentage of data to use for validation
     }
 
 
@@ -87,7 +90,7 @@ def unet_config(n_levels: int) -> dict[str, int | float | str | type[nn.Module]]
         # Number of class to predict
         "n_kernels_last": 3,
         # Set to None to disable
-        "final_layer_activation": nn.Sigmoid,
+        "final_layer_activation": nn.Softmax,
     }
 
 

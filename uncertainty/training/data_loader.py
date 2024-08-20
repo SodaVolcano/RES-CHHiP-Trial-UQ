@@ -1,7 +1,7 @@
 from itertools import cycle, tee
 from typing import Callable, Iterable, Optional
 import torch
-from torch.utils.data import IterableDataset
+from torch.utils.data import Dataset
 
 from ..data.patient_scan import PatientScan
 from .data_handling import preprocess_dataset
@@ -10,10 +10,10 @@ from toolz import curried
 import toolz as tz
 
 
-class PatientScanDataset(IterableDataset):
+class PatientScanDataset(Dataset):
     def __init__(
         self,
-        patient_scans: Iterable["PatientScan"],
+        patient_scans: list["PatientScan"],
         transform: Optional[
             Callable[[tuple[np.ndarray, np.ndarray]], tuple[np.ndarray, np.ndarray]]
         ] = tz.identity,
@@ -21,8 +21,8 @@ class PatientScanDataset(IterableDataset):
         """
         Parameters
         ----------
-        patient_scans : Iterable[PatientScan]
-            Iterable of PatientScan objects to be converted to
+        patient_scans : list[PatientScan]
+            List of PatientScan objects to be converted to
             (volume, masks) pairs. The volume and masks will have shape
             (H, W, D, C) where C is the number of channels which
             PatientScanDataset will convert to (C, H, W, D).
@@ -34,19 +34,17 @@ class PatientScanDataset(IterableDataset):
             Set to 1 to disable shuffling.
         """
         super().__init__()
-        self.data: Iterable[tuple[np.ndarray, np.ndarray]] = preprocess_dataset(
+        self.data: list[tuple[np.ndarray, np.ndarray]] = preprocess_dataset(
             patient_scans
         )
         self.transform = transform
 
-    def __iter__(self):  # type: ignore
-        self.data, it = tee(self.data, 2)
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor]:
         return tz.pipe(
-            it,
-            curried.map(self.transform),
-            curried.map(
-                lambda vol_mask: (torch.tensor(vol_mask[0]), torch.tensor(vol_mask[1]))
-            ),
-            cycle,
-            lambda it: tz.random_sample(0.1, it),
-        )
+            self.data[index],
+            self.transform,
+            lambda vol_mask: (torch.tensor(vol_mask[0]), torch.tensor(vol_mask)[1]),
+        )  # type: ignore

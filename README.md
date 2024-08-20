@@ -6,16 +6,16 @@ The repository contains modules for loading DICOM and NIFTI files, preprocessing
 
 # Setup
 
-## Devbox (OUTDATED!!!)
+## Devenv
 
 This is the recommended method for Linux and Mac OS as the resulting environment is isolated from the rest of the host environment.
 
-[Devbox](https://github.com/jetify-com/devbox) is used to create isolated development shells where the dependencies are declared in `devbox.json` file and are version-locked in `devbox.lock`. Dependencies and programs installed in the shell are only accessible in the shell. It is internally powered by Nix where the list of Nix packages can be found at [Nixhub.io](https://www.nixhub.io/).
+[Devenv](https://devenv.sh/) is used to create isolated development shells where the dependencies are declared in `devenv.nix` file with input channels defined in `devenv.yaml` and are version-locked in `devenv.lock`. Dependencies and programs installed in the shell are only accessible in the shell. It is internally powered by Nix where the list of Nix packages can be found at [NixOS Packages](https://search.nixos.org/packages).
 
-First, install [Devbox](https://github.com/jetify-com/devbox). Then, from the top-most directory of the project, run the following command to let Devbox install the required dependencies locally, install the requirements, and activate the virtual environment.
+First, install `devenv`. Then, from the top-most directory of the project, run the following command to let `devenv` install the required dependencies locally, install the requirements, and activate the virtual environment.
 
 ```bash
-devbox shell
+devenv shell
 exit # Exit the devbox shell
 ```
 
@@ -111,24 +111,9 @@ pytest
 
 This section is only relevant if you wish to use and maintain the codebase.
 
-## Devbox and Nix
+## Devenv and Nix
 
-Devbox is internally powered by [Nix](https://nixos.org/) which both a package manager and a pure, turing-complete functional programming language. It's used to install packages in isolation from other packages to achieve reproducibility.
-
-[Nix Flakes](https://nixos.org/) is a standarised way of building packages consisting of mainly two attributes. `inputs` specify the dependencies for building the `outputs` where the specified dependencies are version locked in a `flake.lock` file to ensure that they are reproducible on future installs (`devbox.lock` functions in the same manner). The `outputs` attribute is a _function_ that takes dependencies in `inputs` to produce an attribute set, such as a set containing `packages` or `devShells`.
-
-Devbox allows packages to be installed from a `flake.nix` file, whether locally or online e.g. via GitHub repositories. The line
-
-```json
-"packages": [
-    ...
-    "github:GuillaumeDesforges/fix-python/"
-],
-```
-
-simply installs `fix-python` defined in `flake.nix` from the provided GitHub repository.
-
-As Nix installs packages in isolation from one another, many libraries that link to the C/C++ standard libraries such as `glibc` and `zlib` in some assumed paths will not function. `fix-python` is used to fix these paths where, given a list of Nix packages (in `.nix/libs.nix`), it will resolve all references to those packages in the installed python modules at `venv`. This can also be done manually if `fix-python` fails by installing said package in `devbox.json` and exporting the `LD_LIBRARY_PATH` environment variable to `.devbox/nix/profile/default` which contains the installed packages.
+Devbox is internally powered by [Nix](https://nixos.org/) which both a package manager and a pure, turing-complete functional programming language. It's used to install packages in isolation from other packages to achieve reproducibility. `devenv.nix` is written in the Nix programming language, you can find the references [here](https://devenv.sh/reference/options/).
 
 ## Coding Paradigm
 

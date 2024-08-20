@@ -139,7 +139,7 @@ def preprocess_data(
 @logger_wraps(level="INFO")
 @curry
 def preprocess_dataset(
-    dataset: Iterable[PatientScan], config: Configuration = configuration()
+    dataset: Iterable[PatientScan | None], config: Configuration = configuration()
 ) -> Iterable[tuple[np.ndarray, np.ndarray]]:
     """
     Preprocess a dataset of PatientScan objects into (volume, masks) pairs
@@ -150,6 +150,7 @@ def preprocess_dataset(
     """
     return tz.pipe(
         dataset,
+        curried.filter(lambda x: x is not None),
         curried.map(preprocess_data(config=config)),
         curried.filter(lambda x: x[1] is not None),
     )  # type: ignore

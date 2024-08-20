@@ -130,5 +130,4 @@ def load_model(
     """
     model = model_fn().to(get_device())
     model.load_state_dict(torch.load(path))
-    model.eval()
     return model

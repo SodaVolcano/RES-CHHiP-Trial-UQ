@@ -31,6 +31,7 @@ torch = "^2.4.0"
 torchvision = "^0.19.0"
 torchviz = "^0.0.2"
 torchio = { version = "^0.18.90", python = ">=3.12,<3.13" }
+lightning = "^2.4.0"
 
 [tool.isort]
 profile = "black"
