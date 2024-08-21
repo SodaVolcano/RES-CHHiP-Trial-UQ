@@ -26,7 +26,7 @@ Configuration = TypedDict(
         "n_kernels_init": int,
         "n_levels": int,
         "n_kernels_last": int,
-        "final_layer_activation": Callable[..., nn.Module] | None,
+        "final_layer_activation": Callable[..., nn.Module],
         "model_checkpoint_path": str,
         "n_epochs": int,
         "batch_size": int,
@@ -98,7 +98,6 @@ def unet_config(n_levels: int) -> dict[str, int | float | str | type[nn.Module]]
         "n_levels": n_levels,
         # Number of class to predict
         "n_kernels_last": 3,
-        # Set to None to disable
         "final_layer_activation": nn.Softmax,
     }
 

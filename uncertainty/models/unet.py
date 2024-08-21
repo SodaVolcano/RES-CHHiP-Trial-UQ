@@ -265,19 +265,50 @@ class Decoder(nn.Module):
                 kernel_size=1,
                 bias=False,
             ),
-            (
-                config["final_layer_activation"]()
-                if config["final_layer_activation"]
-                else nn.Identity()
-            ),
         )
+        self.last_activation = config["final_layer_activation"]()
 
-    def forward(
-        self, x: torch.Tensor, skips: List[torch.Tensor], logits: bool = False
-    ) -> torch.Tensor:
+    def _forward_deep_supervision(self, x, skips, logits: bool) -> List[torch.Tensor]:
+        """
+        Forward pass with deep supervision, returns a list of outputs from each level
+        """
+        outputs = []
         for level, skip in zip(self.levels, reversed(skips)):
             x = level(x, skip)
-        return self.last_conv(x) if not logits else x
+            x = self.last_conv(x, logits)
+            if not logits:
+                x = self.last_activation(x)
+            outputs.append(x)
+        return outputs
+
+    def forward(
+        self,
+        x: torch.Tensor,
+        skips: List[torch.Tensor],
+        logits: bool = False,
+        deep_supervision: bool = True,
+    ) -> torch.Tensor | List[torch.Tensor]:
+        """
+        Parameters
+        ----------
+        x : torch.Tensor
+            Input tensor
+        skips : List[torch.Tensor]
+            Skip connections from the encoder
+        logits : bool
+            Whether to return logits or not
+        deep_supervision : bool
+            If True, a list of outputs from each level is returned. The outputs
+            are from convolving the output of each level with a 1x1 convolution.
+
+        """
+        if deep_supervision:
+            return self._forward_deep_supervision(x, skips, logits)
+
+        for level, skip in zip(self.levels, reversed(skips)):
+            x = level(x, skip)
+        x = self.last_conv(x)
+        return self.last_activation(x) if not logits else x
 
 
 class UNet(nn.Module):
@@ -298,9 +329,11 @@ class UNet(nn.Module):
         self.encoder = Encoder(config)
         self.decoder = Decoder(config)
 
-    def forward(self, x: torch.Tensor, logits: bool = False) -> torch.Tensor:
+    def forward(
+        self, x: torch.Tensor, logits: bool = False, deep_supervision: bool = True
+    ) -> torch.Tensor:
         encoded, skips = self.encoder(x)
-        return self.decoder(encoded, skips, logits)
+        return self.decoder(encoded, skips, logits, deep_supervision)
 
 
 class MCDropoutUNet(UNet):
@@ -326,8 +359,10 @@ class MCDropoutUNet(UNet):
             self.model = model
 
     @override
-    def forward(self, x: torch.Tensor, logits: bool = False) -> torch.Tensor:
-        return self.model(x, logits)
+    def forward(
+        self, x: torch.Tensor, logits: bool = False, deep_supervision: bool = True
+    ) -> torch.Tensor:
+        return self.model(x, logits, deep_supervision)
 
     @override
     def eval(self):
