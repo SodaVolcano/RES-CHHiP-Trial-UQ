@@ -4,8 +4,10 @@ Overload for embarrassingly parallel tasks
 
 from multiprocessing.pool import IMapIterator
 from typing import Any, Generator, Literal, Optional
-from .wrappers import curry
+
 from pathos.multiprocessing import ProcessingPool, ThreadingPool
+
+from .wrappers import curry
 
 
 @curry

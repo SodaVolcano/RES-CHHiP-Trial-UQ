@@ -5,26 +5,25 @@ Load and save folders of DICOM files to h5 files.
 import argparse
 import sys
 from typing import override
+from loguru import logger
+from context import uncertainty as un
 
 
 def main(
     dicom_path: str, save_path: str, preprocess: bool, n_workers: int, logging: bool
 ):
-    # only import the function if it's needed - tensorflow takes some time
-    from uncertainty.data.dicom import save_dicom_scans_to_h5
-    from loguru import logger
-    from uncertainty.utils.logging import config_logger
 
     if logging:
         logger.enable("uncertainty")
-        config_logger()
+        un.utils.logging.config_logger()
 
-    save_dicom_scans_to_h5(
+    un.data.dicom.save_dicom_scans_to_h5(
         dicom_path, save_path, n_workers=n_workers, preprocess=preprocess
     )
 
 
 if __name__ == "__main__":
+    config = un.config.configuration()
 
     class HelpfulParser(argparse.ArgumentParser):
         """
@@ -41,12 +40,16 @@ if __name__ == "__main__":
         description="Load and save folders of DICOM files to h5 files."
     )
     parser.add_argument(
-        "in_path",
+        "--in_path",
         type=str,
         help="Path to the folder containing folders of DICOM files.",
+        default=config["data_dir"],
     )
     parser.add_argument(
-        "out_path", type=str, help="Output directory to store the h5 files."
+        "out_path",
+        type=str,
+        help="Output directory to store the h5 files.",
+        default=config["staging_dir"],
     )
     parser.add_argument(
         "--preprocess",

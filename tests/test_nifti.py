@@ -5,7 +5,6 @@ from uncertainty.data.mask import get_organ_names
 
 from .context import gen_path, uncertainty
 
-
 # Import aliases
 Mask = uncertainty.data.mask.Mask
 PatientScan = uncertainty.data.patient_scan.PatientScan

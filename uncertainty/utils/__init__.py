@@ -1,1 +1,1 @@
-from . import common, logging, path, string, wrappers, sequence
+from . import common, logging, path, sequence, string, wrappers

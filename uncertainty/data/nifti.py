@@ -3,22 +3,22 @@ Set of methods to load and save NIfTI files
 """
 
 import itertools
-from typing import Generator, List
 import re
+from typing import Generator, List
 
+import nibabel as nib
+import numpy as np
 import toolz as tz
 import toolz.curried as curried
-import numpy as np
-import nibabel as nib
 
 from uncertainty.utils.logging import logger_wraps
 
-from .mask import Mask
-from .patient_scan import PatientScan
 from ..utils.common import unpack_args
-from ..utils.wrappers import curry
 from ..utils.path import resolve_path_placeholders
 from ..utils.string import placeholder_matches
+from ..utils.wrappers import curry
+from .mask import Mask
+from .patient_scan import PatientScan
 
 
 def __assert_placeholders(path: str, placeholders: list[str] | str, path_name: str):

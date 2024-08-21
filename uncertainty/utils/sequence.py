@@ -2,14 +2,14 @@
 Utility functions for generating sequences
 """
 
-from tqdm import tqdm
-from .wrappers import curry
-
-from typing import Callable, Generator
 from itertools import islice
+from typing import Callable, Generator
 
 import toolz as tz
 import toolz.curried as curried
+from tqdm import tqdm
+
+from .wrappers import curry
 
 
 @curry

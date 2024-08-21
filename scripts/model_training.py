@@ -1,17 +1,18 @@
 import argparse
 from typing import Callable, Literal
-import toolz as tz
 
 import numpy as np
+import tensorflow as tf
+import toolz as tz
+
+from uncertainty.config import configuration
 from uncertainty.data.dicom import load_patient_scans
 from uncertainty.data.patient_scan import from_h5_dir
 from uncertainty.training.data_handling import (
     augment_data,
-    preprocess_dataset,
     construct_augmentor,
+    preprocess_dataset,
 )
-from uncertainty.config import configuration
-import tensorflow as tf
 
 
 def main(data_path: str, datatype: Literal["dicom", "h5"]):

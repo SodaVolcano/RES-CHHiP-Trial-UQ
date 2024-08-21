@@ -2,12 +2,14 @@
 Functions for logging
 """
 
-from functools import wraps
 import inspect
 import logging
 import warnings
+from functools import wraps
 
 from loguru import logger
+
+from uncertainty.config import configuration
 
 
 class __InterceptHandler(logging.Handler):
@@ -34,18 +36,23 @@ class __InterceptHandler(logging.Handler):
         )
 
 
-def config_logger():
+def config_logger(
+    sink=configuration()["log_sink"],
+    format=configuration()["log_format"],
+    level=configuration()["log_level"],
+    retention=configuration()["log_retention"],
+):
     """
     Configure loguru logger settings and set it as as the default logger
     """
     logger.remove()
     logger.add(
-        "./logs/out_{time}.log",
-        format="{time:YYYY-MM-DD at HH:mm:ss} {level} {message}",
+        sink,
+        format=format,
         backtrace=True,
         diagnose=True,
-        level="DEBUG",
-        retention="7 days",
+        level=level,
+        retention=retention,
     )
 
     logging.basicConfig(handlers=[__InterceptHandler()], level=0, force=True)

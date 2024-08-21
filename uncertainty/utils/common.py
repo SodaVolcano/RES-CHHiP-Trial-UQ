@@ -5,9 +5,9 @@ Collection of common utility functions
 from copy import deepcopy
 from typing import Callable, Optional
 
-from .wrappers import curry
-
 import toolz as tz
+
+from .wrappers import curry
 
 
 def call_method_impure(method_name: str, /, *args, **kwargs) -> Callable:

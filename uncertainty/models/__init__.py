@@ -1,4 +1,4 @@
-from .unet import UNet, MCDropoutUNet
 from .ensemble import DeepEnsemble
+from .unet import MCDropoutUNet, UNet
 
 __all__ = ["MCDropoutUNet", "UNet", "DeepEnsemble"]

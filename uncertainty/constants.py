@@ -4,7 +4,6 @@ Collection of global constants
 
 from typing import Final
 
-
 # SOP Class UIDs for different types of DICOM files
 # https://dicom.nema.org/dicom/2013/output/chtml/part04/sect_B.5.html
 CT_IMAGE: Final[str] = "1.2.840.10008.5.1.4.1.1.2"

@@ -1,11 +1,11 @@
 from typing import Generator
 
 from tests.context import (
-    list_files,
-    generate_full_paths,
-    resolve_path_placeholders,
     PATCH_LIST_FILES,
     PATCH_OS_WALK,
+    generate_full_paths,
+    list_files,
+    resolve_path_placeholders,
 )
 
 

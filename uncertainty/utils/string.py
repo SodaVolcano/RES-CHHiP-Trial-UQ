@@ -2,13 +2,13 @@
 String utilities for working with placeholders in strings
 """
 
-from .wrappers import curry
-
-from typing import List
 import re
+from typing import List
 
 import toolz as tz
 import toolz.curried as curried
+
+from .wrappers import curry
 
 
 @curry

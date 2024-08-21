@@ -3,10 +3,11 @@ An ensemble of models
 """
 
 from typing import Callable
+
+import torch
 from deprecated import deprecated
 from torch import nn, vmap
-import torch
-from torch.func import stack_module_state, functional_call  # type: ignore
+from torch.func import functional_call, stack_module_state  # type: ignore
 
 
 class DeepEnsemble(nn.Module):

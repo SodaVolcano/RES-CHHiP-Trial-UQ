@@ -7,22 +7,22 @@ import os
 from typing import Generator, Iterable, Optional
 
 import numpy as np
-import rt_utils
 import pydicom as dicom
+import rt_utils
 import toolz as tz
 import toolz.curried as curried
-from tqdm import tqdm
 from loguru import logger
+from tqdm import tqdm
 
-from .preprocessing import make_isotropic
-from .mask import Mask, get_organ_names
-from .patient_scan import PatientScan, save_h5
-from ..utils.common import conditional, unpack_args, apply_if_truthy
-from ..utils.path import list_files, generate_full_paths
-from ..utils.wrappers import curry
+from .. import constants as c
+from ..utils.common import apply_if_truthy, conditional, unpack_args
 from ..utils.logging import logger_wraps
 from ..utils.parallel import pmap
-from .. import constants as c
+from ..utils.path import generate_full_paths, list_files
+from ..utils.wrappers import curry
+from .mask import Mask, get_organ_names
+from .patient_scan import PatientScan, save_h5
+from .preprocessing import make_isotropic
 
 # ============ Helper functions ============
 

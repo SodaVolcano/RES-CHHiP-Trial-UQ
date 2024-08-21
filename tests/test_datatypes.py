@@ -1,6 +1,7 @@
-from .context import Mask
-import pytest
 import numpy as np
+import pytest
+
+from .context import Mask
 
 
 class TestMask:

@@ -4,15 +4,15 @@ Collection of functions to preprocess numpy arrays
 
 from typing import Iterable, Literal, Optional, Sequence, Tuple
 
-import SimpleITK as sitk
 import numpy as np
+import SimpleITK as sitk
 import toolz as tz
 from toolz import curried
 
+from .. import constants as c
+from ..utils.common import call_method, conditional
 from ..utils.logging import logger_wraps
 from ..utils.wrappers import curry
-from ..utils.common import call_method, conditional
-from .. import constants as c
 
 
 @logger_wraps()

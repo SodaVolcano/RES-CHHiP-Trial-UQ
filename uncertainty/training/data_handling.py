@@ -2,18 +2,6 @@
 Functions for hanlding dataset
 """
 
-from ..data.mask import get_organ_names, masks_as_array
-from ..data.patient_scan import PatientScan
-from ..data.preprocessing import (
-    filter_roi,
-    find_organ_roi,
-    map_interval,
-)
-from ..utils.logging import logger_wraps
-from ..utils.wrappers import curry
-from ..constants import BODY_THRESH, HU_RANGE, ORGAN_MATCHES
-from ..config import configuration, Configuration
-
 from typing import Callable, Iterable, Optional
 
 import numpy as np
@@ -22,12 +10,20 @@ import toolz.curried as curried
 import torchio as tio
 from torchio.transforms import (
     Compose,
-    RandomFlip,
     RandomAffine,
-    RandomElasticDeformation,
     RandomBlur,
+    RandomElasticDeformation,
+    RandomFlip,
     RandomGamma,
 )
+
+from ..config import Configuration, configuration
+from ..constants import BODY_THRESH, HU_RANGE, ORGAN_MATCHES
+from ..data.mask import get_organ_names, masks_as_array
+from ..data.patient_scan import PatientScan
+from ..data.preprocessing import filter_roi, find_organ_roi, map_interval
+from ..utils.logging import logger_wraps
+from ..utils.wrappers import curry
 
 
 def to_torchio_subject(volume_mask: tuple[np.ndarray, np.ndarray]) -> tio.Subject:
@@ -101,8 +97,8 @@ def preprocess_data(
             torchio_crop_or_pad,
             tz.first,
             lambda vol: np.clip(vol, *HU_RANGE),
-            map_interval(HU_RANGE, (0, 1)),
-            lambda vol: np.astype(vol, np.float32),
+            map_interval(HU_RANGE, config["intensity_range"]),
+            lambda vol: np.astype(vol, np.float16),
         )  # type: ignore
 
     def preprocess_mask(scan: PatientScan) -> Optional[np.ndarray]:
@@ -130,7 +126,7 @@ def preprocess_data(
             lambda mask: (mask, BODY_MASK),
             torchio_crop_or_pad,
             tz.first,
-            lambda mask: np.astype(mask, np.float32),
+            lambda mask: np.astype(mask, np.float16),
         )  # type: ignore
 
     return tz.juxt(preprocess_volume, preprocess_mask)(scan)

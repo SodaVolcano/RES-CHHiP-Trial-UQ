@@ -3,6 +3,7 @@ Data type Mask and functions that operate on Mask
 """
 
 from typing import NamedTuple, override
+
 import numpy as np
 
 from uncertainty.utils.wrappers import curry

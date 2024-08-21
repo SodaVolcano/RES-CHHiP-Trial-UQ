@@ -1,8 +1,8 @@
-from toolz import curried
 from unittest import mock
+
 import numpy as np
 import pydicom
-
+from toolz import curried
 
 from .context import gen_path, uncertainty
 

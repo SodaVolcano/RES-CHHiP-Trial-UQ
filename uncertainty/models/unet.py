@@ -6,14 +6,15 @@ References:
     https://github.com/milesial/Pytorch-UNet/tree/master
 """
 
+from typing import Callable, List, Optional, Tuple, override
+
+import toolz as tz
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Callable, List, Tuple
 
 from ..config import Configuration
 from ..utils.sequence import growby_accum
-import toolz as tz
 
 
 class ConvLayer(nn.Module):
@@ -301,12 +302,38 @@ class UNet(nn.Module):
 
 
 class MCDropoutUNet(UNet):
+    """
+    Wrapper around U-Net to apply dropout during evaluation
+    """
+
+    @override
+    def __init__(
+        self, config: Optional[Configuration] = None, model: Optional[nn.Module] = None
+    ):
+        """
+        Wrap an existing U-Net or create a new one using the provided configuration
+        """
+        assert (
+            config is not None or model is not None
+        ), "Either config or model must be provided"
+
+        if model is None and config is not None:
+            super().__init__(config)
+            self.model = self
+        elif model is not None:
+            self.model = model
+
+    @override
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.model(x)
+
+    @override
     def eval(self):
         def activate_dropout(module):
             if isinstance(module, nn.Dropout):
                 module.train(True)
 
         # Apply dropout during evaluation
-        super().eval()
-        self.apply(activate_dropout)
+        self.model.super().eval()
+        self.model.apply(activate_dropout)
         return self

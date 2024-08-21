@@ -2,17 +2,17 @@
 Utility functions for working with file paths
 """
 
-from .wrappers import curry
-from .common import iterate_while
-from .string import placeholder_matches
-
-from functools import reduce
 import os
 import re
+from functools import reduce
 from typing import Callable, Generator, Iterable
 
-import toolz.curried as curried
 import toolz as tz
+import toolz.curried as curried
+
+from .common import iterate_while
+from .string import placeholder_matches
+from .wrappers import curry
 
 
 @curry

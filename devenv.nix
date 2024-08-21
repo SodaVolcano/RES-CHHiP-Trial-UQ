@@ -9,7 +9,7 @@
   env.SHELL = "zsh";
 
   # https://devenv.sh/packages/
-  packages = with pkgs; [git alejandra];
+  packages = with pkgs; [git alejandra tk];
 
   # https://devenv.sh/scripts/
   scripts = {

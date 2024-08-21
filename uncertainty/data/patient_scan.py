@@ -1,15 +1,15 @@
 import os
 from typing import Generator, Iterable, List, NamedTuple, Optional
-import numpy as np
-from loguru import logger
+
 import h5py
+import numpy as np
+import toolz as tz
+from loguru import logger
+from toolz import curried
 
 from uncertainty.utils.path import generate_full_paths
 
 from .mask import Mask, get_organ_names
-
-import toolz as tz
-from toolz import curried
 
 
 class PatientScan(NamedTuple):
