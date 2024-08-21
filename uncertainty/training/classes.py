@@ -7,6 +7,10 @@ import toolz as tz
 import torch
 from torch import nn
 from torch.utils.data import DataLoader, Dataset, random_split
+from tqdm import tqdm
+from toolz import curried
+
+from uncertainty.utils.parallel import pmap
 
 from ..config import Configuration
 from ..data.patient_scan import PatientScan, from_h5_dir
@@ -191,7 +195,21 @@ class SegmentationData(lit.LightningDataModule):
         self.val_split = config["val_split"]
         self.augmentations = augmentations(p=1)
 
-        scans = list(filter(lambda x: x is not None, from_h5_dir(self.data_dir)))
+        scans = list(
+            tz.pipe(
+                self.data_dir,
+                pmap(from_h5_dir),
+                curried.filter(lambda x: x is not None),
+                tqdm,
+            )
+        )
+
+        [
+            i
+            for i in tqdm(
+                filter(lambda x: x is not None, pmap(from_h5_dir, self.data_dir))
+            )
+        ]
         self.train, self.val = random_split(
             scans, (1 - config["val_split"]) * len(scans), config["val_split"] * len(scans)  # type: ignore
         )
