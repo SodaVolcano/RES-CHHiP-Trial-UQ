@@ -23,7 +23,7 @@ def main(
     else:
         model = model_fn(config=config)
 
-    model = un.training.LitSegmentation(model, config)
+    model = un.training.LitSegmentation(model, deep_supervision=True, config=config)
     data = un.training.SegmentationData(config)
     pbar = TQDMProgressBar()
 
