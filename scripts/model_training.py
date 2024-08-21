@@ -58,7 +58,7 @@ if __name__ == "__main__":
         type=str,
         choices=["unet", "mc_dropout_unet"],
         help="Name of the model to train.",
-        required=True,
+        default="unet",
     )
     parser.add_argument(
         "--ensemble_size",

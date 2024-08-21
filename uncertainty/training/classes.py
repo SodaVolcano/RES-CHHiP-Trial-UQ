@@ -10,7 +10,7 @@ from torch.utils.data import DataLoader, Dataset, random_split
 from tqdm import tqdm
 from toolz import curried
 
-from uncertainty.utils.parallel import pmap
+from ..utils.parallel import pmap
 
 from ..config import Configuration
 from ..data.patient_scan import PatientScan, from_h5_dir
@@ -198,7 +198,7 @@ class SegmentationData(lit.LightningDataModule):
         scans = list(
             tz.pipe(
                 self.data_dir,
-                pmap(from_h5_dir),
+                from_h5_dir(parallel=True),
                 curried.filter(lambda x: x is not None),
                 tqdm,
             )

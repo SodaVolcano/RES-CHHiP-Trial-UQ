@@ -16,13 +16,13 @@ def pmap(
     iterable,
     *iterables,
     n_workers: Optional[int] = None,
-    executor: Literal["pool", "thread"] = "pool",
+    executor: Literal["process", "thread"] = "process",
 ) -> IMapIterator | Generator[Any, None, None] | Any:
     """
-    Parallel map function using Pool or Thread
+    Parallel map function using Process or Thread pool
 
-    If `executor` is `"pool"`, `n_workers` specifies the number of processes to use.
+    If `executor` is `"process"`, `n_workers` specifies the number of processes to use.
     If `executor` is `"thread"`, `n_workers` specifies the number of threads to use.
     """
-    pool = ProcessingPool if executor == "pool" else ThreadingPool
+    pool = ProcessingPool if executor == "process" else ThreadingPool
     return pool(n_workers).imap(f, iterable, *iterables)

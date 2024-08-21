@@ -7,7 +7,9 @@ import toolz as tz
 from loguru import logger
 from toolz import curried
 
-from uncertainty.utils.path import generate_full_paths
+from ..utils.parallel import pmap
+from ..utils.path import generate_full_paths
+from ..utils.wrappers import curry
 
 from .mask import Mask, get_organ_names
 
@@ -72,7 +74,10 @@ def from_h5(file_path: str) -> Optional[PatientScan]:
         return None
 
 
-def from_h5_dir(dir_path: str) -> Iterable[Optional[PatientScan]]:
+@curry
+def from_h5_dir(
+    dir_path: str, parallel: bool = False
+) -> Iterable[Optional[PatientScan]]:
     """
     Load all PatientScan objects from h5 files in dir_path
 
@@ -80,7 +85,7 @@ def from_h5_dir(dir_path: str) -> Iterable[Optional[PatientScan]]:
     """
     return tz.pipe(
         generate_full_paths(dir_path, os.listdir),
-        curried.map(from_h5),
+        pmap(from_h5) if parallel else curried.map(from_h5),
     )
 
 
