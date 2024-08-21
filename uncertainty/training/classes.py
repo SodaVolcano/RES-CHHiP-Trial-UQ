@@ -198,7 +198,7 @@ class SegmentationData(lit.LightningDataModule):
         scans = list(
             tz.pipe(
                 self.data_dir,
-                from_h5_dir(parallel=True),
+                from_h5_dir(n_parallel=5),
                 curried.filter(lambda x: x is not None),
                 tqdm,
             )

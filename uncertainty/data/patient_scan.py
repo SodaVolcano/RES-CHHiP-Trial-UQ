@@ -75,17 +75,22 @@ def from_h5(file_path: str) -> Optional[PatientScan]:
 
 
 @curry
-def from_h5_dir(
-    dir_path: str, parallel: bool = False
-) -> Iterable[Optional[PatientScan]]:
+def from_h5_dir(dir_path: str, n_parallel: int = 1) -> Iterable[Optional[PatientScan]]:
     """
     Load all PatientScan objects from h5 files in dir_path
 
     None is returned in place of an object if an error occurs
+
+    Parameters
+    ----------
+    dir_path : str
+        Path to directory containing h5 files
+    n_parallel : int
+        Number of parallel processes to use, set to 1 to disable
     """
     return tz.pipe(
         generate_full_paths(dir_path, os.listdir),
-        pmap(from_h5) if parallel else curried.map(from_h5),
+        pmap(from_h5) if n_parallel > 1 else curried.map(from_h5),
     )
 
 
