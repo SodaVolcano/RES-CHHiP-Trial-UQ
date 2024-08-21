@@ -2,11 +2,9 @@
 Load and save folders of DICOM files to h5 files.
 """
 
-import argparse
-import sys
-from typing import override
 from loguru import logger
 from context import uncertainty as un
+from __helpful_parser import HelpfulParser
 
 
 def main(
@@ -24,17 +22,6 @@ def main(
 
 if __name__ == "__main__":
     config = un.config.configuration()
-
-    class HelpfulParser(argparse.ArgumentParser):
-        """
-        Print help message when an error occurs.
-        """
-
-        @override
-        def error(self, message):
-            sys.stderr.write("error: %s\n" % message)
-            self.print_help()
-            sys.exit(2)
 
     parser = HelpfulParser(
         description="Load and save folders of DICOM files to h5 files."

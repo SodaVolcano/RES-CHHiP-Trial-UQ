@@ -1,70 +1,78 @@
-import argparse
-from typing import Callable, Literal
+from context import uncertainty as un
+from lightning.pytorch.callbacks import TQDMProgressBar, ModelCheckpoint, EarlyStopping
+from lightning import Trainer
 
-import numpy as np
-import tensorflow as tf
-import toolz as tz
-
-from uncertainty.config import configuration
-from uncertainty.data.dicom import load_patient_scans
-from uncertainty.data.patient_scan import from_h5_dir
-from uncertainty.training.data_handling import (
-    augment_data,
-    construct_augmentor,
-    preprocess_dataset,
-)
+from scripts.__helpful_parser import HelpfulParser
+from uncertainty.config import Configuration
 
 
-def main(data_path: str, datatype: Literal["dicom", "h5"]):
-    data_loader_map: dict[str, Callable] = {
-        "dicom": load_patient_scans,
-        "h5": from_h5_dir,
-    }
-    aug = construct_augmentor()
-    config = configuration()
+def name_to_model(name: str):
+    return {
+        "unet": un.models.unet.UNet,
+        "mc_dropout_unet": un.models.MCDropoutUNet,
+    }[name]
 
-    @tf.py_function(Tout=(tf.float32, tf.float32))  # type: ignore
-    def augmentation(x: np.ndarray, y: np.ndarray):
-        """Wrap in tf.numpy_function to apply augmentor to numpy arrays"""
-        return augment_data(x, y, aug)
 
-    dataset_it = tz.pipe(
-        data_path,
-        data_loader_map[datatype],
-        preprocess_dataset(config=config),
+def main(
+    config: Configuration, model_name: str, ensemble_size: int, checkpoint_path: str
+):
+    model_fn = name_to_model(model_name)
+
+    if ensemble_size > 1:
+        model = un.models.DeepEnsemble(model_fn, ensemble_size, config=config)
+    else:
+        model = model_fn(config=config)
+
+    model = un.training.LitSegmentation(model, config)
+    data = un.training.SegmentationData(config)
+    pbar = TQDMProgressBar()
+
+    checkpoint = ModelCheckpoint(
+        monitor="val/loss",
+        mode="min",
+        dirpath=f"{checkpoint_path}/model1",
+        filename="{epoch:02d}-{val/loss:.2f}",
+        auto_insert_metric_name=False,
+    )
+    early_stopping = EarlyStopping(
+        monitor="val/loss", min_delta=0.00, patience=5, verbose=False, mode="min"
     )
 
-    dataset = (
-        tf.data.Dataset.from_generator(
-            lambda: dataset_it,
-            output_signature=(
-                tf.TensorSpec(shape=(config["input_height"], config["input_width"], config["input_depth"]), dtype=tf.float32),  # type: ignore
-                tf.TensorSpec(shape=(config["input_height"], config["input_width"], config["input_depth"], config["output_channel"]), dtype=tf.float32),  # type: ignore
-            ),
-        )
-        .repeat()
-        .shuffle(
-            config["batch_size"] * 20
-        )  # buffer size should be larger than dataset size
-        .batch(config["batch_size"])
-        .map(augmentation, num_parallel_calls=tf.data.AUTOTUNE)
-        .prefetch(tf.data.AUTOTUNE)
-    )
+    trainer = Trainer(max_epochs=10, callbacks=[checkpoint, early_stopping, pbar])
+    trainer.fit(model, data)
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Load and preprocess data for training."
+    config = un.config.configuration()
+    parser = HelpfulParser(
+        description="Train a model on a dataset of DICOM files or h5 files."
     )
     parser.add_argument(
-        "data_path",
+        "--data_path",
         type=str,
-        help="Path to the folder containing folders of folders of DICOM files, or folders of h5 files.",
+        help="Path to the folder containing h5 files.",
+        default=config["staging_dir"],
     )
     parser.add_argument(
-        "--datatype",
+        "--model_name",
         type=str,
-        choices=["dicom", "h5"],
-        help='Extension of data file to load, "dicom" or "h5". Default is "dicom".',
-        default="dicom",
+        choices=["unet", "mc_dropout_unet"],
+        help="Name of the model to train.",
+        required=True,
     )
+    parser.add_argument(
+        "--ensemble_size",
+        type=int,
+        help="Number of models in the ensemble. Default is 1 (no ensemble training).",
+        default=1,
+    )
+    parser.add_argument(
+        "--checkpoint_path",
+        type=str,
+        help="Path to save model checkpoints.",
+        default=config["model_checkpoint_path"],
+    )
+    args = parser.parse_args()
+    config["staging_dir"] = args.data_path
+
+    main(config, args.model_name, args.ensemble_size, args.checkpoint_path)

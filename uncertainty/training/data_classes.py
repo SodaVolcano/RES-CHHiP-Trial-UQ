@@ -84,12 +84,14 @@ class LitSegmentation(lit.LightningModule):
 class SegmentationData(lit.LightningDataModule):
     """
     Wrapper class for PyTorch dataset to be used with PyTorch Lightning
+
+    WARNING: Only loads h5 files
     """
 
     def __init__(self, config: Configuration):
         super().__init__()
         self.config = config
-        self.data_dir = config["data_dir"]
+        self.data_dir = config["staging_dir"]
         self.batch_size = config["batch_size"]
         self.val_split = config["val_split"]
         self.augmentations = augmentations(p=1)

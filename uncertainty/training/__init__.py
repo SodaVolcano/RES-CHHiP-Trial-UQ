@@ -6,6 +6,7 @@ from .data_handling import (
     preprocess_data,
     preprocess_dataset,
 )
+from .data_classes import PatientScanDataset, LitSegmentation, SegmentationData
 
 __all__ = [
     "preprocess_data",
@@ -13,5 +14,8 @@ __all__ = [
     "augment_data",
     "augment_dataset",
     "augmentations",
+    "PatientScanDataset",
+    "LitSegmentation",
+    "SegmentationData",
     "PatientScanDataset",
 ]
