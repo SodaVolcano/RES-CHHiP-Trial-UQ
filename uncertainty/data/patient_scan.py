@@ -75,7 +75,7 @@ def from_h5(file_path: str) -> Optional[PatientScan]:
 
 
 @curry
-def from_h5_dir(dir_path: str, n_parallel: int = 1) -> Iterable[Optional[PatientScan]]:
+def from_h5_dir(dir_path: str) -> Iterable[Optional[PatientScan]]:
     """
     Load all PatientScan objects from h5 files in dir_path
 
@@ -90,7 +90,7 @@ def from_h5_dir(dir_path: str, n_parallel: int = 1) -> Iterable[Optional[Patient
     """
     return tz.pipe(
         generate_full_paths(dir_path, os.listdir),
-        pmap(from_h5, n_workers=n_parallel) if n_parallel > 1 else curried.map(from_h5),
+        curried.map(from_h5),
     )
 
 
