@@ -2,6 +2,18 @@
 Functions for hanlding dataset
 """
 
+from ..data.mask import get_organ_names, masks_as_array
+from ..data.patient_scan import PatientScan
+from ..data.preprocessing import (
+    filter_roi,
+    find_organ_roi,
+    map_interval,
+)
+from ..utils.logging import logger_wraps
+from ..utils.wrappers import curry
+from ..constants import BODY_THRESH, HU_RANGE, ORGAN_MATCHES
+from ..config import configuration, Configuration
+
 from typing import Callable, Iterable, Optional
 
 import numpy as np
@@ -10,20 +22,12 @@ import toolz.curried as curried
 import torchio as tio
 from torchio.transforms import (
     Compose,
-    RandomAffine,
-    RandomBlur,
-    RandomElasticDeformation,
     RandomFlip,
+    RandomAffine,
+    RandomElasticDeformation,
+    RandomBlur,
     RandomGamma,
 )
-
-from ..config import Configuration, configuration
-from ..constants import BODY_THRESH, HU_RANGE, ORGAN_MATCHES
-from ..data.mask import get_organ_names, masks_as_array
-from ..data.patient_scan import PatientScan
-from ..data.preprocessing import filter_roi, find_organ_roi, map_interval
-from ..utils.logging import logger_wraps
-from ..utils.wrappers import curry
 
 
 def to_torchio_subject(volume_mask: tuple[np.ndarray, np.ndarray]) -> tio.Subject:
@@ -98,7 +102,7 @@ def preprocess_data(
             tz.first,
             lambda vol: np.clip(vol, *HU_RANGE),
             map_interval(HU_RANGE, config["intensity_range"]),
-            lambda vol: np.astype(vol, np.float16),
+            lambda vol: np.astype(vol, np.float32),  # sitk can't work with float16
         )  # type: ignore
 
     def preprocess_mask(scan: PatientScan) -> Optional[np.ndarray]:
@@ -126,7 +130,7 @@ def preprocess_data(
             lambda mask: (mask, BODY_MASK),
             torchio_crop_or_pad,
             tz.first,
-            lambda mask: np.astype(mask, np.float16),
+            lambda mask: np.astype(mask, np.float32),  # sitk can't work with float16
         )  # type: ignore
 
     return tz.juxt(preprocess_volume, preprocess_mask)(scan)
@@ -184,33 +188,3 @@ def augmentations(
         ),
         from_torchio_subject,
     )
-
-
-@logger_wraps(level="INFO")
-@curry
-def augment_data(
-    image: np.ndarray, masks: np.ndarray, augmentor: Compose
-) -> tuple[np.ndarray, np.ndarray]:
-    """
-    Augment data using the provided augmentor
-    """
-    return tz.pipe(
-        # Pack in dictionary to work with augmentor
-        {
-            "image": image,
-            "mask": masks,
-        },
-        lambda x: augmentor(**x),
-        lambda x: (x["image"], x["mask"]),
-    )  # type: ignore
-
-
-@logger_wraps(level="INFO")
-@curry
-def augment_dataset(
-    dataset: Iterable[tuple[np.ndarray, np.ndarray]], augmentor: Compose
-) -> Iterable[tuple[np.ndarray, np.ndarray]]:
-    """
-    Augment data using the provided augmentor
-    """
-    return map(augment_data(augmentor=augmentor), dataset)

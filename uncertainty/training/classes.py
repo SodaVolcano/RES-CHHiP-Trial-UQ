@@ -1,6 +1,7 @@
 from typing import Callable, Optional
 
 import lightning as lit
+from torchmetrics.classification import MultilabelF1Score
 import numpy as np
 import toolz as tz
 import torch
@@ -9,7 +10,7 @@ from torch.utils.data import DataLoader, Dataset, random_split
 
 from ..config import Configuration
 from ..data.patient_scan import PatientScan, from_h5_dir
-from .data_handling import augment_dataset, augmentations, preprocess_dataset
+from .data_handling import augmentations, preprocess_dataset
 
 
 class PatientScanDataset(Dataset):
@@ -48,7 +49,11 @@ class PatientScanDataset(Dataset):
         return tz.pipe(
             self.data[index],
             self.transform,
-            lambda vol_mask: (torch.tensor(vol_mask[0]), torch.tensor(vol_mask)[1]),
+            lambda vol_mask: (
+                # float16 to reduce memory usage
+                torch.tensor(vol_mask[0], dtype=torch.float16),
+                torch.tensor(vol_mask[1], dtype=torch.float16),
+            ),
         )  # type: ignore
 
 
@@ -57,20 +62,64 @@ class LitSegmentation(lit.LightningModule):
     Wrapper class for PyTorch model to be used with PyTorch Lightning
     """
 
-    def __init__(self, model: nn.Module, config: Configuration):
+    def __init__(
+        self, model: nn.Module, config: Configuration, class_weights: list[float] = None
+    ):
+        """
+        Parameters
+        ----------
+        model : nn.Module
+            PyTorch model to be trained
+        config : Configuration
+            Configuration object
+        class_weights : list[float]
+            Weights for each class in the loss function. Default is None.
+            Weights are typically calculated using the number of pixels as
+                n_background / n_foreground
+        """
         super().__init__()
         self.model = model
         self.config = config
-        self.loss_fn = config["loss"]()
+        self.class_weights = class_weights
+        self.bce_fns = [
+            nn.BCEWithLogitsLoss(weight=torch.tensor(weight))
+            for weight in class_weights
+        ]
+        self.dice_fn = MultilabelF1Score(num_labels=config["output_channel"])
 
     def forward(self, x):
         return self.model(x)
 
+    def calc_loss(self, y_pred: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+        """
+        Compute the sum of the binary cross entropy loss and the dice loss
+        """
+        # Sums BCE loss for each class, y have shape (batch, n_classes, H, W, D)
+        bce = tz.pipe(
+            [
+                self.loss_fns[i](y_pred[:, i], y[:, i])
+                for i in range(len(self.loss_fns))
+            ],
+            sum,
+            torch.Tensor,
+        )
+        dice = self.dice_fn(y_pred, y)
+        return bce + (1 - dice)  # scale dice to match bce?
+
     def training_step(self, batch: torch.Tensor):
         x, y = batch
         y_pred = self.model(x)
-        loss = self.loss_fn(y_pred, y)
+        loss = self.calc_loss(y_pred, y)
+
         self.log("train_loss", loss)
+        return loss
+
+    def validation_step(self, batch: torch.Tensor):
+        x, y = batch
+        y_pred = self.model(x)
+        loss = self.calc_loss(y_pred, y)
+
+        self.log("val_loss", loss)
         return loss
 
     def configure_optimizers(self):  # type: ignore
@@ -102,7 +151,7 @@ class SegmentationData(lit.LightningDataModule):
         )
 
     def train_dataloader(self):
-        dataset = PatientScanDataset(list(self.train), transform=augment_dataset(augmentor=self.augmentations))  # type: ignore
+        dataset = PatientScanDataset(list(self.train), transform=self.augmentations)  # type: ignore
         return DataLoader(
             dataset, batch_size=self.batch_size, shuffle=True, num_workers=2
         )

@@ -129,7 +129,6 @@ def training_config() -> dict[str, int | str | list[int | float | str] | type]:
         "initialiser": nn.init.xavier_normal_,  # type: ignore
         "optimiser": optim.SGD,  # type: ignore
         "optimiser_kwargs": {"momentum": 0.99, "nesterov": True},
-        "loss": nn.CrossEntropyLoss,
         # Learning rate scheduler, decrease learning rate at certain epochs
         "lr_scheduler": optim.lr_scheduler.PolynomialLR,
     }

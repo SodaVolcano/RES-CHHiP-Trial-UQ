@@ -272,10 +272,12 @@ class Decoder(nn.Module):
             ),
         )
 
-    def forward(self, x: torch.Tensor, skips: List[torch.Tensor]) -> torch.Tensor:
+    def forward(
+        self, x: torch.Tensor, skips: List[torch.Tensor], logits: bool = False
+    ) -> torch.Tensor:
         for level, skip in zip(self.levels, reversed(skips)):
             x = level(x, skip)
-        return self.last_conv(x)
+        return self.last_conv(x) if not logits else x
 
 
 class UNet(nn.Module):
@@ -296,9 +298,9 @@ class UNet(nn.Module):
         self.encoder = Encoder(config)
         self.decoder = Decoder(config)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, logits: bool = False) -> torch.Tensor:
         encoded, skips = self.encoder(x)
-        return self.decoder(encoded, skips)
+        return self.decoder(encoded, skips, logits)
 
 
 class MCDropoutUNet(UNet):
@@ -324,8 +326,8 @@ class MCDropoutUNet(UNet):
             self.model = model
 
     @override
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.model(x)
+    def forward(self, x: torch.Tensor, logits: bool = False) -> torch.Tensor:
+        return self.model(x, logits)
 
     @override
     def eval(self):
