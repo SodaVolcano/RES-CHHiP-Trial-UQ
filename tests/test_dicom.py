@@ -260,7 +260,7 @@ class TestLoadPatientScan:
         )
 
         # Mocking the load_mask function to return a list of Mask objects
-        mock_mask = Mask({}, "observer1")
+        mock_mask = Mask({"a": np.ndarray((30, 30))}, "observer1")
         mocker.patch(PATCH_LOAD_MASK, return_value=mock_mask)
 
         result = load_patient_scan(gen_path())
@@ -272,6 +272,32 @@ class TestLoadPatientScan:
         assert result.volume.shape == (2, 2, 1)
         assert result.masks == {mock_mask.observer: mock_mask}
         assert get_organ_mask(result, mock_mask.observer) == mock_mask
+
+    def test_loads_patient_scan_no_masks(self, mocker):
+        # Mocking the list_files function to return a list of DICOM file paths
+        mocker.patch(
+            PATCH_LIST_FILES,
+            return_value=["file1.dcm", "file2.dcm"],
+        )
+
+        # Mocking the dicom.dcmread function to return a mock object with a PatientID attribute
+        mock_dicom = pydicom.Dataset()
+        mock_dicom.PatientID = "12345"
+        mocker.patch(PATCH_DCMREAD, return_value=mock_dicom)
+
+        # Mocking the load_volume function to return a numpy array
+        mocker.patch(
+            PATCH_LOAD_VOLUME,
+            return_value=np.moveaxis(np.array([[[1, 2], [3, 4]]]), 0, -1),
+        )
+
+        # Mocking the load_mask function to return a list of Mask objects
+        mock_mask = Mask({}, "observer1")
+        mocker.patch(PATCH_LOAD_MASK, return_value=mock_mask)
+
+        result = load_patient_scan(gen_path())
+
+        assert result is None
 
     # Directory contains no DICOM files
     def test_no_dicom_files_in_directory(self, mocker):
@@ -315,12 +341,7 @@ class TestLoadPatientScan:
         result = load_patient_scan(gen_path())
 
         # Assertions
-        assert result.patient_id == "12345"
-        assert isinstance(result.volume, np.ndarray)
-        assert result.volume.shape == (2, 2, 1)
-        assert result.masks == {}
-        assert result.mask_observers == []
-        assert result.n_masks == 0
+        assert result is None
 
     # Handles directories with hidden files correctly
     def test_handles_hidden_files_correctly(self, mocker):
@@ -342,7 +363,7 @@ class TestLoadPatientScan:
         )
 
         # Mocking the load_mask function to return a list of Mask objects
-        mock_mask = Mask({}, "observer1")
+        mock_mask = Mask({"a": np.ndarray((30, 30))}, "observer1")
         mocker.patch(PATCH_LOAD_MASK, return_value=mock_mask)
 
         # Calling the function under test

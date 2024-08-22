@@ -224,6 +224,9 @@ def load_patient_scan(
     width increases from left to right and the height increases from top to bottom.
     The depth increases from top to bottom (head to feet).
 
+    None is returned if no organ masks are found. Use load_volume and load_mask if
+    only one of the volume or mask is available.
+
     Parameters
     ----------
     dicom_path : str
@@ -250,6 +253,14 @@ def load_patient_scan(
                     empty_lst_if_none([load_mask(dicom_path, preprocess)]),
                 )
             )
+        ),
+        # Only return PatientScan if organ masks are present
+        lambda x: (
+            x
+            if x is not None
+            and x.mask_observers
+            and get_organ_names(x.masks[x.mask_observers[0]])
+            else None
         ),
     )  # type: ignore
 
