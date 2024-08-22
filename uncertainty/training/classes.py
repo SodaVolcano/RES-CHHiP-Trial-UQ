@@ -111,7 +111,7 @@ class LitSegmentation(lit.LightningModule):
         return self.model(x)
 
     def __calc_loss_deep_supervision(
-        self, y_preds: list[torch.Tensor], y: torch.Tensor
+        self, y_preds: list[torch.Tensor], ys: torch.Tensor
     ) -> torch.Tensor:
         """
         Calculate the loss for each level of the U-Net
@@ -124,13 +124,18 @@ class LitSegmentation(lit.LightningModule):
         """
         # ignore the two lowest resolution outputs and order from highest to lowest
         y_preds = y_preds[-3::-1]
-        weights = [1 / (2**i) for i in range(len(y_preds))]
+        ys = torch.tensor(
+            [nn.Upsample(size=y_pred.shape)(y) for y, y_pred in zip(ys, y_preds)]
+        )
+
+        weights = [1 / (2**i) for i in range(len(y_preds))]  # halve for each level
         # normalise weights to sum to 1
         weights = [weight / sum(weights) for weight in weights]
+
         return torch.Tensor(
             sum(
                 [
-                    weight * self.calc_loss(y_pred, y)
+                    weight * self.calc_loss(y_pred, ys)
                     for weight, y_pred in zip(weights, y_preds)
                 ]
             )
@@ -200,7 +205,7 @@ class SegmentationData(lit.LightningDataModule):
                 self.data_dir,
                 from_h5_dir,
                 curried.filter(lambda x: x is not None),
-                tqdm,
+                lambda x: tqdm(x, desc="Loading patient scans (h5 files)"),
             )
         )
 
