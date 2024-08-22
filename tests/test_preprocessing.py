@@ -6,7 +6,6 @@ from .context import uncertainty
 # Import aliases
 Mask = uncertainty.data.mask.Mask
 PatientScan = uncertainty.data.patient_scan.PatientScan
-load_patient_scan = uncertainty.data.nifti.load_patient_scan
 map_interval = uncertainty.data.preprocessing.map_interval
 make_isotropic = uncertainty.data.preprocessing.make_isotropic
 

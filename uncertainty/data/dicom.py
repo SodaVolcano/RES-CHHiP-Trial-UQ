@@ -12,16 +12,14 @@ import rt_utils
 import toolz as tz
 import toolz.curried as curried
 from loguru import logger
-from tqdm import tqdm
 
 from .. import constants as c
 from ..utils.common import apply_if_truthy, conditional, unpack_args
 from ..utils.logging import logger_wraps
-from ..utils.parallel import pmap
 from ..utils.path import generate_full_paths, list_files
 from ..utils.wrappers import curry
 from .mask import Mask, get_organ_names
-from .patient_scan import PatientScan, save_h5
+from .patient_scan import PatientScan
 from .preprocessing import make_isotropic
 
 # ============ Helper functions ============
@@ -459,62 +457,4 @@ def load_all_masks(
     return tz.pipe(
         generate_full_paths(dicom_collection_path, os.listdir),
         curried.map(load_mask(preprocess=preprocess)),
-    )
-
-
-@logger_wraps(level="INFO")
-@curry
-def save_dicom_scans_to_h5(
-    dicom_path: str, save_dir: str, preprocess=True, n_workers: Optional[int] = None
-) -> None:
-    """
-    Save PatientScans to .h5 files in save_dir from folders of DICOM files in dicom_path
-
-    Preprocessing involves interpolating the volume and masks to have isotropic spacing,
-    mapping the volume pixel values to Hounsfield units (HU), and standardising
-    the ROI names in the masks to be in snake_case. None is returned if no DICOM
-    files are found.
-
-    **Side effect**: Saves PatientScans to .h5 files in save_dir, displays progress bar
-
-    Parameters
-    ----------
-    dicom_path : str
-        Path to the directory containing folders of DICOM files
-    preprocess : bool, optional
-        Whether to preprocess the volume and mask, by default True. WARNING: will
-        take significantly longer to load if set to True
-    """
-
-    def save_dicom_scan(dicom_path):
-        try:
-            valid_scan = tz.pipe(
-                dicom_path,
-                # Load without preprocess to check for validity
-                load_patient_scan(preprocess=False),
-                lambda x: conditional(get_organ_names(x.masks[""]), x),
-            )
-
-            if valid_scan is None:
-                logger.error(
-                    f"Failed to load scan from {dicom_path}, load_patient_scan returned None"
-                )
-                return
-            if os.path.exists(os.path.join(save_dir, f"{valid_scan.patient_id}.h5")):
-                logger.warning(
-                    f"Scan {valid_scan.patient_id} already exist, skipping..."
-                )
-                return
-            save_h5(load_patient_scan(dicom_path, preprocess=preprocess), save_dir)
-        except Exception as e:
-            logger.error(f"Failed to load scan from {dicom_path}, {e}")
-
-    n_scans = len(os.listdir(dicom_path))
-    mapper = (
-        pmap(n_workers=n_workers) if n_workers is not None and n_workers > 1 else map
-    )
-    tz.pipe(
-        dicom_path,
-        generate_full_paths(path_generator=os.listdir),
-        lambda x: [i for i in tqdm(mapper(save_dicom_scan, x), total=n_scans)],
     )

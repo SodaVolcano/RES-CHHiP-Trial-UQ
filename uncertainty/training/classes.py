@@ -13,8 +13,10 @@ from toolz import curried
 from ..utils.parallel import pmap
 
 from ..config import Configuration
-from ..data.patient_scan import PatientScan, from_h5_dir
-from .data_handling import augmentations, preprocess_dataset
+from ..data.patient_scan import PatientScan
+from ..data.h5 import load_scan_from_h5, load_scans_from_h5
+from .augmentations import augmentations
+from ..data.preprocessing import preprocess_dataset
 
 
 class PatientScanDataset(Dataset):
@@ -203,18 +205,12 @@ class SegmentationData(lit.LightningDataModule):
         scans = list(
             tz.pipe(
                 self.data_dir,
-                from_h5_dir,
+                load_scans_from_h5,
                 curried.filter(lambda x: x is not None),
                 lambda x: tqdm(x, desc="Loading patient scans (h5 files)"),
             )
         )
 
-        [
-            i
-            for i in tqdm(
-                filter(lambda x: x is not None, pmap(from_h5_dir, self.data_dir))
-            )
-        ]
         self.train, self.val = random_split(
             scans, (1 - config["val_split"]) * len(scans), config["val_split"] * len(scans)  # type: ignore
         )

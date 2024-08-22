@@ -1,5 +1,5 @@
 """
-Load and save folders of DICOM files to h5 files.
+Load and save folders of DICOM files to h5 file(s).
 """
 
 from loguru import logger
@@ -15,9 +15,13 @@ def main(
         logger.enable("uncertainty")
         un.utils.logging.config_logger()
 
-    un.data.dicom.save_dicom_scans_to_h5(
-        dicom_path, save_path, n_workers=n_workers, preprocess=preprocess
-    )
+    scans = un.data.dicom.load_patient_scans(dicom_path, preprocess=preprocess)
+    if preprocess:
+        un.data.preprocessing.preprocess_dataset(scans, n_workers=n_workers)
+        un.data.h5.save_xy_to_h5(scans, save_path)
+        return
+
+    un.data.h5.save_scan_to_h5(scans, save_path)
 
 
 if __name__ == "__main__":
@@ -41,7 +45,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--preprocess",
         action="store_true",
-        help="Whether to preprocess the volume and the masks (convert to the HU scale and make them isotropic). Will take significant resources. Default is True.",
+        help="Whether to preprocess the volume and the masks. Will take significant resources. If True, a single h5 file containing (volume, mask) pairs is produced. If False, multiple h5 files for each raw PatientScan object is produced. Default is True.",
         default=True,
     )
     parser.add_argument(

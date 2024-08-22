@@ -1,3 +1,3 @@
-from . import dicom, mask, nifti, patient_scan, preprocessing
+from . import dicom, mask, patient_scan, preprocessing, h5
 
-__all__ = ["dicom", "nifti", "preprocessing", "mask", "patient_scan"]
+__all__ = ["dicom", "preprocessing", "mask", "patient_scan", "h5"]

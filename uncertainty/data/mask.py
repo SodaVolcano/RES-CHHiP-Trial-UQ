@@ -15,7 +15,7 @@ class Mask(NamedTuple):
     organs: dict[str, np.ndarray]
     observer: str = ""
 
-    def __getitem__(self, idx: str) -> np.ndarray:
+    def __getitem__(self, idx: str) -> np.ndarray:  # type: ignore
         """
         Return mask array for given organ
 

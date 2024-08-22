@@ -29,7 +29,6 @@ PATCH_GENERATE_FULL_PATHS = "uncertainty.data.dicom.generate_full_paths"
 PATCH_LOAD_PATIENT_SCAN = "uncertainty.data.dicom.load_patient_scan"
 PATCH_LISTDIR = "os.listdir"
 PATCH_GET_DICOM_SLICES = "uncertainty.data.dicom._get_dicom_slices"
-PATCH_PMAP = "uncertainty.data.dicom.pmap"
 
 
 class TestLoadVolume:
@@ -55,9 +54,7 @@ class TestLoadVolume:
         mock_dicom.RescaleIntercept = 0.0
         mocker.patch(PATCH_DCMREAD, return_value=mock_dicom)
 
-        with mock.patch(PATCH_PMAP, curried.map):
-            # Call the load_volume function
-            volume = load_volume(gen_path())
+        volume = load_volume(gen_path())
 
         # Assert the volume shape is as expected
         assert volume.shape == (512 // 2, 412 // 2, 8)
@@ -84,9 +81,8 @@ class TestLoadVolume:
         mock_dicom.RescaleIntercept = 0.0
         mocker.patch(PATCH_DCMREAD, return_value=mock_dicom)
 
-        with mock.patch(PATCH_PMAP, curried.map):
-            # Call the load_volume function
-            volume = load_volume(gen_path(), preprocess=False)
+        # Call the load_volume function
+        volume = load_volume(gen_path(), preprocess=False)
 
         # Assert the volume shape is as expected
         assert volume.shape == (512, 412, 4)
@@ -176,8 +172,7 @@ class TestLoadMask:
             return_value=mock_rt_struct,
         )
 
-        with mock.patch(PATCH_PMAP, curried.map):
-            mask = load_mask(dicom_path)
+        mask = load_mask(dicom_path)
 
         assert isinstance(mask, Mask)
         assert "organ_1" in get_organ_names(mask)
@@ -268,9 +263,7 @@ class TestLoadPatientScan:
         mock_mask = Mask({}, "observer1")
         mocker.patch(PATCH_LOAD_MASK, return_value=mock_mask)
 
-        with mock.patch(PATCH_PMAP, curried.map):
-            # Calling the function under test
-            result = load_patient_scan(gen_path())
+        result = load_patient_scan(gen_path())
 
         # Assertions
         assert result.patient_id == "12345"
@@ -318,13 +311,8 @@ class TestLoadPatientScan:
             return_value=np.moveaxis(np.array([[[1, 2], [3, 4]]]), 0, -1),
         )
 
-        with mock.patch(PATCH_PMAP, curried.map):
-            # Mocking the load_mask function to return None since no RT struct data is found
-            mocker.patch(PATCH_LOAD_MASK, return_value=None)
-
-        with mock.patch(PATCH_PMAP, curried.map):
-            # Calling the function under test
-            result = load_patient_scan(gen_path())
+        mocker.patch(PATCH_LOAD_MASK, return_value=None)
+        result = load_patient_scan(gen_path())
 
         # Assertions
         assert result.patient_id == "12345"
@@ -357,9 +345,8 @@ class TestLoadPatientScan:
         mock_mask = Mask({}, "observer1")
         mocker.patch(PATCH_LOAD_MASK, return_value=mock_mask)
 
-        with mock.patch(PATCH_PMAP, curried.map):
-            # Calling the function under test
-            result = load_patient_scan(gen_path())
+        # Calling the function under test
+        result = load_patient_scan(gen_path())
 
         # Assertions
         assert result.patient_id == "12345"
@@ -402,9 +389,8 @@ class TestLoadPatientScans:
         # Mocking the load_mask function to return None since no RT struct data is found
         mocker.patch(PATCH_LOAD_MASK, return_value=mock_mask)
 
-        with mock.patch(PATCH_PMAP, curried.map):
-            # Call the function under test
-            result = list(load_patient_scans(gen_path()))
+        # Call the function under test
+        result = list(load_patient_scans(gen_path()))
 
         # Assertions
         assert len(result) == 2
@@ -470,8 +456,7 @@ class TestLoadAllMasks:
         )
         mocker.patch(PATCH_GET_DICOM_SLICES, return_value=[mock_dicom, mock_dicom])
 
-        with mock.patch(PATCH_PMAP, curried.map):
-            result = list(load_all_masks(dicom_collection_path))
+        result = list(load_all_masks(dicom_collection_path))
 
         from uncertainty.data.preprocessing import make_isotropic
 
