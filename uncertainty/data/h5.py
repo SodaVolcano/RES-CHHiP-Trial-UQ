@@ -19,15 +19,25 @@ from ..utils.wrappers import curry
 
 @logger_wraps(level="INFO")
 @curry
-def save_xy_to_h5(dataset: Iterable[tuple[np.ndarray, np.ndarray]], path: str):
+def save_xy_to_h5(
+    dataset: Iterable[tuple[np.ndarray, np.ndarray]],
+    path: str,
+    name: str = "dataset.h5",
+) -> None:
     """
     Save a list of instance-label (volume, mask) pairs to an h5 file
 
     Each tuple is given a numerical key as a string in the h5 file.
     """
-    with h5.File(path, "w") as hf:
+
+    def create_datasets(x: np.ndarray, y: np.ndarray, idx: int, hf: h5.File) -> None:
+        group = hf.create_group(f"{idx}")
+        group.create_dataset("x", data=x, compression="gzip")
+        group.create_dataset("y", data=y, compression="gzip")
+
+    with h5.File(os.path.join(path, name), "w") as hf:
         [
-            hf.create_dataset(f"{i}", data=tup, compression="gzip")
+            create_datasets(tup[0], tup[1], i, hf)
             for i, tup in tqdm(enumerate(dataset), desc="Saving to H5")
         ]
 

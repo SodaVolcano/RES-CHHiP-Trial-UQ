@@ -10,19 +10,18 @@ from torch.utils.data import DataLoader, Dataset, random_split
 from tqdm import tqdm
 from toolz import curried
 
-from ..utils.parallel import pmap
 
 from ..config import Configuration
 from ..data.patient_scan import PatientScan
-from ..data.h5 import load_scan_from_h5, load_scans_from_h5
+from ..data.h5 import load_scans_from_h5
 from .augmentations import augmentations
-from ..data.preprocessing import preprocess_dataset
+from ..data.preprocessing import _preprocess_data_configurable, preprocess_dataset
 
 
-class PatientScanDataset(Dataset):
+class VolumeMaskDataset(Dataset):
     def __init__(
         self,
-        patient_scans: list["PatientScan"],
+        vol_masks: list[tuple[np.ndarray, np.ndarray]],
         transform: Optional[
             Callable[[tuple[np.ndarray, np.ndarray]], tuple[np.ndarray, np.ndarray]]
         ] = tz.identity,
@@ -30,21 +29,17 @@ class PatientScanDataset(Dataset):
         """
         Parameters
         ----------
-        patient_scans : list[PatientScan]
-            List of PatientScan objects to be converted to
-            (volume, masks) pairs. The volume and masks will have shape
-            (H, W, D, C) where C is the number of channels which
-            PatientScanDataset will convert to (C, H, W, D).
+        vol_masks : list[tuple[np.ndarray, np.ndarray]]
+            List of (volume, masks) pairs The volume and masks must
+            have shape (C, H, W, D) where C is the number of channels .
         transform : Optional[Callable]
             A function that take in a (volume, masks) pair and returns a new
-            (volume, masks) pair. Default is the identity function.
-        buffer_size : int
-            Size of the buffer used by the Shuffler to randomly shuffle the dataset.
-            Set to 1 to disable shuffling.
+            (volume, masks) pair. Default is the identity function. Intended
+            for data augmentation.
         """
         super().__init__()
-        self.data: list[tuple[np.ndarray, np.ndarray]] = preprocess_dataset(
-            patient_scans
+        self.data: list[tuple[np.ndarray, np.ndarray]] = list(
+            map(_preprocess_data_configurable, vol_masks)
         )
         self.transform = transform
 
@@ -55,11 +50,6 @@ class PatientScanDataset(Dataset):
         return tz.pipe(
             self.data[index],
             self.transform,
-            lambda vol_mask: (
-                # float16 to reduce memory usage
-                torch.tensor(vol_mask[0], dtype=torch.float16),
-                torch.tensor(vol_mask[1], dtype=torch.float16),
-            ),
         )  # type: ignore
 
 

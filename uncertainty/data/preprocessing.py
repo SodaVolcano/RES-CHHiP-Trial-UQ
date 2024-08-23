@@ -189,47 +189,21 @@ def find_organ_roi(organ: str, roi_lst: list[str]) -> Optional[str]:
 @logger_wraps(level="INFO")
 @curry
 def preprocess_data(
-    scan: PatientScan, config: Configuration = configuration()
+    scan: PatientScan,
 ) -> tuple[np.ndarray, Optional[np.ndarray]]:
     """
     Preprocess a PatientScan object into (volume, masks) pairs of shape (C, H, W, D)
 
-    Mask for multiple organs are stacked along the first dimension to have
-    shape (organ, height, width, depth). Mask is `None` if not all organs are present.
+    Mask for multiple organs are stacked along the first dimension to have shape
+    (organ, height, width, depth). Mask is `None` if not all organs are present.
     """
-    # Centre image using body mask and to (channel, height, width, depth)
-    BODY_MASK = np.expand_dims(scan.volume > BODY_THRESH, axis=0)
-
-    def torchio_crop_or_pad(
-        volume_mask: tuple[np.ndarray, np.ndarray]
-    ) -> tuple[np.ndarray, np.ndarray]:
-        return tz.pipe(
-            volume_mask,
-            to_torchio_subject,
-            tio.CropOrPad(
-                (
-                    config["input_height"],
-                    config["input_width"],
-                    config["input_depth"],
-                ),
-                padding_mode=np.min(volume_mask[0]),
-                mask_name="mask",
-            ),
-            from_torchio_subject,
-            lambda x: (x[0].numpy(), x[1].numpy()),
-        )
 
     def preprocess_volume(scan: PatientScan) -> np.ndarray:
         return tz.pipe(
             scan.volume,
-            lambda vol: np.expand_dims(
+            lambda vol: np.expand_dims(  # to (channel, height, width, depth)
                 vol, axis=0
-            ),  # to (channel, height, width, depth)
-            lambda vol: (vol, BODY_MASK),
-            torchio_crop_or_pad,
-            tz.first,
-            lambda vol: np.clip(vol, *HU_RANGE),
-            map_interval(HU_RANGE, config["intensity_range"]),
+            ),
             lambda vol: np.astype(vol, np.float32),  # sitk can't work with float16
         )  # type: ignore
 
@@ -255,13 +229,60 @@ def preprocess_data(
             scan.masks[""],
             masks_as_array(organ_ordering=names),
             lambda arr: np.moveaxis(arr, -1, 0),  # to (organ, height, width, depth)
-            lambda mask: (mask, BODY_MASK),
-            torchio_crop_or_pad,
-            tz.first,
             lambda mask: np.astype(mask, np.float32),  # sitk can't work with float16
         )  # type: ignore
 
     return tz.juxt(preprocess_volume, preprocess_mask)(scan)
+
+
+@logger_wraps(level="INFO")
+def _preprocess_data_configurable(
+    volume_mask: tuple[np.ndarray, np.ndarray], config: Configuration = configuration()
+):
+    """
+    Preprocess data according to the configuration
+
+    Used by DataLoaders to preprocess data during training, not meant to be called
+    directly.
+    """
+    # Centre image using body mask and to (channel, height, width, depth)
+    BODY_MASK = volume_mask[0] > BODY_THRESH
+
+    def torchio_crop_or_pad(
+        arr_target: tuple[np.ndarray, np.ndarray]
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """crop/pad array centered using the target mask"""
+        return tz.pipe(
+            arr_target,
+            to_torchio_subject,
+            tio.CropOrPad(
+                (
+                    config["input_height"],
+                    config["input_width"],
+                    config["input_depth"],
+                ),
+                padding_mode=np.min(arr_target[0]),
+                mask_name="mask",
+            ),
+            from_torchio_subject,
+            lambda x: (x[0].numpy(), x[1].numpy()),
+        )
+
+    def scale_intensity(vol: np.ndarray) -> np.ndarray:
+        return tz.pipe(
+            vol,
+            lambda vol: np.clip(vol, *HU_RANGE),
+            map_interval(HU_RANGE, config["intensity_range"]),
+        )
+
+    return tz.pipe(
+        volume_mask,
+        curried.map(lambda arr: (arr, BODY_MASK)),
+        curried.map(torchio_crop_or_pad),
+        curried.map(tz.first),
+        lambda vol_mask: (scale_intensity(vol_mask[0]), vol_mask[1]),
+        tuple,
+    )
 
 
 @logger_wraps(level="INFO")
