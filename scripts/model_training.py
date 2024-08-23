@@ -1,8 +1,10 @@
 from context import uncertainty as un
 from lightning.pytorch.callbacks import TQDMProgressBar, ModelCheckpoint, EarlyStopping
 from lightning import Trainer
+import os
 
 from scripts.__helpful_parser import HelpfulParser
+from tests.test_unet import UNet
 from uncertainty.config import Configuration
 
 
@@ -13,17 +15,15 @@ def name_to_model(name: str):
     }[name]
 
 
-def main(
-    config: Configuration, model_name: str, ensemble_size: int, checkpoint_path: str
-):
-    model_fn = name_to_model(model_name)
-
+def main(config: Configuration, ensemble_size: int, checkpoint_path: str):
     if ensemble_size > 1:
-        model = un.models.DeepEnsemble(model_fn, ensemble_size, config=config)
+        model = un.models.DeepEnsemble(
+            lambda x: UNet(x, deep_supervision=True), ensemble_size, config=config
+        )
     else:
-        model = model_fn(config=config)
+        model = UNet(config=config, deep_supervision=True)
 
-    model = un.training.LitSegmentation(model, deep_supervision=True, config=config)
+    model = un.training.LitSegmentation(model, config=config)
     data = un.training.SegmentationData(config)
     pbar = TQDMProgressBar()
 
@@ -50,15 +50,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--data_path",
         type=str,
-        help="Path to the folder containing h5 files.",
-        default=config["staging_dir"],
-    )
-    parser.add_argument(
-        "--model_name",
-        type=str,
-        choices=["unet", "mc_dropout_unet"],
-        help="Name of the model to train.",
-        default="unet",
+        help="Path to the dataset.h5 file containing list of (x, y) pairs.",
+        default=os.path.join(config["staging_dir"], config["staging_fname"]),
     )
     parser.add_argument(
         "--ensemble_size",
@@ -73,6 +66,7 @@ if __name__ == "__main__":
         default=config["model_checkpoint_path"],
     )
     args = parser.parse_args()
-    config["staging_dir"] = args.data_path
+    config["staging_dir"] = os.path.dirname(args.data_path)
+    config["staging_fname"] = os.path.basename(args.data_path)
 
-    main(config, args.model_name, args.ensemble_size, args.checkpoint_path)
+    main(config, args.ensemble_size, args.checkpoint_path)
