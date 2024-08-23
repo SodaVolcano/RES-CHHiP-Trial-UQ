@@ -1,3 +1,4 @@
+import os
 from typing import Callable, Optional
 
 import lightning as lit
@@ -7,50 +8,104 @@ import toolz as tz
 import torch
 from torch import nn
 from torch.utils.data import DataLoader, Dataset, random_split
-from tqdm import tqdm
 from toolz import curried
+import h5py as h5
 
-
-from ..config import Configuration
-from ..data.patient_scan import PatientScan
-from ..data.h5 import load_scans_from_h5
+from ..config import Configuration, configuration
 from .augmentations import augmentations
-from ..data.preprocessing import _preprocess_data_configurable, preprocess_dataset
+from ..data.preprocessing import _preprocess_data_configurable
 
 
-class VolumeMaskDataset(Dataset):
+class H5Dataset(Dataset):
+    """
+    PyTorch Dataset for loading (x, y) pairs from an H5 file.
+
+    Parameters
+    ----------
+    h5_file_path : str
+        Path to the H5 file containing the dataset.
+    transform : Callable[[tuple[np.ndarray, np.ndarray]], tuple[np.ndarray, np.ndarray]]
+        Function to apply to the (x, y) pair. Default is the identity function.
+        Intended to be used for data augmentation.
+    indices : Optional[list[int]]
+        List of indices to load from the H5 file. Default is None, which loads
+        all the data.
+
+    Attributes
+    ----------
+    h5_file_path : str
+        The file path of the H5 file.
+
+    h5_file : h5py.File
+        The opened H5 file object.
+
+    keys : list of str
+        List of keys corresponding to the dataset entries in the H5 file.
+    """
+
     def __init__(
         self,
-        vol_masks: list[tuple[np.ndarray, np.ndarray]],
-        transform: Optional[
-            Callable[[tuple[np.ndarray, np.ndarray]], tuple[np.ndarray, np.ndarray]]
+        h5_file_path: str,
+        config: Configuration = configuration(),
+        transform: Callable[
+            [tuple[np.ndarray, np.ndarray]], tuple[np.ndarray, np.ndarray]
         ] = tz.identity,
+        indices: Optional[list[int]] = None,
     ):
-        """
-        Parameters
-        ----------
-        vol_masks : list[tuple[np.ndarray, np.ndarray]]
-            List of (volume, masks) pairs The volume and masks must
-            have shape (C, H, W, D) where C is the number of channels .
-        transform : Optional[Callable]
-            A function that take in a (volume, masks) pair and returns a new
-            (volume, masks) pair. Default is the identity function. Intended
-            for data augmentation.
-        """
-        super().__init__()
-        self.data: list[tuple[np.ndarray, np.ndarray]] = list(
-            map(_preprocess_data_configurable, vol_masks)
-        )
+        self.h5_file_path = h5_file_path
+        self.h5_file = h5.File(self.h5_file_path, "r")
         self.transform = transform
+        self.keys = list(self.h5_file.keys())
+        self.config = config
+        if indices is not None:
+            self.keys = [self.keys[i] for i in indices]
 
-    def __len__(self):
-        return len(self.data)
+    def __len__(self) -> int:
+        return len(self.keys)
 
-    def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor]:
+    def __getitem__(self, index: int):
         return tz.pipe(
-            self.data[index],
+            self.h5_file[self.keys[index]],
+            lambda group: (group["x"][:], group["y"][:]),
+            _preprocess_data_configurable(config=self.config),
             self.transform,
-        )  # type: ignore
+            curried.map(torch.tensor),
+            tuple,
+        )
+
+    def __del__(self):
+        self.h5_file.close()
+
+
+class SegmentationData(lit.LightningDataModule):
+    """
+    Wrapper class for PyTorch dataset to be used with PyTorch Lightning
+    """
+
+    def __init__(self, config: Configuration):
+        super().__init__()
+        self.config = config
+        self.fname = os.path.join(config["staging_dir"], config["staging_fname"])
+        self.batch_size = config["batch_size"]
+        self.val_split = config["val_split"]
+        self.augmentations = augmentations(p=1)
+
+        dataset = H5Dataset(self.fname, transform=_preprocess_data_configurable(config))
+
+        self.train, self.val = random_split(
+            dataset, [1 - round(config["val_split"]), config["val_split"]]
+        )
+
+    def train_dataloader(self):
+        return DataLoader(
+            self.train, batch_size=self.batch_size, shuffle=True, num_workers=2
+        )
+
+    def val_dataloader(self):
+        return DataLoader(self.val, batch_size=len(self.val), num_workers=2)
+
+    def test_dataloader(self):
+        pass
 
 
 class LitSegmentation(lit.LightningModule):
@@ -175,46 +230,3 @@ class LitSegmentation(lit.LightningModule):
         )
         lr_scheduler = self.config["lr_scheduler"](self.optimizer)
         return {"optimizer": optimiser, "lr_scheduler": lr_scheduler}
-
-
-class SegmentationData(lit.LightningDataModule):
-    """
-    Wrapper class for PyTorch dataset to be used with PyTorch Lightning
-
-    WARNING: Only loads h5 files
-    """
-
-    def __init__(self, config: Configuration):
-        super().__init__()
-        self.config = config
-        self.data_dir = config["staging_dir"]
-        self.batch_size = config["batch_size"]
-        self.val_split = config["val_split"]
-        self.augmentations = augmentations(p=1)
-
-        scans = list(
-            tz.pipe(
-                self.data_dir,
-                load_scans_from_h5,
-                curried.filter(lambda x: x is not None),
-                lambda x: tqdm(x, desc="Loading patient scans (h5 files)"),
-            )
-        )
-
-        self.train, self.val = random_split(
-            scans, (1 - config["val_split"]) * len(scans), config["val_split"] * len(scans)  # type: ignore
-        )
-
-    def train_dataloader(self):
-        dataset = PatientScanDataset(list(self.train), transform=self.augmentations)  # type: ignore
-        return DataLoader(
-            dataset, batch_size=self.batch_size, shuffle=True, num_workers=2
-        )
-
-    def val_dataloader(self):
-        val = list(self.val)  # type: ignore
-        dataset = PatientScanDataset(val)
-        return DataLoader(dataset, batch_size=len(val), num_workers=2)
-
-    def test_dataloader(self):
-        pass

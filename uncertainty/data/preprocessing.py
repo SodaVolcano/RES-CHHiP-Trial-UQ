@@ -236,6 +236,7 @@ def preprocess_data(
 
 
 @logger_wraps(level="INFO")
+@curry
 def _preprocess_data_configurable(
     volume_mask: tuple[np.ndarray, np.ndarray], config: Configuration = configuration()
 ):
@@ -280,8 +281,8 @@ def _preprocess_data_configurable(
         curried.map(lambda arr: (arr, BODY_MASK)),
         curried.map(torchio_crop_or_pad),
         curried.map(tz.first),
-        lambda vol_mask: (scale_intensity(vol_mask[0]), vol_mask[1]),
         tuple,
+        lambda vol_mask: (scale_intensity(vol_mask[0]), vol_mask[1]),
     )
 
 
@@ -289,7 +290,6 @@ def _preprocess_data_configurable(
 @curry
 def preprocess_dataset(
     dataset: Iterable[PatientScan | None],
-    config: Configuration = configuration(),
     n_workers: int = 1,
 ) -> Iterable[tuple[np.ndarray, np.ndarray]]:
     """
@@ -312,6 +312,6 @@ def preprocess_dataset(
     return tz.pipe(
         dataset,
         curried.filter(lambda x: x is not None),
-        mapper(preprocess_data(config=config)),
+        mapper(preprocess_data),
         curried.filter(lambda x: x[1] is not None),
     )  # type: ignore

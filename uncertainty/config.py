@@ -9,6 +9,7 @@ Configuration = TypedDict(
     {
         "data_dir": str,
         "staging_dir": str,
+        "staging_fname": str,
         "input_height": int,
         "input_width": int,
         "input_depth": int,
@@ -61,6 +62,7 @@ def data_config(n_levels: int) -> dict[str, int | str | float | tuple[int, int]]
         "data_dir": "/run/media/tin/Expansion/honours/dataset/originals/CHHiP/",
         # Directory to store h5 files (processed data)
         "staging_dir": "/run/media/tin/Expansion/honours/dataset/originals/CHHiP_patientScans/",
+        "staging_fname": "dataset.h5",
         # Data are formatted as (height, width, depth, dimension)
         "input_height": (2**n_levels) * 12,
         "input_width": (2**n_levels) * 15,

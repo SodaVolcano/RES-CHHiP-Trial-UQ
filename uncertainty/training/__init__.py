@@ -1,11 +1,11 @@
 from .augmentations import (
     augmentations,
 )
-from .classes import VolumeMaskDataset, LitSegmentation, SegmentationData
+from .classes import H5Dataset, LitSegmentation, SegmentationData
 
 __all__ = [
     "augmentations",
     "LitSegmentation",
     "SegmentationData",
-    "VolumeMaskDataset",
+    "H5Dataset",
 ]
