@@ -16,7 +16,7 @@ class DeepEnsemble(nn.Module):
 
     def __init__(
         self,
-        model: Callable[..., nn.Module] | list[type[nn.Module]],
+        model: Callable[..., nn.Module] | list[nn.Module],
         ensemble_size: int,
         *args,
         **kwargs,

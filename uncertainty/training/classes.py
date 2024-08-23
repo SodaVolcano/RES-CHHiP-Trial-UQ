@@ -66,10 +66,10 @@ class H5Dataset(Dataset):
     def __getitem__(self, index: int):
         return tz.pipe(
             self.h5_file[self.keys[index]],
-            lambda group: (group["x"][:], group["y"][:]),
+            lambda group: (group["x"], group["y"]),
             _preprocess_data_configurable(config=self.config),
             self.transform,
-            curried.map(torch.tensor),
+            curried.map(lambda x: torch.tensor(x, dtype=torch.float32)),
             tuple,
         )
 
