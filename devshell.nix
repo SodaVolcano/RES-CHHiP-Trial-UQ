@@ -6,7 +6,7 @@
 }:
 pkgs.mkShell {
   # nativeBuildInputs is usually what you want -- tools you need to run
-  propagatedBuildInputs = [
+  propagatedBuildInputs = with pkgs; [
     stdenv.cc.cc.lib
   ];
   postShellHook = ''
