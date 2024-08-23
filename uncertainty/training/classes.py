@@ -60,7 +60,8 @@ class H5Dataset(Dataset):
     def __getitem__(self, index: int):
         return tz.pipe(
             self.h5_file[self.keys[index]],
-            lambda group: (group["x"], group["y"]),
+            # [:] change data from dataset to numpy array
+            lambda group: (group["x"][:], group["y"][:]),
             _preprocess_data_configurable(config=self.config),
             self.transform,
             curried.map(lambda x: torch.tensor(x, dtype=torch.float32)),
@@ -87,7 +88,7 @@ class SegmentationData(lit.LightningDataModule):
         dataset = H5Dataset(self.fname, transform=augmentations(p=1))
 
         self.train, self.val = random_split(
-            dataset, [1 - round(config["val_split"]), config["val_split"]]
+            dataset, [1 - config["val_split"], config["val_split"]]
         )
 
     def train_dataloader(self):
@@ -221,5 +222,5 @@ class LitSegmentation(lit.LightningModule):
         optimiser = self.config["optimiser"](
             self.model.parameters(), **self.config["optimiser_kwargs"]
         )
-        lr_scheduler = self.config["lr_scheduler"](self.optimizer)
+        lr_scheduler = self.config["lr_scheduler"](optimiser)  # type: ignore
         return {"optimizer": optimiser, "lr_scheduler": lr_scheduler}
