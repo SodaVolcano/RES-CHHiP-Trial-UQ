@@ -27,9 +27,6 @@ class H5Dataset(Dataset):
     transform : Callable[[tuple[np.ndarray, np.ndarray]], tuple[np.ndarray, np.ndarray]]
         Function to apply to the (x, y) pair. Default is the identity function.
         Intended to be used for data augmentation.
-    indices : Optional[list[int]]
-        List of indices to load from the H5 file. Default is None, which loads
-        all the data.
 
     Attributes
     ----------
@@ -50,15 +47,12 @@ class H5Dataset(Dataset):
         transform: Callable[
             [tuple[np.ndarray, np.ndarray]], tuple[np.ndarray, np.ndarray]
         ] = tz.identity,
-        indices: Optional[list[int]] = None,
     ):
         self.h5_file_path = h5_file_path
         self.h5_file = h5.File(self.h5_file_path, "r")
         self.transform = transform
         self.keys = list(self.h5_file.keys())
         self.config = config
-        if indices is not None:
-            self.keys = [self.keys[i] for i in indices]
 
     def __len__(self) -> int:
         return len(self.keys)
@@ -90,7 +84,7 @@ class SegmentationData(lit.LightningDataModule):
         self.val_split = config["val_split"]
         self.augmentations = augmentations(p=1)
 
-        dataset = H5Dataset(self.fname, transform=_preprocess_data_configurable(config))
+        dataset = H5Dataset(self.fname, transform=augmentations(p=1))
 
         self.train, self.val = random_split(
             dataset, [1 - round(config["val_split"]), config["val_split"]]
