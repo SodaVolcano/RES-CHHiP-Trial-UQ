@@ -10,7 +10,7 @@ pkgs.mkShell {
     stdenv.cc.cc.lib
   ];
   postShellHook = ''
-  unset LD_LIBRARY_PATH
+    unset LD_LIBRARY_PATH
   '';
   preferLocalBuild = true;
   nativeBuildInputs = with pkgs.buildPackages; [

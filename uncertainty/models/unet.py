@@ -19,7 +19,29 @@ from ..utils.sequence import growby_accum
 
 class ConvLayer(nn.Module):
     """
-    Single convolution layer: Conv3D -> [BN] -> Activation -> Dropout
+    Convolution layer: Conv3D -> [BN] -> Activation -> Dropout
+
+    Parameters
+    ----------
+    in_channels : int
+        Number of input channels
+    out_channels : int
+        Number of output channels
+    kernel_size : int
+        Kernel size for convolution
+    use_batch_norm : bool
+        Whether to use batch normalisation
+    activation : Callable[..., nn.Module]
+        Function returning an activation module, e.g. `nn.ReLU`
+    dropout_rate : float
+        Dropout rate
+    bn_epsilon : float
+        Epsilon for batch normalisation, small constant added to the variance
+        to avoid division by zero
+    bn_momentum : float
+        Momentum for batch normalisation, controls update rate of running
+        mean and variance during inference. Mean and variance are used to
+        normalise inputs during inference.
     """
 
     def __init__(
@@ -33,31 +55,6 @@ class ConvLayer(nn.Module):
         bn_epsilon: float,
         bn_momentum: float,
     ):
-        """
-        Convolution layer: Conv3D -> [BN] -> Activation -> Dropout
-
-        Parameters
-        ----------
-        in_channels : int
-            Number of input channels
-        out_channels : int
-            Number of output channels
-        kernel_size : int
-            Kernel size for convolution
-        use_batch_norm : bool
-            Whether to use batch normalisation
-        activation : Callable[..., nn.Module]
-            Function returning an activation module, e.g. `nn.ReLU`
-        dropout_rate : float
-            Dropout rate
-        bn_epsilon : float
-            Epsilon for batch normalisation, small constant added to the variance
-            to avoid division by zero
-        bn_momentum : float
-            Momentum for batch normalisation, controls update rate of running
-            mean and variance during inference. Mean and variance are used to
-            normalise inputs during inference.
-        """
         super().__init__()
 
         self.layers = nn.Sequential(
@@ -132,18 +129,15 @@ class ConvBlock(nn.Module):
 
 class DownConvBlock(nn.Module):
     """
-    A downconvolution block, downsample -> conv block
+    A single down convolution block, downsample -> conv block
+
+    Parameters
+    ----------
+    level : int
+        Level in the U-Net (0-indexed)
     """
 
     def __init__(self, level: int, config: Configuration):
-        """
-        A single down convolution block, downsample -> conv block
-
-        Parameters
-        ----------
-        level : int
-            Level in the U-Net (0-indexed)
-        """
         super().__init__()
         self.layer = nn.Sequential(
             nn.MaxPool3d(kernel_size=2, stride=(2, 2, 2)),
@@ -162,20 +156,17 @@ class DownConvBlock(nn.Module):
 class Encoder(nn.Module):
     """
     U-Net Encoder, conv block -> downconv blocks... -> (output, skip_connections)
+
+    Parameters
+    ----------
+    config: Configuration
+        Dictionary containing configuration parameters
     """
 
     def __init__(
         self,
         config: Configuration,
     ):
-        """
-        Encoder branch of U-Net, returns (output, skip_connections)
-
-        Parameters
-        ----------
-        config: Configuration
-            Dictionary containing configuration parameters
-        """
         super().__init__()
 
         self.levels = nn.ModuleList(
@@ -238,7 +229,8 @@ class UpConvBlock(nn.Module):
                 [dim - dim // 2 for dim in diff_dims],
             ]
         )
-        x = F.pad(x, list(bounds))
+        # pad scans from END of list, so we need to reverse bounds!
+        x = F.pad(x, list(reversed(list(bounds))))
         x = torch.cat([skip, x], dim=1)
         return self.conv(x)
 
@@ -246,47 +238,69 @@ class UpConvBlock(nn.Module):
 class Decoder(nn.Module):
     """
     U-Net Decoder, upconv blocks... -> 1x1 conv -> (output)
+
+    Parameters
+    ----------
+    config : Configuration
+        Dictionary containing configuration parameters
+    deep_supervision : bool
+        If True, a list of outputs from each level is returned. The outputs
+        are from convolving the output of each level with a 1x1 convolution.
     """
 
-    def __init__(self, config: Configuration):
+    def __init__(self, config: Configuration, deep_supervision: bool = True):
         super().__init__()
+        self.deep_supervision = deep_supervision
         self.levels = nn.ModuleList(
             [
                 UpConvBlock(level=level, config=config)
                 # is zero-indexed so max level is n_levels - 1, -1 again for bottleneck
+                # if encoder have layer [3, 2, 1], this is [2, 1, 0]
+                # i.e. encoder excludes first level (0), decoder ignores last level (3)
                 for level in range(config["n_levels"] - 2, -1, -1)
             ]
         )
-
-        self.last_conv = nn.Sequential(
-            nn.Conv3d(
-                in_channels=config["n_kernels_init"],
-                out_channels=config["n_kernels_last"],
-                kernel_size=1,
-                bias=False,
-            ),
-        )
+        if deep_supervision:
+            self.last_conv = nn.ModuleList(
+                [
+                    nn.Conv3d(
+                        in_channels=config["n_kernels_init"] * 2**level,
+                        out_channels=config["n_kernels_last"],
+                        kernel_size=1,
+                        bias=False,
+                    )
+                    for level in range(config["n_levels"] - 2, -1, -1)
+                ]
+            )
+        else:
+            self.last_conv = nn.Sequential(
+                nn.Conv3d(
+                    in_channels=config["n_kernels_init"],
+                    out_channels=config["n_kernels_last"],
+                    kernel_size=1,
+                    bias=False,
+                ),
+            )
         self.last_activation = config["final_layer_activation"]()
 
     def _forward_deep_supervision(self, x, skips, logits: bool) -> List[torch.Tensor]:
         """
         Forward pass with deep supervision, returns a list of outputs from each level
         """
-        outputs = []
-        for level, skip in zip(self.levels, reversed(skips)):
+        deep_outputs = []
+        for i, (level, skip) in enumerate(zip(self.levels, reversed(skips))):
             x = level(x, skip)
-            x = self.last_conv(x, logits)
+            conved_x = self.last_conv[i](x)  # type: ignore
             if not logits:
-                x = self.last_activation(x)
-            outputs.append(x)
-        return outputs
+                conved_x = self.last_activation(conved_x)
+            deep_outputs.append(conved_x)
+        return deep_outputs
 
     def forward(
         self,
         x: torch.Tensor,
         skips: List[torch.Tensor],
         logits: bool = False,
-        deep_supervision: bool = True,
     ) -> torch.Tensor | List[torch.Tensor]:
         """
         Parameters
@@ -297,12 +311,8 @@ class Decoder(nn.Module):
             Skip connections from the encoder
         logits : bool
             Whether to return logits or not
-        deep_supervision : bool
-            If True, a list of outputs from each level is returned. The outputs
-            are from convolving the output of each level with a 1x1 convolution.
-
         """
-        if deep_supervision:
+        if self.deep_supervision:
             return self._forward_deep_supervision(x, skips, logits)
 
         for level, skip in zip(self.levels, reversed(skips)):
@@ -322,47 +332,42 @@ class UNet(nn.Module):
     level with the corresponding output from the Encoder of the
     same level and then apply convolutions. A final 1x1 convolution
     produces the final output.
+
+    Parameters
+    ----------
+    config : Configuration
+        Dictionary containing configuration parameters
+    deep_supervision : bool
+        If True, a list of outputs from each level is returned. The outputs
+        are from convolving the output of each level with a 1x1 convolution.
     """
 
-    def __init__(self, config: Configuration):
+    def __init__(self, config: Configuration, deep_supervision: bool = True):
         super().__init__()
         self.encoder = Encoder(config)
-        self.decoder = Decoder(config)
+        self.decoder = Decoder(config, deep_supervision=deep_supervision)
 
-    def forward(
-        self, x: torch.Tensor, logits: bool = False, deep_supervision: bool = True
-    ) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, logits: bool = False) -> torch.Tensor:
         encoded, skips = self.encoder(x)
-        return self.decoder(encoded, skips, logits, deep_supervision)
+        return self.decoder(encoded, skips, logits)
 
 
-class MCDropoutUNet(UNet):
+class MCDropoutUNet(nn.Module):
     """
     Wrapper around U-Net to apply dropout during evaluation
     """
 
     @override
-    def __init__(
-        self, config: Optional[Configuration] = None, model: Optional[nn.Module] = None
-    ):
+    def __init__(self, model: UNet):
         """
         Wrap an existing U-Net or create a new one using the provided configuration
         """
-        assert (
-            config is not None or model is not None
-        ), "Either config or model must be provided"
-
-        if model is None and config is not None:
-            super().__init__(config)
-            self.model = self
-        elif model is not None:
-            self.model = model
+        super().__init__()
+        self.model = model
 
     @override
-    def forward(
-        self, x: torch.Tensor, logits: bool = False, deep_supervision: bool = True
-    ) -> torch.Tensor:
-        return self.model(x, logits, deep_supervision)
+    def forward(self, x: torch.Tensor, logits: bool = False) -> torch.Tensor:
+        return self.model(x, logits)
 
     @override
     def eval(self):

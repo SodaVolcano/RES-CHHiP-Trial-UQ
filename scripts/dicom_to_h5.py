@@ -10,15 +10,14 @@ from __helpful_parser import HelpfulParser
 def main(
     dicom_path: str, save_path: str, preprocess: bool, n_workers: int, logging: bool
 ):
-
     if logging:
         logger.enable("uncertainty")
         un.utils.logging.config_logger()
 
     scans = un.data.dicom.load_patient_scans(dicom_path, preprocess=preprocess)
     if preprocess:
-        un.data.preprocessing.preprocess_dataset(scans, n_workers=n_workers)
-        un.data.h5.save_xy_to_h5(scans, save_path)
+        scan = un.data.preprocessing.preprocess_dataset(scans, n_workers=n_workers)
+        scan = un.data.h5.save_xy_to_h5(scans, save_path)
         return
 
     un.data.h5.save_scan_to_h5(scans, save_path)

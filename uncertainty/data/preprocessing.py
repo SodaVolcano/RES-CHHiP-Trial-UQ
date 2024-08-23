@@ -303,8 +303,6 @@ def preprocess_dataset(
     ----------
     dataset : Iterable[PatientScan | None]
         Dataset of PatientScan objects
-    config : Configuration, optional
-        Configuration object, by default configuration()
     n_workers : int
         Number of parallel processes to use, set to 1 to disable, by default 1
     """

@@ -2,7 +2,7 @@
 Data type Mask and functions that operate on Mask
 """
 
-from typing import NamedTuple, override
+from typing import NamedTuple
 
 import numpy as np
 
