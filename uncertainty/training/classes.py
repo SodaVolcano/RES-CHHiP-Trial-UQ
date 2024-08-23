@@ -105,54 +105,57 @@ class SegmentationData(lit.LightningDataModule):
 class LitSegmentation(lit.LightningModule):
     """
     Wrapper class for PyTorch model to be used with PyTorch Lightning
+
+    If deep supervision is enabled, then for a U-Net with n levels, a loss is calculated
+    for each level and summed as
+        L = w1 * L1 + w2 * L2 + ... + wn * Ln
+    Where the weights halve for each level and are normalised to sum to 1.
+    Output from the two levels in the lowest resolution are not used.
+    SEE https://arxiv.org/abs/1809.10486
+
+    Parameters
+    ----------
+    model : nn.Module
+        PyTorch model to be trained
+    config : Configuration
+        Configuration object
+    class_weights : Optional[list[float]]
+        Weights for each class in the loss function. Default is None.
+        Weights are typically calculated using the number of pixels as
+            n_background / n_foreground
     """
 
     def __init__(
         self,
         model: nn.Module,
-        deep_supervision: bool,
         config: Configuration,
         class_weights: Optional[list[float]] = None,
     ):
-        """
-        Parameters
-        ----------
-        model : nn.Module
-            PyTorch model to be trained
-        deep_supervision : bool
-            Whether to use deep supervision. If enabled, for each output
-            from the levels of the U-Net, a loss is calculated and summed
-            as
-                L = w1 * L1 + w2 * L2 + ... + wn * Ln
-            Where the weights halve for each level and are normalised to sum to 1.
-            Output from the two levels in the lowest resolution are not used.
-            SEE https://arxiv.org/abs/1809.10486
-        config : Configuration
-            Configuration object
-        class_weights : Optional[list[float]]
-            Weights for each class in the loss function. Default is None.
-            Weights are typically calculated using the number of pixels as
-                n_background / n_foreground
-        """
         super().__init__()
         self.model = model
         self.config = config
-        self.deep_supervision = deep_supervision
+        self.deep_supervision = (
+            hasattr(model, "deep_supervision") and model.deep_supervision
+        )
         self.class_weights = class_weights
         if class_weights is None:
-            self.loss_fns = [nn.BCEWithLogitsLoss()] * config["output_channel"]
+            self.bce_fns = nn.ModuleList(
+                [nn.BCEWithLogitsLoss()] * config["output_channel"]
+            )
         else:
-            self.bce_fns = [
-                nn.BCEWithLogitsLoss(weight=torch.tensor(weight))
-                for weight in class_weights
-            ]
+            self.bce_fns = nn.ModuleList(
+                [
+                    nn.BCEWithLogitsLoss(weight=torch.tensor(weight))
+                    for weight in class_weights
+                ]
+            )
         self.dice_fn = MultilabelF1Score(num_labels=config["output_channel"])
 
     def forward(self, x):
         return self.model(x)
 
     def __calc_loss_deep_supervision(
-        self, y_preds: list[torch.Tensor], ys: torch.Tensor
+        self, y_preds: list[torch.Tensor], y: torch.Tensor
     ) -> torch.Tensor:
         """
         Calculate the loss for each level of the U-Net
@@ -163,21 +166,20 @@ class LitSegmentation(lit.LightningModule):
             List of outputs from the U-Net ordered from the lowest resolution
             to the highest resolution
         """
-        # ignore the two lowest resolution outputs and order from highest to lowest
-        y_preds = y_preds[-3::-1]
-        ys = torch.tensor(
-            [nn.Upsample(size=y_pred.shape)(y) for y, y_pred in zip(ys, y_preds)]
-        )
+        # ignore the TWO lowest resolution outputs, [1:] as encoder already excludes bottleneck
+        y_preds = y_preds[1:]
+        ys = [nn.Upsample(size=y_pred.shape[2:])(y) for y_pred in y_preds]
 
-        weights = [1 / (2**i) for i in range(len(y_preds))]  # halve for each level
+        # Reverse to match y_preds; halves weights as resolution decreases
+        weights = list(reversed([1 / (2**i) for i in range(len(y_preds))]))
         # normalise weights to sum to 1
         weights = [weight / sum(weights) for weight in weights]
 
         return torch.Tensor(
             sum(
                 [
-                    weight * self.calc_loss(y_pred, ys)
-                    for weight, y_pred in zip(weights, y_preds)
+                    weight * self.calc_loss(y_pred, y_scaled)
+                    for weight, y_pred, y_scaled in zip(weights, y_preds, ys)
                 ]
             )
         )
@@ -188,10 +190,7 @@ class LitSegmentation(lit.LightningModule):
         """
         # Sums BCE loss for each class, y have shape (batch, n_classes, H, W, D)
         bce = tz.pipe(
-            [
-                self.loss_fns[i](y_pred[:, i], y[:, i])
-                for i in range(len(self.loss_fns))
-            ],
+            [self.bce_fns[i](y_pred[:, i], y[:, i]) for i in range(len(self.bce_fns))],
             sum,
             torch.Tensor,
         )
