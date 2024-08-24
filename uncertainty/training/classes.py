@@ -9,7 +9,7 @@ import numpy as np
 import toolz as tz
 import torch
 from torch import nn
-from torch.utils.data import DataLoader, Dataset, random_split, IterableDataset
+from torch.utils.data import DataLoader, Dataset, random_split, IterableDataset, Subset
 from toolz import curried
 import h5py as h5
 
@@ -37,7 +37,7 @@ class WeightedPatchSampler(IterableDataset):
 
     def __init__(
         self,
-        dataset: "H5Dataset",
+        dataset: "H5Dataset | Subset",
         config: Configuration,
     ):
         self.dataset = dataset
@@ -132,11 +132,11 @@ class H5Dataset(Dataset):
         ] = tz.identity,
     ):
         self.h5_file_path = h5_file_path
+        self.dataset = None
         self.transform = transform
         with h5.File(h5_file_path, "r") as f:
             self.keys = list(f.keys())
         self.config = config
-        self.h5_file = None
 
     def __len__(self) -> int:
         return len(self.keys)
@@ -144,11 +144,11 @@ class H5Dataset(Dataset):
     def __getitem__(self, index: int):
         # opened HDF5 is not pickleable, so don't open in __init__
         # open once to prevent overhead
-        if self.h5_file is None:
-            self.h5_file = h5.File(self.h5_file_path, "r")
+        if self.dataset is None:
+            self.dataset = h5.File(self.h5_file_path, "r")
 
         return tz.pipe(
-            self.h5_file[self.keys[index]],
+            self.dataset[self.keys[index]],
             # [:] change data from dataset to numpy array
             lambda group: (group["x"][:], group["y"][:]),
             _preprocess_data_configurable(config=self.config),
@@ -165,8 +165,8 @@ class H5Dataset(Dataset):
         )
 
     def __del__(self):
-        if self.h5_file is not None:
-            self.h5_file.close()
+        if self.dataset is not None:
+            self.dataset.close()
 
 
 class SegmentationData(lit.LightningDataModule):
@@ -311,7 +311,7 @@ class LitSegmentation(lit.LightningModule):
 
     def training_step(self, batch: torch.Tensor):
         x, y = batch
-        y_pred = self.model(x)
+        y_pred = self.model(x, logits=True)
         loss = (
             self.calc_loss(y_pred, y)
             if not self.deep_supervision
@@ -323,7 +323,7 @@ class LitSegmentation(lit.LightningModule):
 
     def validation_step(self, batch: torch.Tensor):
         x, y = batch
-        y_pred = self.model(x)
+        y_pred = self.model(x, logits=True)
         loss = self.calc_loss(y_pred, y)
 
         self.log("val_loss", loss)

@@ -2,6 +2,8 @@ from context import uncertainty as un
 from lightning.pytorch.callbacks import TQDMProgressBar, ModelCheckpoint, EarlyStopping
 from lightning import Trainer
 import os
+import torch
+from lightning.pytorch.strategies import DeepSpeedStrategy
 
 from scripts.__helpful_parser import HelpfulParser
 from tests.test_unet import UNet
@@ -41,7 +43,17 @@ def main(
         monitor="val/loss", min_delta=0.00, patience=5, verbose=False, mode="min"
     )
 
-    trainer = Trainer(max_epochs=10, callbacks=[checkpoint, early_stopping, pbar])
+    trainer = Trainer(
+        max_epochs=10,
+        callbacks=[checkpoint, early_stopping, pbar],
+        strategy=DeepSpeedStrategy(
+            stage=3,
+            offload_optimizer=True,
+            offload_parameters=True,
+        ),
+        accelerator="gpu",
+        precision="16-mixed",
+    )
     trainer.fit(model, data)
 
 

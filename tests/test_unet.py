@@ -93,7 +93,7 @@ class TestDownConvBlock:
     # Initializes DownConvBlock with valid level and configuration
     def test_initializes_with_valid_level_and_config(self):
         config = {
-            "n_kernels_init": 16,
+            "n_kernels_init": 8,
             "n_convolutions_per_block": 2,
             "kernel_size": 3,
             "use_instance_norm": True,
@@ -110,8 +110,8 @@ class TestDownConvBlock:
     # Handles typical 3D tensor inputs without errors
     def test_handles_typical_3d_inputs_without_errors(self):
         config = {
-            "n_kernels_init": 16,
-            "n_convolutions_per_block": 2,
+            "n_kernels_init": 8,
+            "n_convolutions_per_block": 1,
             "kernel_size": 3,
             "use_instance_norm": True,
             "activation": nn.ReLU,
@@ -121,9 +121,9 @@ class TestDownConvBlock:
         }
         level = 1
         down_conv_block = DownConvBlock(level, config)  # type: ignore
-        input_tensor = torch.randn(1, 16, 32, 32, 32)  # Example 3D tensor input
+        input_tensor = torch.randn(1, 8, 32, 32, 32)  # Example 3D tensor input
         output = down_conv_block(input_tensor)
-        assert output.shape == torch.Size([1, 32, 16, 16, 16])  # Expected output shape
+        assert output.shape == torch.Size([1, 16, 16, 16, 16])  # Expected output shape
 
 
 class TestEncoder:
@@ -138,7 +138,7 @@ class TestEncoder:
             "instance_norm_epsilon": 1e-5,
             "n_kernels_init": 64,
             "n_convolutions_per_block": 2,
-            "n_levels": 4,
+            "n_levels": 2,
             "input_channel": 1,
             "final_layer_activation": nn.Sigmoid,
         }
@@ -155,9 +155,9 @@ class TestEncoder:
             "dropout_rate": 0.5,
             "instance_norm_decay": 0.9,
             "instance_norm_epsilon": 1e-5,
-            "n_kernels_init": 64,
-            "n_convolutions_per_block": 2,
-            "n_levels": 4,
+            "n_kernels_init": 8,
+            "n_convolutions_per_block": 1,
+            "n_levels": 3,
             "input_channel": 1,
             "final_layer_activation": nn.Sigmoid,
         }
@@ -275,7 +275,7 @@ class TestUNet:
     # Initializes UNet with valid configuration and processes input tensor correctly
     def test_unet_initialization_and_forward_pass(self, mocker):
         config = {
-            "n_kernels_init": 16,
+            "n_kernels_init": 4,
             "kernel_size": 3,
             "n_convolutions_per_block": 2,
             "use_instance_norm": True,
@@ -316,7 +316,7 @@ class TestUNet:
     # Deep supervision mode in forward pass returns list of outputs from each level
     def test_deep_supervision_mode_returns_list_of_outputs(self, mocker):
         config = {
-            "n_kernels_init": 16,
+            "n_kernels_init": 8,
             "n_convolutions_per_block": 2,
             "kernel_size": 3,
             "use_instance_norm": True,
@@ -355,7 +355,7 @@ class TestUNet:
 
     def test_prime_input_shape(self, mocker):
         config = {
-            "n_kernels_init": 16,
+            "n_kernels_init": 8,
             "n_convolutions_per_block": 2,
             "kernel_size": 3,
             "use_instance_norm": True,
@@ -367,9 +367,9 @@ class TestUNet:
             "input_channel": 1,
             "n_kernels_last": 1,
             "final_layer_activation": nn.Sigmoid,
-            "input_height": 128,
-            "input_width": 128,
-            "input_depth": 128,
+            "input_height": 97,
+            "input_width": 89,
+            "input_depth": 79,
         }
 
         model = UNet(config, deep_supervision=False)  # type: ignore
@@ -382,15 +382,15 @@ class TestMCDropoutUNet:
     # Initialize MCDropoutUNet with a valid Configuration and ensure it wraps a new UNet instance
     def test_initialization_with_valid_config(self):
         config = {
-            "n_kernels_init": 16,
+            "n_kernels_init": 4,
             "n_convolutions_per_block": 2,
             "kernel_size": 3,
             "use_instance_norm": True,
             "activation": nn.ReLU,
-            "dropout_rate": 0.1,
+            "dropout_rate": 0.8,
             "instance_norm_epsilon": 1e-5,
             "instance_norm_decay": 0.1,
-            "n_levels": 4,
+            "n_levels": 3,
             "input_channel": 1,
             "n_kernels_last": 1,
             "final_layer_activation": nn.Sigmoid,
@@ -408,28 +408,42 @@ class TestMCDropoutUNet:
     # Test that passing the same input produces different outputs
     def test_same_input_different_output(self):
         config = {
-            "n_kernels_init": 16,
+            "n_kernels_init": 8,
             "n_convolutions_per_block": 2,
             "kernel_size": 3,
             "use_instance_norm": True,
             "activation": nn.ReLU,
-            "dropout_rate": 0.1,
+            "dropout_rate": 0.8,
             "instance_norm_epsilon": 1e-5,
             "instance_norm_decay": 0.1,
-            "n_levels": 4,
+            "n_levels": 2,
             "input_channel": 3,
             "n_kernels_last": 1,
             "final_layer_activation": nn.Sigmoid,
         }
         unet = UNet(config=config, deep_supervision=False)  # type: ignore
+        unet2 = UNet(config=config, deep_supervision=False)  # type: ignore
+        unet2.eval()
         # Create an instance of MCDropoutUNet
         model = MCDropoutUNet(unet)  # type: ignore
+        model.eval()
 
         # Prepare input tensor
         x = torch.randn(1, 3, 100, 100, 100)
 
-        output_1 = model(x)
-        output_2 = model(x)
+        output_1 = model(x, logits=True)
+        output_2 = model(x, logits=True)
 
+        # check all Dropout layers are in train mode
+        assert all(
+            layer.training
+            for layer in model.model.modules()
+            if isinstance(layer, nn.Dropout)
+        )
         # Check that the two outputs are different
         assert not torch.allclose(output_1, output_2)
+
+        output_3 = unet2(x, logits=True)
+        output_4 = unet2(x, logits=True)
+        # Check that the two outputs are the same
+        assert torch.allclose(output_3, output_4)

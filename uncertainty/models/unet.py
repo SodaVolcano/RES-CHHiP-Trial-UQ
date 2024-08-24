@@ -72,7 +72,7 @@ class ConvLayer(nn.Module):
                 if use_instance_norm
                 else nn.Identity()
             ),
-            activation(),
+            activation(inplace=True),
             nn.Dropout(dropout_rate, inplace=True),
         )
 
@@ -378,6 +378,6 @@ class MCDropoutUNet(nn.Module):
                 module.train(True)
 
         # Apply dropout during evaluation
-        self.model.super().eval()
+        self.model.eval()
         self.model.apply(activate_dropout)
         return self

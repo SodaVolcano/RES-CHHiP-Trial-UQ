@@ -1,8 +1,8 @@
 from typing import Callable, Final, TypedDict
 
 import torch
-from pyparsing import C
 from torch import nn, optim
+from deepspeed.ops.adam import DeepSpeedCPUAdam
 
 Configuration = TypedDict(
     "Configuration",
@@ -38,7 +38,6 @@ Configuration = TypedDict(
         "initialiser": Callable[..., torch.Tensor],
         "optimiser": Callable[..., nn.Module],
         "optimiser_kwargs": dict[str, int | float | str],
-        "loss": Callable[..., nn.Module],
         "lr_scheduler": type[optim.lr_scheduler.LRScheduler],
         "log_sink": str,
         "log_format": str,
@@ -101,12 +100,12 @@ def unet_config(n_levels: int) -> dict[str, int | float | str | type[nn.Module]]
         # ------- Encoder/Decoder settings -------
         # Number of kernels in the output of the first level of Encoder
         # doubles/halves at each level in Encoder/Decoder
-        "n_kernels_init": 64,
+        "n_kernels_init": 32,
         # Number of resolutions/blocks; height of U-Net
         "n_levels": n_levels,
         # Number of class to predict
         "n_kernels_last": 3,
-        "final_layer_activation": nn.Softmax,
+        "final_layer_activation": nn.Sigmoid,
     }
 
 
@@ -132,11 +131,11 @@ def training_config() -> dict[str, int | str | list[int | float | str] | type]:
         "deep_supervision": True,
         "n_epochs": 1000,
         "n_batches_per_epoch": 250,
-        "batch_size": 4,
+        "batch_size": 2,
         "metrics": ["accuracy"],
-        "initialiser": nn.init.xavier_normal_,  # type: ignore
-        "optimiser": optim.SGD,  # type: ignore
-        "optimiser_kwargs": {"momentum": 0.99, "nesterov": True},
+        "initialiser": nn.init.kaiming_normal_,  # type: ignore
+        "optimiser": DeepSpeedCPUAdam,  # type: ignore
+        "optimiser_kwargs": {},
         # Learning rate scheduler, decrease learning rate at certain epochs
         "lr_scheduler": optim.lr_scheduler.PolynomialLR,
     }
