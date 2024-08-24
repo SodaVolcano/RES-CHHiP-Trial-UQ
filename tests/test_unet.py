@@ -19,21 +19,21 @@ class TestConvLayer:
         in_channels = 3
         out_channels = 16
         kernel_size = 3
-        use_batch_norm = True
+        use_instance_norm = True
         activation = nn.ReLU
         dropout_rate = 0.5
-        bn_epsilon = 1e-5
-        bn_momentum = 0.1
+        inorm_epsilon = 1e-5
+        inorm_momentum = 0.1
 
         conv_layer = ConvLayer(
             in_channels=in_channels,
             out_channels=out_channels,
             kernel_size=kernel_size,
-            use_batch_norm=use_batch_norm,
+            use_instance_norm=use_instance_norm,
             activation=activation,
             dropout_rate=dropout_rate,
-            bn_epsilon=bn_epsilon,
-            bn_momentum=bn_momentum,
+            inorm_epsilon=inorm_epsilon,
+            inorm_momentum=inorm_momentum,
         )
         input_ = torch.randn(1, in_channels, 64, 64, 64)
         output = conv_layer(input_)
@@ -42,7 +42,7 @@ class TestConvLayer:
         assert isinstance(conv_layer, ConvLayer)
         assert len(conv_layer.layers) == 4
         assert isinstance(conv_layer.layers[0], nn.Conv3d)
-        assert isinstance(conv_layer.layers[1], nn.BatchNorm3d)
+        assert isinstance(conv_layer.layers[1], nn.InstanceNorm3d)
         assert isinstance(conv_layer.layers[2], nn.ReLU)
         assert isinstance(conv_layer.layers[3], nn.Dropout)
 
@@ -52,11 +52,11 @@ class TestConvBlock:
     def test_initializes_with_valid_configuration(self):
         config = {
             "kernel_size": 3,
-            "use_batch_norm": True,
+            "use_instance_norm": True,
             "activation": nn.ReLU,
             "dropout_rate": 0.5,
-            "batch_norm_epsilon": 1e-5,
-            "batch_norm_decay": 0.1,
+            "instance_norm_epsilon": 1e-5,
+            "instance_norm_decay": 0.1,
         }
         conv_block = ConvBlock(
             in_channels=1,
@@ -72,11 +72,11 @@ class TestConvBlock:
     def test_forward_pass_processes_input_tensor_correctly(self, mocker):
         config = {
             "kernel_size": 3,
-            "use_batch_norm": True,
+            "use_instance_norm": True,
             "activation": nn.ReLU,
             "dropout_rate": 0.5,
-            "batch_norm_epsilon": 1e-5,
-            "batch_norm_decay": 0.1,
+            "instance_norm_epsilon": 1e-5,
+            "instance_norm_decay": 0.1,
         }
         conv_block = ConvBlock(
             in_channels=1,
@@ -96,11 +96,11 @@ class TestDownConvBlock:
             "n_kernels_init": 16,
             "n_convolutions_per_block": 2,
             "kernel_size": 3,
-            "use_batch_norm": True,
+            "use_instance_norm": True,
             "activation": nn.ReLU,
             "dropout_rate": 0.1,
-            "batch_norm_epsilon": 1e-5,
-            "batch_norm_decay": 0.1,
+            "instance_norm_epsilon": 1e-5,
+            "instance_norm_decay": 0.1,
         }
         level = 1
         down_conv_block = DownConvBlock(level, config)  # type: ignore
@@ -113,11 +113,11 @@ class TestDownConvBlock:
             "n_kernels_init": 16,
             "n_convolutions_per_block": 2,
             "kernel_size": 3,
-            "use_batch_norm": True,
+            "use_instance_norm": True,
             "activation": nn.ReLU,
             "dropout_rate": 0.1,
-            "batch_norm_epsilon": 1e-5,
-            "batch_norm_decay": 0.1,
+            "instance_norm_epsilon": 1e-5,
+            "instance_norm_decay": 0.1,
         }
         level = 1
         down_conv_block = DownConvBlock(level, config)  # type: ignore
@@ -131,11 +131,11 @@ class TestEncoder:
     def test_encoder_initializes_with_valid_configuration(self):
         config = {
             "kernel_size": 3,
-            "use_batch_norm": True,
+            "use_instance_norm": True,
             "activation": nn.ReLU,
             "dropout_rate": 0.5,
-            "batch_norm_decay": 0.9,
-            "batch_norm_epsilon": 1e-5,
+            "instance_norm_decay": 0.9,
+            "instance_norm_epsilon": 1e-5,
             "n_kernels_init": 64,
             "n_convolutions_per_block": 2,
             "n_levels": 4,
@@ -150,11 +150,11 @@ class TestEncoder:
     def test_encoder_processes_input_and_returns_output(self, mocker):
         config = {
             "kernel_size": 3,
-            "use_batch_norm": True,
+            "use_instance_norm": True,
             "activation": nn.ReLU,
             "dropout_rate": 0.5,
-            "batch_norm_decay": 0.9,
-            "batch_norm_epsilon": 1e-5,
+            "instance_norm_decay": 0.9,
+            "instance_norm_epsilon": 1e-5,
             "n_kernels_init": 64,
             "n_convolutions_per_block": 2,
             "n_levels": 4,
@@ -186,11 +186,11 @@ class TestUpConvBlock:
             "n_kernels_init": 16,
             "kernel_size": 3,
             "n_convolutions_per_block": 2,
-            "use_batch_norm": True,
+            "use_instance_norm": True,
             "activation": nn.ReLU,
             "dropout_rate": 0.1,
-            "batch_norm_epsilon": 1e-5,
-            "batch_norm_decay": 0.1,
+            "instance_norm_epsilon": 1e-5,
+            "instance_norm_decay": 0.1,
         }
         level = 1
         block = UpConvBlock(level, config)  # type: ignore
@@ -211,11 +211,11 @@ class TestDecoder:
             "kernel_size": 3,
             "n_convolutions_per_block": 2,
             "final_layer_activation": nn.ReLU,
-            "use_batch_norm": True,
+            "use_instance_norm": True,
             "activation": nn.ReLU,
             "dropout_rate": 0.1,
-            "batch_norm_epsilon": 1e-5,
-            "batch_norm_decay": 0.1,
+            "instance_norm_epsilon": 1e-5,
+            "instance_norm_decay": 0.1,
         }
         decoder = Decoder(config, deep_supervision=False)  # type: ignore
         # encoder don't have first level
@@ -234,11 +234,11 @@ class TestDecoder:
             "kernel_size": 3,
             "n_convolutions_per_block": 2,
             "final_layer_activation": nn.ReLU,
-            "use_batch_norm": True,
+            "use_instance_norm": True,
             "activation": nn.ReLU,
             "dropout_rate": 0.1,
-            "batch_norm_epsilon": 1e-5,
-            "batch_norm_decay": 0.1,
+            "instance_norm_epsilon": 1e-5,
+            "instance_norm_decay": 0.1,
         }
         decoder = Decoder(config, deep_supervision=False)  # type: ignore
         x = torch.randn(1, 64, 32, 32, 32)  # from last layer
@@ -255,11 +255,11 @@ class TestDecoder:
             "kernel_size": 3,
             "n_convolutions_per_block": 2,
             "final_layer_activation": nn.ReLU,
-            "use_batch_norm": True,
+            "use_instance_norm": True,
             "activation": nn.ReLU,
             "dropout_rate": 0.1,
-            "batch_norm_epsilon": 1e-5,
-            "batch_norm_decay": 0.1,
+            "instance_norm_epsilon": 1e-5,
+            "instance_norm_decay": 0.1,
         }
         decoder = Decoder(config, deep_supervision=True)  # type: ignore
         x = torch.randn(1, 64, 32, 32, 32)
@@ -278,11 +278,11 @@ class TestUNet:
             "n_kernels_init": 16,
             "kernel_size": 3,
             "n_convolutions_per_block": 2,
-            "use_batch_norm": True,
+            "use_instance_norm": True,
             "activation": nn.ReLU,
             "dropout_rate": 0.1,
-            "batch_norm_epsilon": 1e-5,
-            "batch_norm_decay": 0.1,
+            "instance_norm_epsilon": 1e-5,
+            "instance_norm_decay": 0.1,
             "n_levels": 4,
             "input_channel": 1,
             "n_kernels_last": 1,
@@ -319,11 +319,11 @@ class TestUNet:
             "n_kernels_init": 16,
             "n_convolutions_per_block": 2,
             "kernel_size": 3,
-            "use_batch_norm": True,
+            "use_instance_norm": True,
             "activation": nn.ReLU,
             "dropout_rate": 0.1,
-            "batch_norm_epsilon": 1e-5,
-            "batch_norm_decay": 0.1,
+            "instance_norm_epsilon": 1e-5,
+            "instance_norm_decay": 0.1,
             "n_levels": 4,
             "input_channel": 1,
             "n_kernels_last": 1,
@@ -358,11 +358,11 @@ class TestUNet:
             "n_kernels_init": 16,
             "n_convolutions_per_block": 2,
             "kernel_size": 3,
-            "use_batch_norm": True,
+            "use_instance_norm": True,
             "activation": nn.ReLU,
             "dropout_rate": 0.1,
-            "batch_norm_epsilon": 1e-5,
-            "batch_norm_decay": 0.1,
+            "instance_norm_epsilon": 1e-5,
+            "instance_norm_decay": 0.1,
             "n_levels": 4,
             "input_channel": 1,
             "n_kernels_last": 1,
@@ -385,11 +385,11 @@ class TestMCDropoutUNet:
             "n_kernels_init": 16,
             "n_convolutions_per_block": 2,
             "kernel_size": 3,
-            "use_batch_norm": True,
+            "use_instance_norm": True,
             "activation": nn.ReLU,
             "dropout_rate": 0.1,
-            "batch_norm_epsilon": 1e-5,
-            "batch_norm_decay": 0.1,
+            "instance_norm_epsilon": 1e-5,
+            "instance_norm_decay": 0.1,
             "n_levels": 4,
             "input_channel": 1,
             "n_kernels_last": 1,
@@ -411,11 +411,11 @@ class TestMCDropoutUNet:
             "n_kernels_init": 16,
             "n_convolutions_per_block": 2,
             "kernel_size": 3,
-            "use_batch_norm": True,
+            "use_instance_norm": True,
             "activation": nn.ReLU,
             "dropout_rate": 0.1,
-            "batch_norm_epsilon": 1e-5,
-            "batch_norm_decay": 0.1,
+            "instance_norm_epsilon": 1e-5,
+            "instance_norm_decay": 0.1,
             "n_levels": 4,
             "input_channel": 3,
             "n_kernels_last": 1,

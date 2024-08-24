@@ -14,14 +14,17 @@ Configuration = TypedDict(
         "input_width": int,
         "input_depth": int,
         "input_channel": int,
+        "patch_size": tuple[int, int, int],
+        "patch_stride": int,
+        "foreground_oversample_ratio": float,
         "intensity_range": tuple[int, int],
         "output_channel": int,
         "val_split": float,
         "kernel_size": int,
         "n_convolutions_per_block": int,
-        "use_batch_norm": bool,
-        "batch_norm_decay": float,
-        "batch_norm_epsilon": float,
+        "use_instance_norm": bool,
+        "instance_norm_decay": float,
+        "instance_norm_epsilon": float,
         "activation": Callable[..., nn.Module],
         "dropout_rate": float,
         "n_kernels_init": int,
@@ -46,7 +49,7 @@ Configuration = TypedDict(
 )
 
 
-def data_config(n_levels: int) -> dict[str, int | str | float | tuple[int, int]]:
+def data_config(n_levels: int) -> dict[str, int | str | float | tuple[int, ...]]:
     """
     Preset configuration for data
 
@@ -70,6 +73,10 @@ def data_config(n_levels: int) -> dict[str, int | str | float | tuple[int, int]]
         "input_depth": (2**n_levels) * 8,
         # For volume
         "input_channel": 1,
+        "patch_size": (128, 128, 128),
+        "patch_stride": 64,
+        # % of sampled patches guaranteed to contain foreground
+        "foreground_oversample_ratio": 1 / 3,
         "intensity_range": (0, 255),
         # Number of organs, mask only
         "output_channel": 3,
@@ -88,11 +95,11 @@ def unet_config(n_levels: int) -> dict[str, int | float | str | type[nn.Module]]
         "n_convolutions_per_block": 2,
         "activation": nn.LeakyReLU,
         "dropout_rate": 0.5,
-        "use_batch_norm": True,
-        # AKA momentum, how much of new batch's mean/variance are added to the running mean/variance
-        "batch_norm_decay": 0.9,
+        "use_instance_norm": True,  # batch norm don't work well with small batch size
+        # AKA momentum, how much of new mean/variance are added to the running mean/variance
+        "instance_norm_decay": 0.9,
         # Small value to avoid division by zero
-        "batch_norm_epsilon": 1e-5,
+        "instance_norm_epsilon": 1e-5,
         # ------- Encoder/Decoder settings -------
         # Number of kernels in the output of the first level of Encoder
         # doubles/halves at each level in Encoder/Decoder

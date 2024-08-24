@@ -19,7 +19,7 @@ from ..utils.sequence import growby_accum
 
 class ConvLayer(nn.Module):
     """
-    Convolution layer: Conv3D -> [BN] -> Activation -> Dropout
+    Convolution layer: Conv3D -> [InstanceNorm] -> Activation -> Dropout
 
     Parameters
     ----------
@@ -29,17 +29,17 @@ class ConvLayer(nn.Module):
         Number of output channels
     kernel_size : int
         Kernel size for convolution
-    use_batch_norm : bool
-        Whether to use batch normalisation
+    use_instance_norm : bool
+        Whether to use instance normalisation
     activation : Callable[..., nn.Module]
         Function returning an activation module, e.g. `nn.ReLU`
     dropout_rate : float
         Dropout rate
-    bn_epsilon : float
-        Epsilon for batch normalisation, small constant added to the variance
+    inorm_epsilon : float
+        Epsilon for instance normalisation, small constant added to the variance
         to avoid division by zero
-    bn_momentum : float
-        Momentum for batch normalisation, controls update rate of running
+    inorm_momentum : float
+        Momentum for instance normalisation, controls update rate of running
         mean and variance during inference. Mean and variance are used to
         normalise inputs during inference.
     """
@@ -49,11 +49,11 @@ class ConvLayer(nn.Module):
         in_channels: int,
         out_channels: int,
         kernel_size: int,
-        use_batch_norm: bool,
+        use_instance_norm: bool,
         activation: Callable[..., nn.Module],
         dropout_rate: float,
-        bn_epsilon: float,
-        bn_momentum: float,
+        inorm_epsilon: float,
+        inorm_momentum: float,
     ):
         super().__init__()
 
@@ -66,8 +66,10 @@ class ConvLayer(nn.Module):
                 bias=False,
             ),
             (
-                nn.BatchNorm3d(out_channels, eps=bn_epsilon, momentum=bn_momentum)
-                if use_batch_norm
+                nn.InstanceNorm3d(
+                    out_channels, eps=inorm_epsilon, momentum=inorm_momentum
+                )
+                if use_instance_norm
                 else nn.Identity()
             ),
             activation(),
@@ -80,7 +82,7 @@ class ConvLayer(nn.Module):
 
 class ConvBlock(nn.Module):
     """
-    A group of convolution layers, each consisting of Conv3D -> [BN] -> Activation -> Dropout
+    A group of convolution layers, each consisting of Conv3D -> [InstanceNorm] -> Activation -> Dropout
     """
 
     def __init__(
@@ -101,7 +103,7 @@ class ConvBlock(nn.Module):
             Number of output channels
         n_convolutions : int
             Number of convolution layers. A convolution layer consists of
-            Conv3D -> [BN] -> Activation -> Dropout
+            Conv3D -> [InstanceNorm] -> Activation -> Dropout
         config : Configuration
             Dictionary containing configuration parameters
         """
@@ -113,11 +115,11 @@ class ConvBlock(nn.Module):
                     in_channels=in_channels if i == 0 else out_channels,
                     out_channels=out_channels,
                     kernel_size=config["kernel_size"],
-                    use_batch_norm=config["use_batch_norm"],
+                    use_instance_norm=config["use_instance_norm"],
                     activation=config["activation"],
                     dropout_rate=config["dropout_rate"],
-                    bn_epsilon=config["batch_norm_epsilon"],
-                    bn_momentum=config["batch_norm_decay"],
+                    inorm_epsilon=config["instance_norm_epsilon"],
+                    inorm_momentum=config["instance_norm_decay"],
                 )
                 for i in range(n_convolutions)
             ]

@@ -9,7 +9,6 @@ python = "^3.12"
 pytest = "^8.3.2"
 loguru = "^0.7.2"
 black = "^24.4.2"
-matplotlib = "^3.9.1"
 cytoolz = "^0.12.3"
 ipykernel = "^6.29.5"
 fastexcel = "^0.11.5"
@@ -33,6 +32,8 @@ torchviz = "^0.0.2"
 torchio = { version = "^0.18.90", python = ">=3.12,<3.13" }
 lightning = "^2.4.0"
 tensorboardx = "^2.6.2.2"
+matplotlib = "^3.9.2"
+scikit-image = "^0.24.0"
 
 [tool.isort]
 profile = "black"

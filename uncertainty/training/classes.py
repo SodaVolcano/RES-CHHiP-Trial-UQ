@@ -7,13 +7,61 @@ import numpy as np
 import toolz as tz
 import torch
 from torch import nn
-from torch.utils.data import DataLoader, Dataset, random_split
+from torch.utils.data import DataLoader, Dataset, random_split, IterableDataset
 from toolz import curried
 import h5py as h5
 
 from ..config import Configuration, configuration
 from .augmentations import augmentations
 from ..data.preprocessing import _preprocess_data_configurable
+
+
+class H5DatasetPatch(IterableDataset):
+    """
+    Wrapper for H5Dataset that allows for patch-based training
+
+
+
+    Parameters
+    ----------
+    h5_file_path : str
+        Path to the H5 file containing the dataset.
+    patch_size : tuple[int]
+        Size of the patch to extract from the dataset.
+    stride : tuple[int]
+        Stride to move the patch window.
+    transform : Callable[[tuple[np.ndarray, np.ndarray]], tuple[np.ndarray, np.ndarray]]
+        Function to apply to the (x, y) pair. Default is the identity function.
+        Intended to be used for data augmentation.
+    config : Configuration
+        Configuration object
+    """
+
+    def __init__(
+        self,
+        h5_file_path: str,
+        patch_size: tuple[int],
+        stride: tuple[int],
+        transform: Callable[
+            [tuple[np.ndarray, np.ndarray]], tuple[np.ndarray, np.ndarray]
+        ] = tz.identity,
+        config: Configuration = configuration(),
+    ):
+        self.h5_file_path = h5_file_path
+        self.patch_size = patch_size
+        self.stride = stride
+        self.transform = transform
+        self.config = config
+        self.dataset = H5Dataset(h5_file_path, config=config, transform=transform)
+
+    def __len__(self) -> int:
+        return len(self.dataset)
+
+    def __getitem__(self, index: int):
+        pass
+
+    def __del__(self):
+        del self.dataset
 
 
 class H5Dataset(Dataset):
@@ -49,15 +97,21 @@ class H5Dataset(Dataset):
         ] = tz.identity,
     ):
         self.h5_file_path = h5_file_path
-        self.h5_file = h5.File(self.h5_file_path, "r")
         self.transform = transform
-        self.keys = list(self.h5_file.keys())
+        with h5.File(h5_file_path, "r") as f:
+            self.keys = list(f.keys())
         self.config = config
+        self.h5_file = None
 
     def __len__(self) -> int:
         return len(self.keys)
 
     def __getitem__(self, index: int):
+        # opened HDF5 is not pickleable, so don't open in __init__
+        # open once to prevent overhead
+        if self.h5_file is None:
+            self.h5_file = h5.File(self.h5_file_path, "r")
+
         return tz.pipe(
             self.h5_file[self.keys[index]],
             # [:] change data from dataset to numpy array
@@ -76,7 +130,8 @@ class H5Dataset(Dataset):
         )
 
     def __del__(self):
-        self.h5_file.close()
+        if self.h5_file is not None:
+            self.h5_file.close()
 
 
 class SegmentationData(lit.LightningDataModule):
