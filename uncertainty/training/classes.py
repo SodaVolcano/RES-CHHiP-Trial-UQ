@@ -64,7 +64,14 @@ class H5Dataset(Dataset):
             lambda group: (group["x"][:], group["y"][:]),
             _preprocess_data_configurable(config=self.config),
             self.transform,
-            curried.map(lambda x: torch.tensor(x, dtype=torch.float32)),
+            curried.map(
+                # torch complains if using tensor(tensor, dtype...)
+                lambda x: (
+                    torch.tensor(x, dtype=torch.float32)
+                    if isinstance(x, np.ndarray)
+                    else x.to(torch.float32)
+                )
+            ),
             tuple,
         )
 
@@ -85,6 +92,7 @@ class SegmentationData(lit.LightningDataModule):
         self.val_split = config["val_split"]
         self.augmentations = augmentations(p=1)
 
+        # Apply augmentations to validation set too
         dataset = H5Dataset(self.fname, transform=augmentations(p=1))
 
         self.train, self.val = random_split(
@@ -97,7 +105,7 @@ class SegmentationData(lit.LightningDataModule):
         )
 
     def val_dataloader(self):
-        return DataLoader(self.val, batch_size=len(self.val), num_workers=2)
+        return DataLoader(self.val, batch_size=self.batch_size, num_workers=2)
 
     def test_dataloader(self):
         pass
@@ -179,15 +187,15 @@ class LitSegmentation(lit.LightningModule):
         return torch.Tensor(
             sum(
                 [
-                    weight * self.calc_loss(y_pred, y_scaled)
+                    weight * self.calc_loss_single(y_pred, y_scaled)
                     for weight, y_pred, y_scaled in zip(weights, y_preds, ys)
                 ]
             )
         )
 
-    def calc_loss(self, y_pred: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+    def calc_loss_single(self, y_pred: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
         """
-        Compute the sum of the binary cross entropy loss and the dice loss
+        Compute the sum of the binary cross entropy loss and the dice loss for one output
         """
         # Sums BCE loss for each class, y have shape (batch, n_classes, H, W, D)
         bce = tz.pipe(
@@ -197,6 +205,15 @@ class LitSegmentation(lit.LightningModule):
         )
         dice = self.dice_fn(y_pred, y)
         return bce + (1 - dice)  # scale dice to match bce?
+
+    def calc_loss(
+        self, y_pred: torch.Tensor | list[torch.Tensor], y: torch.Tensor
+    ) -> torch.Tensor:
+        return (
+            self.calc_loss_single(y_pred, y)
+            if not self.deep_supervision and not isinstance(y_pred, list)
+            else self.__calc_loss_deep_supervision(y_pred, y)  # type: ignore
+        )
 
     def training_step(self, batch: torch.Tensor):
         x, y = batch

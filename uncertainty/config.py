@@ -28,6 +28,7 @@ Configuration = TypedDict(
         "n_levels": int,
         "n_kernels_last": int,
         "final_layer_activation": Callable[..., nn.Module],
+        "deep_supervision": bool,
         "model_checkpoint_path": str,
         "n_epochs": int,
         "batch_size": int,
@@ -123,6 +124,7 @@ def training_config() -> dict[str, int | str | list[int | float | str] | type]:
     return {
         "model_checkpoint_path": "./checkpoints",
         # from nnU-Net settings
+        "deep_supervision": True,
         "n_epochs": 1000,
         "n_batches_per_epoch": 250,
         "batch_size": 4,

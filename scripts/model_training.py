@@ -6,22 +6,25 @@ import os
 from scripts.__helpful_parser import HelpfulParser
 from tests.test_unet import UNet
 from uncertainty.config import Configuration
+import torch
 
 
-def name_to_model(name: str):
-    return {
-        "unet": un.models.unet.UNet,
-        "mc_dropout_unet": un.models.MCDropoutUNet,
-    }[name]
+def main(
+    config: Configuration,
+    ensemble_size: int,
+    checkpoint_path: str,
+    deep_supervision: bool = True,
+):
+    torch.set_float32_matmul_precision("high")
 
-
-def main(config: Configuration, ensemble_size: int, checkpoint_path: str):
     if ensemble_size > 1:
         model = un.models.DeepEnsemble(
-            lambda x: UNet(x, deep_supervision=True), ensemble_size, config=config
+            lambda x: UNet(x, deep_supervision=deep_supervision),
+            ensemble_size,
+            config=config,
         )
     else:
-        model = UNet(config=config, deep_supervision=True)
+        model = UNet(config=config, deep_supervision=deep_supervision)
 
     model = un.training.LitSegmentation(model, config=config)
     data = un.training.SegmentationData(config)
@@ -65,6 +68,13 @@ if __name__ == "__main__":
         help="Path to save model checkpoints.",
         default=config["model_checkpoint_path"],
     )
+    parser.add_argument(
+        "--deep_supervision",
+        action="store_true",
+        help="Use deep supervision during training.",
+        default=config["deep_supervision"],
+    )
+
     args = parser.parse_args()
     config["staging_dir"] = os.path.dirname(args.data_path)
     config["staging_fname"] = os.path.basename(args.data_path)
