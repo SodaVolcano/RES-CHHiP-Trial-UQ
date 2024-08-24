@@ -1,5 +1,7 @@
+from itertools import islice
 import os
 from typing import Callable, Optional
+import random
 
 import lightning as lit
 from torchmetrics.classification import MultilabelF1Score
@@ -16,11 +18,9 @@ from .augmentations import augmentations
 from ..data.preprocessing import _preprocess_data_configurable
 
 
-class H5DatasetPatch(IterableDataset):
+class WeightedPatchSampler(IterableDataset):
     """
-    Wrapper for H5Dataset that allows for patch-based training
-
-
+    Return batches of patches sampled from H5Dataset oversampled by the foreground class.
 
     Parameters
     ----------
@@ -28,8 +28,6 @@ class H5DatasetPatch(IterableDataset):
         Path to the H5 file containing the dataset.
     patch_size : tuple[int]
         Size of the patch to extract from the dataset.
-    stride : tuple[int]
-        Stride to move the patch window.
     transform : Callable[[tuple[np.ndarray, np.ndarray]], tuple[np.ndarray, np.ndarray]]
         Function to apply to the (x, y) pair. Default is the identity function.
         Intended to be used for data augmentation.
@@ -39,26 +37,63 @@ class H5DatasetPatch(IterableDataset):
 
     def __init__(
         self,
-        h5_file_path: str,
-        patch_size: tuple[int],
-        stride: tuple[int],
-        transform: Callable[
-            [tuple[np.ndarray, np.ndarray]], tuple[np.ndarray, np.ndarray]
-        ] = tz.identity,
-        config: Configuration = configuration(),
+        dataset: "H5Dataset",
+        config: Configuration,
     ):
-        self.h5_file_path = h5_file_path
-        self.patch_size = patch_size
-        self.stride = stride
-        self.transform = transform
-        self.config = config
-        self.dataset = H5Dataset(h5_file_path, config=config, transform=transform)
+        self.dataset = dataset
+        self.patch_size = config["patch_size"]
+        self.fg_ratio = config["foreground_oversample_ratio"]
+        self.batch_size = config["batch_size"]
 
-    def __len__(self) -> int:
-        return len(self.dataset)
+    def __patch_stream(self):
+        yield self.__fetch_patch()
 
-    def __getitem__(self, index: int):
-        pass
+    def __fetch_patch(self):
+        """
+        Randomly pick a (x, y) pair from the dataset and extract a patch from it.
+        """
+        x, y = self.dataset[np.random.randint(len(self.dataset))]  # type: ignore
+        h_coord, w_coord, d_coord = [
+            np.random.randint(0, dim - patch_dim)
+            for dim, patch_dim in zip(x.shape[1:], self.patch_size)  # type: ignore
+        ]
+
+        def _extract_patch(arr: np.ndarray) -> np.ndarray:
+            return arr[
+                :,
+                h_coord : h_coord + self.patch_size[0],
+                w_coord : w_coord + self.patch_size[1],
+                d_coord : d_coord + self.patch_size[2],
+            ]
+
+        return (_extract_patch(x), _extract_patch(y))  # type: ignore
+
+    def __fetch_batch(self) -> list[np.ndarray]:
+        def sample_foreground() -> list[np.ndarray]:
+            """
+            Sample max(1, batch_size * fg_ratio) patches that contain foreground.
+            """
+            return tz.pipe(
+                self.__patch_stream(),
+                curried.filter(lambda x: np.any(x[1])),
+                # ensure at least one sample have foreground
+                lambda x: islice(x, stop=max(1, int(round(self.batch_size * self.fg_ratio)))),  # type: ignore
+                list,
+            )  # type: ignore
+
+        def sample_random() -> list[np.ndarray]:
+            return tz.pipe(
+                self.__patch_stream(),
+                lambda x: islice(x, stop=self.batch_size - len(fg_samples)),  # type: ignore
+                list,
+            )  # type: ignore
+
+        samples = sample_foreground() + sample_random()
+        random.shuffle(samples)
+        return samples
+
+    def __iter__(self):
+        yield self.__fetch_batch()
 
     def __del__(self):
         del self.dataset
@@ -156,11 +191,15 @@ class SegmentationData(lit.LightningDataModule):
 
     def train_dataloader(self):
         return DataLoader(
-            self.train, batch_size=self.batch_size, shuffle=True, num_workers=2
+            self.train,
+            num_workers=2,
+            sampler=WeightedPatchSampler(self.train, self.config),
         )
 
     def val_dataloader(self):
-        return DataLoader(self.val, batch_size=self.batch_size, num_workers=2)
+        return DataLoader(
+            self.val, num_workers=2, sampler=WeightedPatchSampler(self.val, self.config)
+        )
 
     def test_dataloader(self):
         pass

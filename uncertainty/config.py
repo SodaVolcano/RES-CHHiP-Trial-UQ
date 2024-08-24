@@ -15,7 +15,6 @@ Configuration = TypedDict(
         "input_depth": int,
         "input_channel": int,
         "patch_size": tuple[int, int, int],
-        "patch_stride": int,
         "foreground_oversample_ratio": float,
         "intensity_range": tuple[int, int],
         "output_channel": int,
@@ -74,7 +73,6 @@ def data_config(n_levels: int) -> dict[str, int | str | float | tuple[int, ...]]
         # For volume
         "input_channel": 1,
         "patch_size": (128, 128, 128),
-        "patch_stride": 64,
         # % of sampled patches guaranteed to contain foreground
         "foreground_oversample_ratio": 1 / 3,
         "intensity_range": (0, 255),
