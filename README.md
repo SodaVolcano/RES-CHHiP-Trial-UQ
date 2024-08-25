@@ -58,43 +58,21 @@ logger.enable("uncertainty")
 config_logger()
 ```
 
-## Loading Data
+## Loading Data (TODO)
 
 **TIP: As preprocessing may take significant time to complete, consider saving all preprocessed data as h5 files and loading them instead of loading directly from the original files.**
-
-### DICOM
 
 The list of utility functions for reading DICOM files is provided in `uncertainty.data.dicom`, the functions assume that all of the DICOM files for a single patient is stored in a single folder. A usage example is provided below.
 
 **Warning: Preprocessing will take a significant amount of time and RAM usage, do not enable if you don't have a beefy computer (e.g. 32+GB of RAM).**
 
 ```python
-import uncertainty.data.dicom as dicom
-
-# Load the volume and mask as a PatientScan object
-# Method is the interpolation method, see scipy.ndimage.interpn
-scan = dicom.load_patient_scan("/path/to/dicom/patient_1/", method="linear", preprocessing=True)
-# Note: an iterator is returned, must evaluate by consuming it
-scans = dicom.load_patient_scans("/path/to/patients/")
-# Load only the mask without interpolation and snake_case name conversion
-mask = dicom.load_mask("/path/to/dicom/files", preprocessing=False)
-
-# Saves all DICOM files for all patients as PatientScan objects in parallel
-dicom.save_dicom_scans_to_h5("/path/to/patients", "/output/path/", preprocess=True, n_workers=8)
 ```
 
-### Data Preprocessing
+### Data Preprocessing TODO
 
 ```python
-from uncertainty.data.dicom import load_patient_scans
-from uncertainty.training.util import preprocess_data, augment_dataset, construct_augmentor
 
-augmentor = construct_augmentor()
-pipe(
-    load_patient_scans("path/to/scan"),
-    preprocess_dataset,
-    augment_data(augmentor=augmentor)
-)
 ```
 
 # Tests
