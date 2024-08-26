@@ -246,28 +246,30 @@ def _preprocess_data_configurable(
     Used by DataLoaders to preprocess data during training, not meant to be called
     directly.
     """
-    # Centre image using body mask and to (channel, height, width, depth)
     BODY_MASK = volume_mask[0] > BODY_THRESH
 
-    def torchio_crop_or_pad(
-        arr_target: tuple[np.ndarray, np.ndarray]
-    ) -> tuple[np.ndarray, np.ndarray]:
-        """crop/pad array centered using the target mask"""
+    def torchio_crop_or_pad(arr: np.ndarray) -> np.ndarray:
+        """crop/pad array centered using the target mask to at least patch_size"""
+        if all(
+            dim >= patch_dim
+            for dim, patch_dim in zip(arr.shape[1:], config["patch_size"])
+        ):
+            return arr
+
         return tz.pipe(
-            arr_target,
+            (arr, BODY_MASK),
             to_torchio_subject,
             tio.CropOrPad(
                 (
-                    config["input_height"],
-                    config["input_width"],
-                    config["input_depth"],
-                ),
-                padding_mode=np.min(arr_target[0]),
+                    max(dim, patch_dim)
+                    for dim, patch_dim in zip(arr.shape[1:], config["patch_size"])
+                ),  # type: ignore
+                padding_mode=np.min(arr),
                 mask_name="mask",
             ),
             from_torchio_subject,
-            lambda x: (x[0].numpy(), x[1].numpy()),
-        )
+            lambda x: x[0].numpy(),
+        )  # type: ignore
 
     def scale_intensity(vol: np.ndarray) -> np.ndarray:
         return tz.pipe(
@@ -278,11 +280,14 @@ def _preprocess_data_configurable(
 
     return tz.pipe(
         volume_mask,
-        curried.map(lambda arr: (arr, BODY_MASK)),
+        to_torchio_subject,
+        tio.CropOrPad(  # crop volume and mask to be the same shape
+            volume_mask[0].shape[1:], padding_mode="minimum", mask_name="mask"
+        ),
+        from_torchio_subject,
         curried.map(torchio_crop_or_pad),
-        curried.map(tz.first),
         tuple,
-        lambda vol_mask: (scale_intensity(vol_mask[0]), vol_mask[1]),
+        lambda vol_mask: (z_score_scale(vol_mask[0]), vol_mask[1]),
     )
 
 

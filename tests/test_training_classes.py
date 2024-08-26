@@ -31,6 +31,7 @@ class TestLitSegmentation:
     # Calculation of loss without deep supervision
     def test_calculation_loss_without_deep_supervision(self, mocker):
         model = mocker.Mock(spec=nn.Module)
+        model.last_activation = nn.Sigmoid()
         config = {
             "output_channel": 3,
             "optimiser": mocker.Mock(),
@@ -53,6 +54,7 @@ class TestLitSegmentation:
     # Calculation of loss with deep supervision
     def test_calculation_loss_deep_supervision(self, mocker):
         model = mocker.Mock(spec=nn.Module)
+        model.last_activation = nn.Sigmoid()
         model.deep_supervision = True
         config = {
             "output_channel": 3,

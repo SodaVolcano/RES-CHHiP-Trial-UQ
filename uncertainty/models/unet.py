@@ -72,7 +72,7 @@ class ConvLayer(nn.Module):
                 if use_instance_norm
                 else nn.Identity()
             ),
-            activation(inplace=True),
+            activation(),
             nn.Dropout(dropout_rate, inplace=True),
         )
 
@@ -348,10 +348,14 @@ class UNet(nn.Module):
         super().__init__()
         self.encoder = Encoder(config)
         self.decoder = Decoder(config, deep_supervision=deep_supervision)
+        self.deep_supervision = deep_supervision
 
     def forward(self, x: torch.Tensor, logits: bool = False) -> torch.Tensor:
         encoded, skips = self.encoder(x)
         return self.decoder(encoded, skips, logits)
+    
+    def last_activation(self, x: torch.Tensor) -> torch.Tensor:
+        return self.decoder.last_activation(x)
 
 
 class MCDropoutUNet(nn.Module):

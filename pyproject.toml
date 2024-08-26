@@ -32,6 +32,7 @@ torchviz = "^0.0.2"
 torchio = { version = "^0.18.90", python = ">=3.12,<3.13" }
 lightning = "^2.4.0"
 tensorboardx = "^2.6.2.2"
+tensorboard = "^2.17.1"
 matplotlib = "^3.9.2"
 scikit-image = "^0.24.0"
 deepspeed = "^0.15.0"

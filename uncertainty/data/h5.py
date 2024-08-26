@@ -42,6 +42,16 @@ def save_xy_to_h5(
         ]
 
 
+@logger_wraps(level="INFO")
+def load_xy_from_h5(fname: str) -> Iterable[tuple[np.ndarray, np.ndarray]]:
+    """
+    Load instance-label pairs from an h5 file
+    """
+    with h5.File(fname, "r") as hf:
+        for key in hf.keys():
+            yield hf[key]["x"][:], hf[key]["y"][:]  # type: ignore
+
+
 @curry
 def save_scan_to_h5(scan: PatientScan, save_dir: str) -> None:
     """

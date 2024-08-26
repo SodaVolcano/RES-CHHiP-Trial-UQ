@@ -10,15 +10,19 @@ Configuration = TypedDict(
         "data_dir": str,
         "staging_dir": str,
         "staging_fname": str,
+        "train_fname": str,
+        "test_fname": str,
         "input_height": int,
         "input_width": int,
         "input_depth": int,
         "input_channel": int,
         "patch_size": tuple[int, int, int],
+        "patch_step": int,
         "foreground_oversample_ratio": float,
         "intensity_range": tuple[int, int],
         "output_channel": int,
         "val_split": float,
+        "test_split": float,
         "kernel_size": int,
         "n_convolutions_per_block": int,
         "use_instance_norm": bool,
@@ -33,7 +37,10 @@ Configuration = TypedDict(
         "deep_supervision": bool,
         "model_checkpoint_path": str,
         "n_epochs": int,
+        "n_batches_per_epoch": int,
+        "n_batches_val": int,
         "batch_size": int,
+        "batch_size_eval": int,
         "metrics": list[str],
         "initialiser": Callable[..., torch.Tensor],
         "optimiser": Callable[..., nn.Module],
@@ -47,7 +54,7 @@ Configuration = TypedDict(
 )
 
 
-def data_config(n_levels: int) -> dict[str, int | str | float | tuple[int, ...]]:
+def data_config() -> dict[str, int | str | float | tuple[int, ...]]:
     """
     Preset configuration for data
 
@@ -61,27 +68,30 @@ def data_config(n_levels: int) -> dict[str, int | str | float | tuple[int, ...]]
     """
     return {
         # Directory containing folders of DICOM slices
-        "data_dir": "/run/media/tin/Expansion/honours/dataset/originals/CHHiP/",
+        "data_dir": "/media/tin/Expansion/honours/dataset/originals/CHHiP/",
         # Directory to store h5 files (processed data)
-        "staging_dir": "/run/media/tin/Expansion/honours/dataset/originals/CHHiP_patientScans/",
-        "staging_fname": "dataset.h5",
+        "staging_dir": "/media/tin/Expansion/honours/dataset/originals/CHHiP_patientScans/",
+        "staging_fname": "dataset.h5", # for the whole dataset
+        "train_fname": "train.h5",
+        "test_fname": "test.h5",
         # Data are formatted as (height, width, depth, dimension)
-        "input_height": (2**n_levels) * 12,
-        "input_width": (2**n_levels) * 15,
-        "input_depth": (2**n_levels) * 8,
         # For volume
         "input_channel": 1,
-        "patch_size": (128, 128, 128),
+        # if patch size is bigger than image, image is padded
+        "patch_size": (150, 150, 100),
+        # For sliding window patch samplers (used for validation and test set)
+        "patch_step": 75,
         # % of sampled patches guaranteed to contain foreground
         "foreground_oversample_ratio": 1 / 3,
-        "intensity_range": (0, 255),
+        "intensity_range": (0, 1),
         # Number of organs, mask only
         "output_channel": 3,
-        "val_split": 0.2,  # percentage of data to use for validation
+        "test_split": 0.2,  # percentage of total dataset for testing
+        "val_split": 0.2,  # percentage of training data (after test split) to use for validation
     }
 
 
-def unet_config(n_levels: int) -> dict[str, int | float | str | type[nn.Module]]:
+def unet_config() -> dict[str, int | float | str | type[nn.Module]]:
     """
     Preset configuration for U-Net model
     """
@@ -102,7 +112,7 @@ def unet_config(n_levels: int) -> dict[str, int | float | str | type[nn.Module]]
         # doubles/halves at each level in Encoder/Decoder
         "n_kernels_init": 32,
         # Number of resolutions/blocks; height of U-Net
-        "n_levels": n_levels,
+        "n_levels": 5,
         # Number of class to predict
         "n_kernels_last": 3,
         "final_layer_activation": nn.Sigmoid,
@@ -114,7 +124,7 @@ def logger_config() -> dict[str, str]:
     Preset configuration for logger
     """
     return {
-        "log_sink": "./logs/out_{time}.log",
+        "log_sink": "/media/tin/Expansion/honours/logs/out_{time}.log",
         "log_format": "{time:YYYY-MM-DD at HH:mm:ss} {level} {message}",
         "log_level": "DEBUG",
         "log_retention": "7 days",
@@ -126,15 +136,18 @@ def training_config() -> dict[str, int | str | list[int | float | str] | type]:
     Preset configuration for training
     """
     return {
-        "model_checkpoint_path": "./checkpoints",
+        "model_checkpoint_path": "/media/tin/Expansion/honours/checkpoints",
         # from nnU-Net settings
         "deep_supervision": True,
         "n_epochs": 1000,
         "n_batches_per_epoch": 250,
+        "n_batches_val": 50,  # Number of batches when using random sampler for validation set
         "batch_size": 2,
+        "batch_size_eval": 4,   # batch size for both validation and test
         "metrics": ["accuracy"],
         "initialiser": nn.init.kaiming_normal_,  # type: ignore
         "optimiser": DeepSpeedCPUAdam,  # type: ignore
+        #"optimiser": optim.Adam,  # type: ignore
         "optimiser_kwargs": {},
         # Learning rate scheduler, decrease learning rate at certain epochs
         "lr_scheduler": optim.lr_scheduler.PolynomialLR,
@@ -145,6 +158,4 @@ def configuration() -> Configuration:
     """
     Preset configuration for U-Net model
     """
-    n_levels: Final[int] = 5  # WARNING: used to calculate input shape
-
-    return data_config(n_levels) | unet_config(n_levels) | training_config() | logger_config()  # type: ignore
+    return data_config() | unet_config() | training_config() | logger_config()  # type: ignore

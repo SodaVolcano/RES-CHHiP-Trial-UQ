@@ -1,15 +1,14 @@
 from context import uncertainty as un
-from lightning.pytorch.callbacks import TQDMProgressBar, ModelCheckpoint, EarlyStopping
+from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping
 from lightning import Trainer
 import os
 import torch
-from lightning.pytorch.strategies import DeepSpeedStrategy
+from lightning.pytorch.strategies import DeepSpeedStrategy, DDPStrategy
 
 from scripts.__helpful_parser import HelpfulParser
-from tests.test_unet import UNet
 from uncertainty.config import Configuration
 import torch
-
+from lightning.pytorch.loggers import TensorBoardLogger, CSVLogger
 
 def main(
     config: Configuration,
@@ -21,40 +20,46 @@ def main(
 
     if ensemble_size > 1:
         model = un.models.DeepEnsemble(
-            lambda x: UNet(x, deep_supervision=deep_supervision),
+            lambda x: un.models.UNet(x, deep_supervision=deep_supervision),
             ensemble_size,
             config=config,
         )
     else:
-        model = UNet(config=config, deep_supervision=deep_supervision)
+        model = un.models.UNet(config=config, deep_supervision=deep_supervision)
 
     model = un.training.LitSegmentation(model, config=config)
     data = un.training.SegmentationData(config)
-    pbar = TQDMProgressBar()
 
+    tb_logger = TensorBoardLogger(save_dir="/media/tin/Expansion/honours/logs/", name="lightning_log_tb")
+    csv_logger = CSVLogger(save_dir="/media/tin/Expansion/honours/logs/", name="lightning_log_csv")
     checkpoint = ModelCheckpoint(
-        monitor="val/loss",
+        monitor="val_loss",
         mode="min",
-        dirpath=f"{checkpoint_path}/model1",
+        dirpath=f"{checkpoint_path}/unet1",
         filename="{epoch:02d}-{val/loss:.2f}",
         auto_insert_metric_name=False,
     )
-    early_stopping = EarlyStopping(
-        monitor="val/loss", min_delta=0.00, patience=5, verbose=False, mode="min"
-    )
 
-    trainer = Trainer(
-        max_epochs=10,
-        callbacks=[checkpoint, early_stopping, pbar],
-        strategy=DeepSpeedStrategy(
-            stage=3,
+    strategy = DeepSpeedStrategy(
+            stage=2,
             offload_optimizer=True,
-            offload_parameters=True,
-        ),
+            offload_parameters=False,
+        )
+    trainer = Trainer(
+        max_epochs=config["n_epochs"],
+        limit_train_batches=config["n_batches_per_epoch"],
+        limit_val_batches=config["n_batches_val"],
+        callbacks=[checkpoint],
+        strategy=strategy,
         accelerator="gpu",
         precision="16-mixed",
+        enable_progress_bar=True,
+        enable_model_summary=True,
+        logger=(tb_logger, csv_logger)
     )
     trainer.fit(model, data)
+    # don't train, prevent possible data-snooping :(
+    #trainer.test(model, data)
 
 
 if __name__ == "__main__":
@@ -81,14 +86,13 @@ if __name__ == "__main__":
         default=config["model_checkpoint_path"],
     )
     parser.add_argument(
-        "--deep_supervision",
-        action="store_true",
-        help="Use deep supervision during training.",
-        default=config["deep_supervision"],
+        "--no_deep_supervision",
+        action="store_false",
+        help="Disable deep supervision during training.",
+        default=not config["deep_supervision"],
     )
 
     args = parser.parse_args()
     config["staging_dir"] = os.path.dirname(args.data_path)
     config["staging_fname"] = os.path.basename(args.data_path)
-
-    main(config, args.ensemble_size, args.checkpoint_path)
+    main(config, args.ensemble_size, args.checkpoint_path, deep_supervision=not args.no_deep_supervision)
