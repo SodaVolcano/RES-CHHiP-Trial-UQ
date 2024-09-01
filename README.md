@@ -30,7 +30,6 @@ devenv shell
 exit # Exit the devbox shell
 ```
 
-
 # Usage
 
 ## Example Scripts
