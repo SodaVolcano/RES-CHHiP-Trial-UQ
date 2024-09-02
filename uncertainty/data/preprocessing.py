@@ -247,13 +247,11 @@ def _preprocess_data_configurable(
     directly.
     """
     BODY_MASK = volume_mask[0] > BODY_THRESH
+    shape = volume_mask[0].shape[1:]
 
-    def torchio_crop_or_pad(arr: np.ndarray) -> np.ndarray:
+    def torchio_crop_or_pad(arr: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         """crop/pad array centered using the target mask to at least patch_size"""
-        if all(
-            dim >= patch_dim
-            for dim, patch_dim in zip(arr.shape[1:], config["patch_size"])
-        ):
+        if all(dim >= patch_dim for dim, patch_dim in zip(shape, config["patch_size"])):
             return arr
 
         return tz.pipe(
@@ -262,29 +260,17 @@ def _preprocess_data_configurable(
             tio.CropOrPad(
                 (
                     max(dim, patch_dim)
-                    for dim, patch_dim in zip(arr.shape[1:], config["patch_size"])
-                ),  # type: ignore
+                    for dim, patch_dim in zip(shape, config["patch_size"])
+                ),
                 padding_mode=np.min(arr),
                 mask_name="mask",
             ),
             from_torchio_subject,
             lambda x: x[0].numpy(),
-        )  # type: ignore
-
-    def scale_intensity(vol: np.ndarray) -> np.ndarray:
-        return tz.pipe(
-            vol,
-            lambda vol: np.clip(vol, *HU_RANGE),
-            map_interval(HU_RANGE, config["intensity_range"]),
         )
 
     return tz.pipe(
         volume_mask,
-        to_torchio_subject,
-        tio.CropOrPad(  # crop volume and mask to be the same shape
-            volume_mask[0].shape[1:], padding_mode="minimum", mask_name="mask"
-        ),
-        from_torchio_subject,
         curried.map(torchio_crop_or_pad),
         tuple,
         lambda vol_mask: (z_score_scale(vol_mask[0]), vol_mask[1]),

@@ -1,8 +1,6 @@
-import numpy as np
 import torch
 from torch import nn
 from .context import uncertainty
-from tests import context
 
 H5Dataset = uncertainty.training.classes.H5Dataset
 LitSegmentation = uncertainty.training.classes.LitSegmentation
@@ -26,7 +24,6 @@ class TestLitSegmentation:
         assert lit_segmentation.config == config
         assert lit_segmentation.deep_supervision is False
         assert lit_segmentation.class_weights is None
-        assert len(lit_segmentation.bce_fns) == config["output_channel"]
 
     # Calculation of loss without deep supervision
     def test_calculation_loss_without_deep_supervision(self, mocker):

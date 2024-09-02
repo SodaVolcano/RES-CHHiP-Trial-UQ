@@ -17,6 +17,10 @@ from ..config import Configuration
 from ..utils.sequence import growby_accum
 
 
+def _calc_n_kernels(n_init: int, level: int, bound: int):
+    return min(bound, n_init * 2**level)
+
+
 class ConvLayer(nn.Module):
     """
     Convolution layer: Conv3D -> [InstanceNorm] -> Activation -> Dropout
@@ -144,8 +148,12 @@ class DownConvBlock(nn.Module):
         self.layer = nn.Sequential(
             nn.MaxPool3d(kernel_size=2, stride=(2, 2, 2)),
             ConvBlock(
-                in_channels=config["n_kernels_init"] * 2 ** (level - 1),
-                out_channels=config["n_kernels_init"] * 2**level,
+                in_channels=_calc_n_kernels(
+                    config["n_kernels_init"], level - 1, config["n_kernels_max"]
+                ),
+                out_channels=_calc_n_kernels(
+                    config["n_kernels_init"], level, config["n_kernels_max"]
+                ),
                 n_convolutions=config["n_convolutions_per_block"],
                 config=config,
             ),
@@ -207,15 +215,24 @@ class UpConvBlock(nn.Module):
     def __init__(self, level: int, config: Configuration) -> None:
         super().__init__()
         self.up = nn.ConvTranspose3d(
-            in_channels=config["n_kernels_init"] * 2 ** (level + 1),
-            out_channels=config["n_kernels_init"] * 2**level,
+            in_channels=_calc_n_kernels(
+                config["n_kernels_init"], level + 1, config["n_kernels_max"]
+            ),
+            out_channels=_calc_n_kernels(
+                config["n_kernels_init"], level, config["n_kernels_max"]
+            ),
             kernel_size=config["kernel_size"],
             stride=(2, 2, 2),
         )
         self.conv = ConvBlock(
             # in_channel is doubled because skip connection is concatenated to input
-            in_channels=config["n_kernels_init"] * 2 ** (level + 1),
-            out_channels=config["n_kernels_init"] * 2**level,
+            in_channels=_calc_n_kernels(
+                config["n_kernels_init"], level, config["n_kernels_max"]
+            )
+            * 2,
+            out_channels=_calc_n_kernels(
+                config["n_kernels_init"], level, config["n_kernels_max"]
+            ),
             n_convolutions=config["n_convolutions_per_block"],
             config=config,
         )
@@ -266,22 +283,22 @@ class Decoder(nn.Module):
             self.last_conv = nn.ModuleList(
                 [
                     nn.Conv3d(
-                        in_channels=config["n_kernels_init"] * 2**level,
+                        in_channels=_calc_n_kernels(
+                            config["n_kernels_init"], level, config["n_kernels_max"]
+                        ),
                         out_channels=config["n_kernels_last"],
                         kernel_size=1,
                         bias=False,
-                    )
+                    ) if level != config["n_levels"] - 2 else None # ignore lowest level from deep supervision
                     for level in range(config["n_levels"] - 2, -1, -1)
                 ]
             )
         else:
-            self.last_conv = nn.Sequential(
-                nn.Conv3d(
-                    in_channels=config["n_kernels_init"],
-                    out_channels=config["n_kernels_last"],
-                    kernel_size=1,
-                    bias=False,
-                ),
+            self.last_conv = nn.Conv3d(
+                in_channels=config["n_kernels_init"],
+                out_channels=config["n_kernels_last"],
+                kernel_size=1,
+                bias=False,
             )
         self.last_activation = config["final_layer_activation"]()
 
@@ -292,10 +309,14 @@ class Decoder(nn.Module):
         deep_outputs = []
         for i, (level, skip) in enumerate(zip(self.levels, reversed(skips))):
             x = level(x, skip)
+            # ignore lowest level of decoder (2nd lowest level of U-Net)
+            if i == 0:
+                continue
             conved_x = self.last_conv[i](x)  # type: ignore
             if not logits:
                 conved_x = self.last_activation(conved_x)
             deep_outputs.append(conved_x)
+
         return deep_outputs
 
     def forward(
@@ -340,8 +361,10 @@ class UNet(nn.Module):
     config : Configuration
         Dictionary containing configuration parameters
     deep_supervision : bool
-        If True, a list of outputs from each level is returned. The outputs
-        are from convolving the output of each level with a 1x1 convolution.
+        If True, a list of outputs from each decoder level is returned. 
+        The outputs are from convolving the output of each level with 
+        a 1x1 convolution. **NOTE** that the last two level of the U-Net
+        (bottleneck and last layer of decoder) is not returned.
     """
 
     def __init__(self, config: Configuration, deep_supervision: bool = True):
@@ -353,7 +376,7 @@ class UNet(nn.Module):
     def forward(self, x: torch.Tensor, logits: bool = False) -> torch.Tensor:
         encoded, skips = self.encoder(x)
         return self.decoder(encoded, skips, logits)
-    
+
     def last_activation(self, x: torch.Tensor) -> torch.Tensor:
         return self.decoder.last_activation(x)
 

@@ -16,6 +16,7 @@ from torchio.transforms import (
     RandomElasticDeformation,
     RandomBlur,
     RandomGamma,
+    RandomAnisotropy,
 )
 
 
@@ -27,9 +28,7 @@ def augmentations(
     Returns a function to augment a (volume, masks) pair
 
     Augmentation involves flipping, affine transformations, elastic deformation,
-    blurring and gamma correction. All augmentations have a probability of 0.5
-    of applying meaning on average, around 3% of data will have no augmentations
-    applied.
+    blurring and gamma correction.
 
     Parameters
     ---------
@@ -41,11 +40,14 @@ def augmentations(
         to_torchio_subject,
         Compose(
             [
-                RandomFlip(p=0.5),
-                RandomAffine(isotropic=True, p=0.5),
-                RandomElasticDeformation(p=0.5),
-                RandomBlur(p=0.5),
-                RandomGamma(p=0.5),
+                RandomAnisotropy(
+                    (0, 1, 2), scalars_only=True, p=0.15
+                ),  # simulate low quality
+                RandomBlur(p=0.2),
+                RandomGamma(p=0.2),
+                # RandomElasticDeformation(num_control_points=5, p=0.15),
+                RandomFlip(axes=(0, 1, 2), p=0.2),
+                # RandomAffine(scales=0.2, degrees=5, isotropic=True, p=0.15),
             ],
             p=p,
         ),

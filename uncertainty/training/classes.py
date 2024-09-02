@@ -1,23 +1,42 @@
-from itertools import islice, cycle
+from itertools import islice
 import os
-from typing import Callable, Iterable, Optional
+from typing import Callable, Optional
 import random
 
+
+import torch.utils
+from kornia.augmentation import RandomAffine3D
+from pytorch_lightning import seed_everything
+import time
 import lightning as lit
-from torchmetrics.classification import MultilabelF1Score
 import numpy as np
 import toolz as tz
 import torch
 from torch import nn
-from torch.utils.data import DataLoader, Dataset, random_split, Subset, IterableDataset
+from torch.utils.data import DataLoader, Dataset, random_split, IterableDataset
 from toolz import curried
 import h5py as h5
 from skimage.util import view_as_windows
 from torchmetrics.aggregation import RunningMean
+from torchmetrics.classification import MultilabelF1Score
 
+from .loss import SmoothDiceLoss
 from ..config import Configuration, configuration
 from .augmentations import augmentations
-from ..data.preprocessing import _preprocess_data_configurable
+
+
+def get_unique_filename(base_path):
+    """Generate a unique filename by appending (copy) if the file already exists."""
+    if not os.path.exists(base_path):
+        return base_path
+
+    base, ext = os.path.splitext(base_path)
+    counter = 1
+    while True:
+        new_filename = f"{base} (copy{counter}){ext}"
+        if not os.path.exists(new_filename):
+            return new_filename
+        counter += 1
 
 
 class SlidingPatchDataset(IterableDataset):
@@ -27,22 +46,29 @@ class SlidingPatchDataset(IterableDataset):
 
     def __init__(
         self,
-        dataset: "H5Dataset",
-        patch_size: tuple[int, int, int],
+        h5_file_path: str,
+        config: Configuration,
+        patch_size: int,
         patch_step: int,
         transform: Callable[
             [tuple[np.ndarray, np.ndarray]], tuple[np.ndarray, np.ndarray]
         ] = tz.identity,
     ):
-        self.dataset = dataset
+        self.h5_file_path = h5_file_path
+        self.config = config
+        self.dataset = None
         self.transform = transform
         self.patch_size = patch_size
         self.patch_step = patch_step
 
+    @torch.no_grad()
     def __patch_iter(self, idx: int):
         """
         Return an iterator of patches for data at index `idx`
         """
+        if self.dataset is None:
+            self.dataset = H5Dataset(self.h5_file_path, self.config)
+
         x_patches, y_patches = tz.pipe(
             self.dataset[idx],
             curried.map(lambda arr: arr.numpy()),
@@ -52,22 +78,28 @@ class SlidingPatchDataset(IterableDataset):
                 )
             ),
             tuple,
-        )  # type: ignore
-        for idx in np.ndindex(x_patches.shape[:-4]):  # type: ignore
-            yield torch.tensor(x_patches[idx]), torch.tensor(y_patches[idx])  # type: ignore
+        )
+        for idx in np.ndindex(x_patches.shape[:-4]):
+            yield torch.tensor(x_patches[idx]), torch.tensor(y_patches[idx])
 
-    def __iter__(self) -> Iterable[tuple[np.ndarray, np.ndarray]]:  # type: ignore
+    @torch.no_grad()
+    def __iter__(self):
         """
         Return iterator of patches over all data in the dataset
         """
+        if self.dataset is None:
+            self.dataset = H5Dataset(self.h5_file_path, self.config)
+
         return tz.pipe(
             range(len(self.dataset)),
             curried.map(self.__patch_iter),
             tz.concat,
-        )  # type: ignore
+            curried.map(self.transform),
+        )
 
     def __del__(self):
-        del self.dataset
+        if self.dataset is not None:
+            del self.dataset
 
 
 class RandomPatchDataset(IterableDataset):
@@ -88,7 +120,7 @@ class RandomPatchDataset(IterableDataset):
     patch_size : tuple[int]
         Size of the patch to extract from the dataset.
     transform : Callable[[tuple[np.ndarray, np.ndarray]], tuple[np.ndarray, np.ndarray]]
-        Function to apply to the (x, y) pair. Default is the identity function.
+        Function to apply to the (x, y) patch pair. Default is the identity function.
         Intended to be used for data augmentation.
     config : Configuration
         Configuration object
@@ -96,46 +128,60 @@ class RandomPatchDataset(IterableDataset):
 
     def __init__(
         self,
-        dataset: "H5Dataset | Subset",
+        h5_file_path: str,
+        config: Configuration,
+        indices: list[int],
         batch_size: int,
-        patch_size: tuple[int, int, int],
+        patch_size: int,
         fg_oversample_ratio: float,
         transform: Callable[
             [tuple[np.ndarray, np.ndarray]], tuple[np.ndarray, np.ndarray]
         ] = tz.identity,
     ):
-        self.dataset = dataset
+        self.indices = indices
+        self.config = config
+        self.h5_file_path = h5_file_path
+        self.dataset = None
         self.transform = transform
         self.patch_size = patch_size
         self.fg_ratio = fg_oversample_ratio
         self.batch_size = batch_size
-
-        # Force at least 1 sample have foreground
-        n_fg_samples = max(1, int(round(self.batch_size * self.fg_ratio)))
-        self.data_stream = tz.pipe(
-            (
-                self.__fg_patch_iter(n_fg_samples),
-                self.__random_patch_iter(self.batch_size - n_fg_samples),
-            ),
-            tz.concat,
-            cycle,
+        self.affine = RandomAffine3D(
+            5, align_corners=True, shears=0, scale=(0.9, 1.1), p=0.15
+        )
+        self.affine_mask = RandomAffine3D(
+            5,
+            align_corners=True,
+            shears=0,
+            scale=(0.9, 1.1),
+            resample="nearest",
+            p=0.15,
         )
 
+    @torch.no_grad()
     def __patch_iter(self):
         """
         Return an infinite stream of randomly augmented and sampled patches
         """
-        while True:
-            yield self.__sample_patch()
+        if self.dataset is None:
+            self.dataset = H5Dataset(self.h5_file_path, self.config)
 
-    def __sample_patch(self) -> tuple[np.ndarray, np.ndarray]:
+        while True:
+            # type: ignore
+            yield tz.pipe(
+                self.dataset[random.choice(self.indices)],
+                lambda xy: self.__sample_patch(*xy),
+                curried.map(lambda arr: torch.tensor(arr)),
+                tuple,
+            )
+
+    @torch.no_grad()
+    def __sample_patch(self, x, y) -> tuple[np.ndarray, np.ndarray]:
         """
-        Randomly pick and augment a (x, y) pair from the dataset and sample a patch from it.
+        Randomly sample a patch from (x, y)
         """
-        x, y = self.dataset[np.random.randint(len(self.dataset))]  # type: ignore
-        x, y = self.transform((x, y))  # type: ignore
         h_coord, w_coord, d_coord = [
-            np.random.randint(0, dim - patch_dim + 1)
+            random.randint(0, dim - patch_dim)
             for dim, patch_dim in zip(x.shape[1:], self.patch_size)  # type: ignore
         ]
 
@@ -149,22 +195,39 @@ class RandomPatchDataset(IterableDataset):
 
         return (_extract_patch(x), _extract_patch(y))  # type: ignore
 
+    @torch.no_grad()
     def __fg_patch_iter(self, length: int):
         """
         Iterator of `length` patches guaranteed to contain a foreground
         """
         return tz.pipe(
             self.__patch_iter(),
-            curried.filter(lambda x: torch.any(x[1])),
+            curried.filter(lambda xy: torch.any(xy[1])),
             lambda x: islice(x, length),
         )
 
+    @torch.no_grad()
     def __random_patch_iter(self, length: int):
         """
         Iterator of `length` patches randomly sampled
         """
         return islice(self.__patch_iter(), length)
 
+    @torch.no_grad()
+    def __oversampled_iter(self):
+        """
+        Iterator of length `batch_size` with oversampled foreground examples
+        """
+        n_fg_samples = max(1, int(round(self.batch_size * self.fg_ratio)))
+        return tz.pipe(
+            (
+                self.__fg_patch_iter(n_fg_samples),
+                self.__random_patch_iter(self.batch_size - n_fg_samples),
+            ),
+            tz.concat,
+        )
+
+    @torch.no_grad()
     def __iter__(self):
         """
         Return infinite stream of sampled patches
@@ -173,15 +236,22 @@ class RandomPatchDataset(IterableDataset):
         foreground class, and number of such patch in the batch is guaranteed
         to be `round(fg_oversample_ratio * batch_size)`
         """
-        buffer = []
-        while True:
-            if len(buffer) == 0:
-                buffer = list(islice(self.data_stream, self.batch_size))
-                random.shuffle(buffer)
-            yield buffer.pop()
+        x, y = [], []
 
+        while True:
+            if len(x) == 0:
+                batch = (vol_mask for vol_mask in self.__oversampled_iter())
+                x, y = zip(*batch)
+                # Apply augmentation batch-wise, more efficient
+                x = self.affine(torch.stack(x))
+                y = self.affine_mask(torch.stack(y), self.affine._params)
+
+            yield next(map(self.transform, zip(x, y)))
+
+    @torch.no_grad()
     def __del__(self):
-        del self.dataset
+        if self.dataset is not None:
+            del self.dataset
 
 
 class H5Dataset(Dataset):
@@ -219,6 +289,7 @@ class H5Dataset(Dataset):
     def __len__(self) -> int:
         return len(self.keys)
 
+    @torch.no_grad()
     def __getitem__(self, index: int):
         # opened HDF5 is not pickleable, so don't open in __init__
         # open once to prevent overhead
@@ -227,23 +298,19 @@ class H5Dataset(Dataset):
 
         return tz.pipe(
             self.dataset[self.keys[index]],
-            # [:] change data from dataset to numpy array
+            # [:] changes data from dataset to numpy array
             lambda group: (group["x"][:], group["y"][:]),
-            _preprocess_data_configurable(config=self.config),
-            curried.map(
-                # torch complains if using tensor(tensor, dtype...)
-                lambda x: (
-                    torch.tensor(x, dtype=torch.float32)
-                    if isinstance(x, np.ndarray)
-                    else x.to(torch.float32)
-                )
-            ),
             tuple,
         )
 
+    @torch.no_grad()
     def __del__(self):
         if self.dataset is not None:
             self.dataset.close()
+
+
+def _seed_with_time(id: int):
+    seed_everything(time.time() + (id * 3), verbose=False)
 
 
 class SegmentationData(lit.LightningDataModule):
@@ -260,38 +327,46 @@ class SegmentationData(lit.LightningDataModule):
 
         self.test = H5Dataset(self.test_fname)
 
-        train = H5Dataset(self.train_fname)
-        self.train, self.val = random_split(
-            train, [1 - config["val_split"], config["val_split"]]
+        indices = list(range(len(H5Dataset(self.train_fname))))
+        self.train_indices, self.val_indices = random_split(
+            indices, [1 - config["val_split"], config["val_split"]]
         )
 
     def train_dataloader(self):
         return DataLoader(
             RandomPatchDataset(
-                self.train,
+                self.train_fname,
+                self.config,
+                self.train_indices,
                 self.config["batch_size"],
                 patch_size=self.config["patch_size"],
                 fg_oversample_ratio=self.config["foreground_oversample_ratio"],
                 transform=self.augmentations,
             ),
-            num_workers=4,
+            num_workers=14,
             batch_size=self.config["batch_size"],
-            prefetch_factor=3,
-            persistent_workers=True,
+            prefetch_factor=1,
+            # persistent_workers=True,
+            pin_memory=True,
+            worker_init_fn=_seed_with_time,
         )
 
     def val_dataloader(self):
         return DataLoader(
             RandomPatchDataset(
-                self.val,
+                self.train_fname,
+                self.config,
+                self.val_indices,
                 self.config["batch_size"],
                 self.config["patch_size"],
                 fg_oversample_ratio=self.config["foreground_oversample_ratio"],
             ),
-            num_workers=4,
+            num_workers=8,
             batch_size=self.config["batch_size_eval"],
-            prefetch_factor=2,
-            persistent_workers=True,
+            prefetch_factor=1,
+            pin_memory=True,
+            # persistent_workers=True,
+            worker_init_fn=_seed_with_time,
         )
 
     def test_dataloader(self):
@@ -305,6 +380,7 @@ class SegmentationData(lit.LightningDataModule):
             batch_size=self.config["batch_size_eval"],
             prefetch_factor=3,
             persistent_workers=True,
+            pin_memory=True,
         )
 
 
@@ -335,28 +411,24 @@ class LitSegmentation(lit.LightningModule):
         self,
         model: nn.Module,
         config: Configuration,
-        class_weights: Optional[list[float]] = None,
+        class_weights: Optional[torch.Tensor] = None,
+        n_models: int = 1,
     ):
         super().__init__()
+        self.save_hyperparameters(ignore=["model"])
         self.model = model
         self.config = config
         self.deep_supervision = (
             hasattr(model, "deep_supervision") and model.deep_supervision
         )
         self.class_weights = class_weights
-        if class_weights is None:
-            self.bce_fns = nn.ModuleList(
-                [nn.BCEWithLogitsLoss()] * config["output_channel"]
-            )
-        else:
-            self.bce_fns = nn.ModuleList(
-                [
-                    nn.BCEWithLogitsLoss(weight=torch.tensor(weight))
-                    for weight in class_weights
-                ]
-            )
-        self.dice_fn = MultilabelF1Score(num_labels=config["output_channel"])
+        self.bce_loss = nn.BCEWithLogitsLoss(class_weights)
+        # Smooth, differentiable approximation
+        self.dice_loss = SmoothDiceLoss()
+        # Original dice, used for evaluation
+        self.dice_eval = MultilabelF1Score(num_labels=config["output_channel"])
         self.running_loss = RunningMean(window=10)
+        self.val_counter = 0
 
     def forward(self, x):
         return self.model(x)
@@ -373,22 +445,15 @@ class LitSegmentation(lit.LightningModule):
             List of outputs from the U-Net ordered from the lowest resolution
             to the highest resolution
         """
-        # ignore the TWO lowest resolution outputs, [1:] as encoder already excludes bottleneck
-        y_preds = y_preds[1:]
         ys = [nn.Upsample(size=y_pred.shape[2:])(y) for y_pred in y_preds]
 
-        # Reverse to match y_preds; halves weights as resolution decreases
-        weights = list(reversed([1 / (2**i) for i in range(len(y_preds))]))
-        # normalise weights to sum to 1
-        weights = [weight / sum(weights) for weight in weights]
+        weights = [1 / (2**i) for i in range(len(y_preds))]
+        weights = [weight / sum(weights) for weight in weights]  # normalise to sum to 1
 
-        return torch.Tensor(
-            sum(
-                [
-                    weight * self.calc_loss_single(y_pred, y_scaled)
-                    for weight, y_pred, y_scaled in zip(weights, y_preds, ys)
-                ]
-            )
+        # Reverse weight to match y_preds; halves weights as resolution decreases
+        return sum(
+            weight * self.calc_loss_single(y_pred, y_scaled)
+            for weight, y_pred, y_scaled in zip(reversed(weights), y_preds, ys)
         )
 
     def calc_loss_single(self, y_pred: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
@@ -396,18 +461,20 @@ class LitSegmentation(lit.LightningModule):
         Compute the sum of the binary cross entropy loss and the dice loss for one output
         """
         # Sums BCE loss for each class, y have shape (batch, n_classes, H, W, D)
-        bce = tz.pipe(
-            [self.bce_fns[i](y_pred[:, i], y[:, i]) for i in range(len(self.bce_fns))],
-            sum,
-            torch.Tensor,
-        )
-        y_pred = self.model.last_activation(y_pred)
-        dice = self.dice_fn(y_pred, y)
-        return bce + (1 - dice)  # scale dice to match bce?
+        bce = self.bce_loss(y_pred, y)
+        # y_pred = (
+        #    self.model.last_activation(y_pred) > self.config["classification_threshold"]
+        # )
+        dice = self.dice_loss(y_pred, y)
+
+        self.log("bce", bce.detach(), sync_dist=True, prog_bar=True)
+        self.log("dice", 1 - dice.detach(), sync_dist=True, prog_bar=True)
+        return bce + dice  # scale dice to match bce?
 
     def calc_loss(
         self, y_pred: torch.Tensor | list[torch.Tensor], y: torch.Tensor
     ) -> torch.Tensor:
+
         return (
             self.calc_loss_single(y_pred, y)
             if not self.deep_supervision and not isinstance(y_pred, list)
@@ -417,39 +484,58 @@ class LitSegmentation(lit.LightningModule):
     def training_step(self, batch: torch.Tensor):
         x, y = batch
         y_pred = self.model(x, logits=True)
-        loss = (
-            self.calc_loss(y_pred, y)
-            if not self.deep_supervision
-            else self.__calc_loss_deep_supervision(y_pred, y)
-        )
+        loss = self.calc_loss(y_pred, y)
 
-        self.running_loss(loss)
+        self.running_loss(loss.detach())
         self.log(
-            "train_loss", self.running_loss.compute(), sync_dist=True, prog_bar=True
+            "train_loss",
+            self.running_loss.compute(),
+            sync_dist=True,
+            prog_bar=True,
         )
         return loss
 
+    @torch.no_grad()
     def validation_step(self, batch: torch.Tensor):
         x, y = batch
+
         y_pred = self.model(x, logits=True)
         loss = self.calc_loss(y_pred, y)
         if self.deep_supervision:
             y_pred = y_pred[-1]
-        y_pred = self.model.last_activation(y_pred)
-        dice = self.dice_fn(y_pred, y)
+        dice = self.dice_eval(y_pred, y)
 
-        self.log("val_loss", loss, sync_dist=True, prog_bar=True)
-        self.log("val_dice", dice, sync_dist=True, prog_bar=True)
+        # TODO: get dice of each organ
+
+        if self.val_counter % 10:
+            name = os.path.join("./batches", f"batch_{self.counter}.pt")
+            torch.save(
+                {"x": x, "y": y, "y_pred": y_pred, "dice": dice, "loss": loss}, name
+            )
+            self.val_counter += 1
+
+        self.log(
+            "val_loss",
+            loss,
+            sync_dist=True,
+            prog_bar=True,
+        )
+        self.log(
+            "val_dice",
+            dice,
+            sync_dist=True,
+            prog_bar=True,
+        )
         return loss
 
+    @torch.no_grad()
     def test_step(self, batch: torch.Tensor):
         x, y = batch
         y_pred = self.model(x, logits=False)
         loss = self.calc_loss(y_pred, y)
         if self.deep_supervision:
             y_pred = y_pred[-1]
-        y_pred = self.model.last_activation(y_pred)
-        dice = self.dice_fn(y_pred, y)
+        dice = self.dice_eval(y_pred, y)
 
         self.log("test_loss", loss, sync_dist=True, prog_bar=True)
         self.log("test_dice", dice, sync_dist=True, prog_bar=True)

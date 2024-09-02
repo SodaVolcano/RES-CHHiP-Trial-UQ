@@ -31,9 +31,11 @@ Configuration = TypedDict(
         "activation": Callable[..., nn.Module],
         "dropout_rate": float,
         "n_kernels_init": int,
+        "n_kernels_max": int,
         "n_levels": int,
         "n_kernels_last": int,
         "final_layer_activation": Callable[..., nn.Module],
+        "classification_threshold": float,
         "deep_supervision": bool,
         "model_checkpoint_path": str,
         "n_epochs": int,
@@ -41,7 +43,6 @@ Configuration = TypedDict(
         "n_batches_val": int,
         "batch_size": int,
         "batch_size_eval": int,
-        "metrics": list[str],
         "initialiser": Callable[..., torch.Tensor],
         "optimiser": Callable[..., nn.Module],
         "optimiser_kwargs": dict[str, int | float | str],
@@ -68,19 +69,20 @@ def data_config() -> dict[str, int | str | float | tuple[int, ...]]:
     """
     return {
         # Directory containing folders of DICOM slices
-        "data_dir": "/media/tin/Expansion/honours/dataset/originals/CHHiP/",
+        "data_dir": "./",
         # Directory to store h5 files (processed data)
-        "staging_dir": "/media/tin/Expansion/honours/dataset/originals/CHHiP_patientScans/",
-        "staging_fname": "dataset.h5", # for the whole dataset
-        "train_fname": "train.h5",
+        "staging_dir": "./",
+        "staging_fname": "dataset.h5",  # for the whole dataset
+        "train_fname": "train_preprocessed.h5",
         "test_fname": "test.h5",
         # Data are formatted as (height, width, depth, dimension)
         # For volume
         "input_channel": 1,
         # if patch size is bigger than image, image is padded
-        "patch_size": (150, 150, 100),
+        # try to keep this divisible by (2 ** (n_level - 1))
+        "patch_size": (256, 256, 64),
         # For sliding window patch samplers (used for validation and test set)
-        "patch_step": 75,
+        "patch_step": 32,
         # % of sampled patches guaranteed to contain foreground
         "foreground_oversample_ratio": 1 / 3,
         "intensity_range": (0, 1),
@@ -111,11 +113,13 @@ def unet_config() -> dict[str, int | float | str | type[nn.Module]]:
         # Number of kernels in the output of the first level of Encoder
         # doubles/halves at each level in Encoder/Decoder
         "n_kernels_init": 32,
+        "n_kernels_max": 512,  # maximum allowed number of kernels for a level
         # Number of resolutions/blocks; height of U-Net
         "n_levels": 5,
         # Number of class to predict
         "n_kernels_last": 3,
         "final_layer_activation": nn.Sigmoid,
+        "classification_threshold": 0.5,  # > threshold will be counted as 1
     }
 
 
@@ -124,7 +128,7 @@ def logger_config() -> dict[str, str]:
     Preset configuration for logger
     """
     return {
-        "log_sink": "/media/tin/Expansion/honours/logs/out_{time}.log",
+        "log_sink": "/media/tin/Expansion/honours/logs//out_{time}.log",
         "log_format": "{time:YYYY-MM-DD at HH:mm:ss} {level} {message}",
         "log_level": "DEBUG",
         "log_retention": "7 days",
@@ -136,21 +140,23 @@ def training_config() -> dict[str, int | str | list[int | float | str] | type]:
     Preset configuration for training
     """
     return {
-        "model_checkpoint_path": "/media/tin/Expansion/honours/checkpoints",
+        "model_checkpoint_path": "/media/tin/Expansion/honours/checkpoints/unet",
         # from nnU-Net settings
         "deep_supervision": True,
-        "n_epochs": 1000,
+        "n_epochs": 750,
         "n_batches_per_epoch": 250,
         "n_batches_val": 50,  # Number of batches when using random sampler for validation set
         "batch_size": 2,
-        "batch_size_eval": 4,   # batch size for both validation and test
-        "metrics": ["accuracy"],
+        "batch_size_eval": 4,  # batch size for both validation and test
         "initialiser": nn.init.kaiming_normal_,  # type: ignore
-        "optimiser": DeepSpeedCPUAdam,  # type: ignore
-        #"optimiser": optim.Adam,  # type: ignore
-        "optimiser_kwargs": {},
+        # "optimiser": DeepSpeedCPUAdam,  # type: ignore
+        # "optimiser_kwargs": {},
+        "optimiser": optim.SGD,  # type: ignore
+        "optimiser_kwargs": {"momentum": 0.99, "nesterov": True},
         # Learning rate scheduler, decrease learning rate at certain epochs
-        "lr_scheduler": optim.lr_scheduler.PolynomialLR,
+        "lr_scheduler": lambda optimiser: optim.lr_scheduler.PolynomialLR(
+            optimiser, total_iters=750, power=0.9
+        ),
     }
 
 

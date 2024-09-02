@@ -1,65 +1,68 @@
 from context import uncertainty as un
-from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping
+from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning import Trainer
 import os
 import torch
-from lightning.pytorch.strategies import DeepSpeedStrategy, DDPStrategy
 
 from scripts.__helpful_parser import HelpfulParser
 from uncertainty.config import Configuration
 import torch
 from lightning.pytorch.loggers import TensorBoardLogger, CSVLogger
+from lightning.pytorch.strategies import DeepSpeedStrategy
+
 
 def main(
     config: Configuration,
     ensemble_size: int,
     checkpoint_path: str,
-    deep_supervision: bool = True,
+    retrain: bool,
+    deep_supervision: bool,
 ):
-    torch.set_float32_matmul_precision("high")
 
-    if ensemble_size > 1:
-        model = un.models.DeepEnsemble(
-            lambda x: un.models.UNet(x, deep_supervision=deep_supervision),
-            ensemble_size,
-            config=config,
-        )
+    torch.set_float32_matmul_precision("medium")
+    torch.autograd.set_detect_anomaly(True)
+
+    if retrain:
+        model = un.training.LitSegmentation.load_from_checkpoint(checkpoint_path)
     else:
         model = un.models.UNet(config=config, deep_supervision=deep_supervision)
+        model = un.training.LitSegmentation(model, config=config)
 
-    model = un.training.LitSegmentation(model, config=config)
     data = un.training.SegmentationData(config)
 
-    tb_logger = TensorBoardLogger(save_dir="/media/tin/Expansion/honours/logs/", name="lightning_log_tb")
-    csv_logger = CSVLogger(save_dir="/media/tin/Expansion/honours/logs/", name="lightning_log_csv")
+    tb_logger = TensorBoardLogger(
+        save_dir="/media/tin/Expansion/honours/logs/", name="lightning_log_tb"
+    )
+
     checkpoint = ModelCheckpoint(
         monitor="val_loss",
         mode="min",
-        dirpath=f"{checkpoint_path}/unet1",
-        filename="{epoch:02d}-{val/loss:.2f}",
-        auto_insert_metric_name=False,
+        dirpath=f"{checkpoint_path}",
+        filename="{epoch:02d}-{val_loss:.3f}",
+        every_n_epochs=100,
+        save_top_k=-1,
+    )
+    strat = DeepSpeedStrategy(
+        accelerator="gpu",
+        offload_optimizer=True,
     )
 
-    strategy = DeepSpeedStrategy(
-            stage=2,
-            offload_optimizer=True,
-            offload_parameters=False,
-        )
     trainer = Trainer(
         max_epochs=config["n_epochs"],
         limit_train_batches=config["n_batches_per_epoch"],
         limit_val_batches=config["n_batches_val"],
         callbacks=[checkpoint],
-        strategy=strategy,
+        strategy="ddp",
+        check_val_every_n_epoch=5,
         accelerator="gpu",
         precision="16-mixed",
         enable_progress_bar=True,
         enable_model_summary=True,
-        logger=(tb_logger, csv_logger)
+        logger=tb_logger,
     )
     trainer.fit(model, data)
     # don't train, prevent possible data-snooping :(
-    #trainer.test(model, data)
+    # trainer.test(model, data)
 
 
 if __name__ == "__main__":
@@ -82,8 +85,14 @@ if __name__ == "__main__":
     parser.add_argument(
         "--checkpoint_path",
         type=str,
-        help="Path to save model checkpoints.",
+        help="Path to save or load model checkpoints.",
         default=config["model_checkpoint_path"],
+    )
+    parser.add_argument(
+        "--retrain",
+        type=bool,
+        help="Whether to retrain a model saved in the model checkpoint",
+        default=False
     )
     parser.add_argument(
         "--no_deep_supervision",
@@ -95,4 +104,14 @@ if __name__ == "__main__":
     args = parser.parse_args()
     config["staging_dir"] = os.path.dirname(args.data_path)
     config["staging_fname"] = os.path.basename(args.data_path)
-    main(config, args.ensemble_size, args.checkpoint_path, deep_supervision=not args.no_deep_supervision)
+    checkpoint_path = args.checkpoint_path
+
+
+
+    main(
+        config,
+        args.ensemble_size,
+        checkpoint_path,
+        args.retrain,
+        deep_supervision=not args.no_deep_supervision,
+    )

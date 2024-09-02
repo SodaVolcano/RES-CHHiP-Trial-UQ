@@ -51,6 +51,7 @@ class TestConvBlock:
     # Initializes ConvBlock with valid configuration and parameters
     def test_initializes_with_valid_configuration(self):
         config = {
+            "n_kernels_max": 256,
             "kernel_size": 3,
             "use_instance_norm": True,
             "activation": nn.ReLU,
@@ -101,6 +102,7 @@ class TestDownConvBlock:
             "dropout_rate": 0.1,
             "instance_norm_epsilon": 1e-5,
             "instance_norm_decay": 0.1,
+            "n_kernels_max": 256,
         }
         level = 1
         down_conv_block = DownConvBlock(level, config)  # type: ignore
@@ -110,6 +112,7 @@ class TestDownConvBlock:
     # Handles typical 3D tensor inputs without errors
     def test_handles_typical_3d_inputs_without_errors(self):
         config = {
+            "n_kernels_max": 256,
             "n_kernels_init": 8,
             "n_convolutions_per_block": 1,
             "kernel_size": 3,
@@ -130,6 +133,7 @@ class TestEncoder:
     # Encoder initializes with valid configuration
     def test_encoder_initializes_with_valid_configuration(self):
         config = {
+            "n_kernels_max": 256,
             "kernel_size": 3,
             "use_instance_norm": True,
             "activation": nn.ReLU,
@@ -149,6 +153,7 @@ class TestEncoder:
     # Encoder processes input tensor and returns expected output and skip connections
     def test_encoder_processes_input_and_returns_output(self, mocker):
         config = {
+            "n_kernels_max": 256,
             "kernel_size": 3,
             "use_instance_norm": True,
             "activation": nn.ReLU,
@@ -183,6 +188,7 @@ class TestUpConvBlock:
     # Correct upsampling and concatenation with skip connections
     def test_correct_upsampling_and_concatenation(self):
         config = {
+            "n_kernels_max": 256,
             "n_kernels_init": 16,
             "kernel_size": 3,
             "n_convolutions_per_block": 2,
@@ -205,6 +211,7 @@ class TestDecoder:
     # Decoder initializes correctly with valid configuration
     def test_decoder_initializes_correctly(self):
         config = {
+            "n_kernels_max": 256,
             "n_levels": 3,
             "n_kernels_init": 16,
             "n_kernels_last": 1,
@@ -220,7 +227,7 @@ class TestDecoder:
         decoder = Decoder(config, deep_supervision=False)  # type: ignore
         # encoder don't have first level
         assert len(decoder.levels) == config["n_levels"] - 1
-        assert isinstance(decoder.last_conv, nn.Sequential)
+        assert isinstance(decoder.last_conv, nn.Conv3d)
         assert isinstance(decoder.last_activation, nn.ReLU)
 
         assert isinstance(decoder.last_activation, nn.ReLU)
@@ -228,6 +235,7 @@ class TestDecoder:
     # Forward pass without deep supervision returns correct tensor shape
     def test_forward_pass_without_deep_supervision_returns_correct_tensor_shape(self):
         config = {
+            "n_kernels_max": 256,
             "n_levels": 3,
             "n_kernels_init": 16,
             "n_kernels_last": 1,
@@ -249,6 +257,7 @@ class TestDecoder:
     # Forward pass with deep supervision returns list of correct tensor shapes
     def test_forward_deep_supervision_tensor_shapes(self):
         config = {
+            "n_kernels_max": 256,
             "n_levels": 3,
             "n_kernels_init": 16,
             "n_kernels_last": 1,
@@ -265,8 +274,8 @@ class TestDecoder:
         x = torch.randn(1, 64, 32, 32, 32)
         skips = [torch.randn(1, 16, 32, 32, 32), torch.randn(1, 32, 16, 16, 16)]
         outputs = decoder(x, skips, logits=False)
-        assert len(outputs) == config["n_levels"] - 1
-        expected_shapes = [(1, 1, 16, 16, 16), (1, 1, 32, 32, 32)]
+        assert len(outputs) == config["n_levels"] - 2
+        expected_shapes = [(1, 1, 32, 32, 32)]
         for output, shape in zip(outputs, expected_shapes):
             assert output.shape == torch.Size(shape)
 
@@ -275,6 +284,7 @@ class TestUNet:
     # Initializes UNet with valid configuration and processes input tensor correctly
     def test_unet_initialization_and_forward_pass(self, mocker):
         config = {
+            "n_kernels_max": 256,
             "n_kernels_init": 4,
             "kernel_size": 3,
             "n_convolutions_per_block": 2,
@@ -310,12 +320,13 @@ class TestUNet:
         # Assertions
         assert outputs is not None
         assert isinstance(outputs, list)
-        for output, expected in zip(outputs, [32, 64, 128]):
+        for output, expected in zip(outputs, [64, 128]):
             assert output.shape == (1, 1, *(expected,) * 3)
 
     # Deep supervision mode in forward pass returns list of outputs from each level
     def test_deep_supervision_mode_returns_list_of_outputs(self, mocker):
         config = {
+            "n_kernels_max": 256,
             "n_kernels_init": 8,
             "n_convolutions_per_block": 2,
             "kernel_size": 3,
@@ -355,6 +366,7 @@ class TestUNet:
 
     def test_prime_input_shape(self, mocker):
         config = {
+            "n_kernels_max": 256,
             "n_kernels_init": 8,
             "n_convolutions_per_block": 2,
             "kernel_size": 3,
@@ -382,6 +394,7 @@ class TestMCDropoutUNet:
     # Initialize MCDropoutUNet with a valid Configuration and ensure it wraps a new UNet instance
     def test_initialization_with_valid_config(self):
         config = {
+            "n_kernels_max": 256,
             "n_kernels_init": 4,
             "n_convolutions_per_block": 2,
             "kernel_size": 3,
@@ -408,6 +421,7 @@ class TestMCDropoutUNet:
     # Test that passing the same input produces different outputs
     def test_same_input_different_output(self):
         config = {
+            "n_kernels_max": 256,
             "n_kernels_init": 8,
             "n_convolutions_per_block": 2,
             "kernel_size": 3,
