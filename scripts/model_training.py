@@ -7,7 +7,7 @@ import torch
 from scripts.__helpful_parser import HelpfulParser
 from uncertainty.config import Configuration
 import torch
-from lightning.pytorch.loggers import TensorBoardLogger, CSVLogger
+from lightning.pytorch.loggers import TensorBoardLogger
 from lightning.pytorch.strategies import DeepSpeedStrategy
 
 
@@ -92,7 +92,7 @@ if __name__ == "__main__":
         "--retrain",
         type=bool,
         help="Whether to retrain a model saved in the model checkpoint",
-        default=False
+        default=False,
     )
     parser.add_argument(
         "--no_deep_supervision",
@@ -105,8 +105,6 @@ if __name__ == "__main__":
     config["staging_dir"] = os.path.dirname(args.data_path)
     config["staging_fname"] = os.path.basename(args.data_path)
     checkpoint_path = args.checkpoint_path
-
-
 
     main(
         config,

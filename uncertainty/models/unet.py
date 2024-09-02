@@ -282,14 +282,18 @@ class Decoder(nn.Module):
         if deep_supervision:
             self.last_conv = nn.ModuleList(
                 [
-                    nn.Conv3d(
-                        in_channels=_calc_n_kernels(
-                            config["n_kernels_init"], level, config["n_kernels_max"]
-                        ),
-                        out_channels=config["n_kernels_last"],
-                        kernel_size=1,
-                        bias=False,
-                    ) if level != config["n_levels"] - 2 else None # ignore lowest level from deep supervision
+                    (
+                        nn.Conv3d(
+                            in_channels=_calc_n_kernels(
+                                config["n_kernels_init"], level, config["n_kernels_max"]
+                            ),
+                            out_channels=config["n_kernels_last"],
+                            kernel_size=1,
+                            bias=False,
+                        )
+                        if level != config["n_levels"] - 2
+                        else nn.Identity()
+                    )  # ignore lowest level from deep supervision
                     for level in range(config["n_levels"] - 2, -1, -1)
                 ]
             )
@@ -361,8 +365,8 @@ class UNet(nn.Module):
     config : Configuration
         Dictionary containing configuration parameters
     deep_supervision : bool
-        If True, a list of outputs from each decoder level is returned. 
-        The outputs are from convolving the output of each level with 
+        If True, a list of outputs from each decoder level is returned.
+        The outputs are from convolving the output of each level with
         a 1x1 convolution. **NOTE** that the last two level of the U-Net
         (bottleneck and last layer of decoder) is not returned.
     """

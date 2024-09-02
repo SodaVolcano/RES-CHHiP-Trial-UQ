@@ -252,7 +252,7 @@ def _preprocess_data_configurable(
     def torchio_crop_or_pad(arr: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         """crop/pad array centered using the target mask to at least patch_size"""
         if all(dim >= patch_dim for dim, patch_dim in zip(shape, config["patch_size"])):
-            return arr
+            return (arr, BODY_MASK)
 
         return tz.pipe(
             (arr, BODY_MASK),
@@ -261,7 +261,7 @@ def _preprocess_data_configurable(
                 (
                     max(dim, patch_dim)
                     for dim, patch_dim in zip(shape, config["patch_size"])
-                ),
+                ),  # type: ignore
                 padding_mode=np.min(arr),
                 mask_name="mask",
             ),
