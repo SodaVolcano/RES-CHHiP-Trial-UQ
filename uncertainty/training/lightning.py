@@ -1,7 +1,11 @@
+import inspect
 import os
 from typing import Optional
 
 
+from sympy import Q
+import toolz as tz
+from toolz import curried
 import torch.utils
 from pytorch_lightning import seed_everything
 import time
@@ -18,7 +22,7 @@ from uncertainty.training.datasets import (
     SlidingPatchDataset,
 )
 
-from .loss import SmoothDiceLoss
+from .loss import DeepSupervisionLoss, DiceBCELoss, SmoothDiceLoss
 from ..config import Configuration
 from .augmentations import augmentations
 
@@ -111,7 +115,9 @@ class LitSegmentation(lit.LightningModule):
     Parameters
     ----------
     model : nn.Module
-        PyTorch model to be trained
+        PyTorch model to be trained. If training an ensemble, the ensemble
+        members are created using the same model class and the same constructor
+        arguments.
     config : Configuration
         Configuration object
     class_weights : Optional[list[float]]
@@ -125,79 +131,36 @@ class LitSegmentation(lit.LightningModule):
         model: nn.Module,
         config: Configuration,
         class_weights: Optional[torch.Tensor] = None,
-        n_models: int = 1,
     ):
         super().__init__()
         self.save_hyperparameters(ignore=["model"])
-        self.model = model
         self.config = config
-        self.deep_supervision = (
-            hasattr(model, "deep_supervision") and model.deep_supervision
-        )
         self.class_weights = class_weights
-        self.bce_loss = nn.BCEWithLogitsLoss(class_weights)
-        # Smooth, differentiable approximation
-        self.dice_loss = SmoothDiceLoss()
         # Original dice, used for evaluation
         self.dice_eval = MultilabelF1Score(num_labels=config["output_channel"])
         self.running_loss = RunningMean(window=10)
         self.val_counter = 0
 
+        self.model = model
+        self.deep_supervision = (
+            hasattr(model, "deep_supervision") and model.deep_supervision
+        )
+        if self.deep_supervision:
+            self.loss = DeepSupervisionLoss(DiceBCELoss(class_weights, logits=True))
+        else:
+            self.loss = DiceBCELoss(class_weights, logits=True)
+
+    def __dump_tensors(self, x, y, y_pred, dice, loss, val_counter):
+        name = os.path.join("./batches", f"batch_{val_counter}.pt")
+        torch.save({"x": x, "y": y, "y_pred": y_pred, "dice": dice, "loss": loss}, name)
+
     def forward(self, x):
         return self.model(x)
-
-    def __calc_loss_deep_supervision(
-        self, y_preds: list[torch.Tensor], y: torch.Tensor
-    ) -> int:
-        """
-        Calculate the loss for each level of the U-Net
-
-        Parameters
-        ----------
-        y_preds : list[torch.Tensor]
-            List of outputs from the U-Net ordered from the lowest resolution
-            to the highest resolution
-        """
-        ys = [nn.Upsample(size=y_pred.shape[2:])(y) for y_pred in y_preds]
-
-        weights = [1 / (2**i) for i in range(len(y_preds))]
-        weights = [weight / sum(weights) for weight in weights]  # normalise to sum to 1
-
-        # Reverse weight to match y_preds; halves weights as resolution decreases
-        return sum(
-            weight * self.calc_loss_single(y_pred, y_scaled)
-            for weight, y_pred, y_scaled in zip(reversed(weights), y_preds, ys)
-        )
-
-    def calc_loss_single(self, y_pred: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
-        """
-        Compute the sum of the binary cross entropy loss and the dice loss for one output
-        """
-        # Sums BCE loss for each class, y have shape (batch, n_classes, H, W, D)
-        bce = self.bce_loss(y_pred, y)
-        # y_pred = (
-        #    self.model.last_activation(y_pred) > self.config["classification_threshold"]
-        # )
-        dice = self.dice_loss(y_pred, y)
-
-        self.log("bce", bce.detach(), sync_dist=True, prog_bar=True)
-        self.log("dice", 1 - dice.detach(), sync_dist=True, prog_bar=True)
-        return bce + dice  # scale dice to match bce?
-
-    def calc_loss(
-        self, y_pred: torch.Tensor | list[torch.Tensor], y: torch.Tensor
-    ) -> torch.Tensor:
-
-        return (
-            self.calc_loss_single(y_pred, y)
-            if not self.deep_supervision and not isinstance(y_pred, list)
-            else self.__calc_loss_deep_supervision(y_pred, y)  # type: ignore
-        )
 
     def training_step(self, batch: torch.Tensor):
         x, y = batch
         y_pred = self.model(x, logits=True)
-        loss = self.calc_loss(y_pred, y)
+        loss = self.loss(y_pred, y)
 
         self.running_loss(loss.detach())
         self.log(
@@ -213,7 +176,7 @@ class LitSegmentation(lit.LightningModule):
         x, y = batch
 
         y_pred = self.model(x, logits=True)
-        loss = self.calc_loss(y_pred, y)
+        loss = self.loss(y_pred, y)
         if self.deep_supervision:
             y_pred = y_pred[-1]
         dice = self.dice_eval(y_pred, y)
@@ -221,10 +184,7 @@ class LitSegmentation(lit.LightningModule):
         # TODO: get dice of each organ
 
         if self.val_counter % 10:
-            name = os.path.join("./batches", f"batch_{self.counter}.pt")
-            torch.save(
-                {"x": x, "y": y, "y_pred": y_pred, "dice": dice, "loss": loss}, name
-            )
+            self.__dump_tensors(x, y, y_pred, dice, loss, self.val_counter)
             self.val_counter += 1
 
         self.log(
@@ -245,7 +205,7 @@ class LitSegmentation(lit.LightningModule):
     def test_step(self, batch: torch.Tensor):
         x, y = batch
         y_pred = self.model(x, logits=False)
-        loss = self.calc_loss(y_pred, y)
+        loss = self.loss(y_pred, y)
         if self.deep_supervision:
             y_pred = y_pred[-1]
         dice = self.dice_eval(y_pred, y)
@@ -260,3 +220,31 @@ class LitSegmentation(lit.LightningModule):
         )
         lr_scheduler = self.config["lr_scheduler"](optimiser)  # type: ignore
         return {"optimizer": optimiser, "lr_scheduler": lr_scheduler}
+
+
+class LitDeepEnsemble(lit.LightningDataModule):
+    def __init__(
+        self,
+        model,
+        ensemble_size: int,
+        config: Configuration,
+        class_weights: Optional[torch.Tensor] = None,
+    ):
+        super().__init__()
+        self.save_hyperparameters()
+        self.config = config
+        self.class_weights = class_weights
+        self.ensemble_size = ensemble_size
+
+        self.automatic_optimization = False  # activate manual optimization
+        self.__init_ensemble()
+
+    def __init_ensemble(self):
+        cls = type(self.model)
+        self.model = tz.pipe(
+            cls,
+            lambda cls: inspect.signature(cls.__init__),
+            lambda sig: sig.parameters.values(),
+            curried.map(lambda param: getattr(self.model, param.name)),
+            lambda args: nn.ModuleList([cls(*args) for _ in range(self.ensemble_size)]),
+        )

@@ -44,29 +44,6 @@ class TestLitSegmentation:
             0, 2, (3, config["output_channel"], 100, 100, 100), dtype=torch.float32
         )  # Example random ground truth tensor
 
-        loss = lit_segmentation.calc_loss(y_pred, y)
+        loss = lit_segmentation.loss(y_pred, y)
 
-        assert isinstance(loss, torch.Tensor)
-
-    # Calculation of loss with deep supervision
-    def test_calculation_loss_deep_supervision(self, mocker):
-        model = mocker.Mock(spec=nn.Module)
-        model.last_activation = nn.Sigmoid()
-        model.deep_supervision = True
-        config = {
-            "output_channel": 3,
-            "optimiser": mocker.Mock(),
-            "optimiser_kwargs": {},
-            "lr_scheduler": mocker.Mock(),
-        }
-        lit_segmentation = LitSegmentation(model=model, config=config)  # type: ignore
-        y_preds = [
-            torch.randn(3, config["output_channel"], 32, 32, 32),
-            torch.randn(3, config["output_channel"], 64, 64, 64),
-            torch.randn(3, config["output_channel"], 128, 128, 128),
-        ]
-        y = torch.randint(
-            0, 2, (3, config["output_channel"], 128, 128, 128), dtype=torch.float32
-        )
-        loss = lit_segmentation._LitSegmentation__calc_loss_deep_supervision(y_preds, y)
         assert isinstance(loss, torch.Tensor)
