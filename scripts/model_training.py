@@ -1,3 +1,4 @@
+from numpy import isin
 from context import uncertainty as un
 from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning import Trainer
@@ -8,7 +9,6 @@ from scripts.__helpful_parser import HelpfulParser
 from uncertainty.config import Configuration
 import torch
 from lightning.pytorch.loggers import TensorBoardLogger
-from lightning.pytorch.strategies import DeepSpeedStrategy
 
 
 def main(
@@ -22,13 +22,22 @@ def main(
     torch.set_float32_matmul_precision("medium")
     torch.autograd.set_detect_anomaly(True)
 
+    lit_model_cls = (
+        un.training.LitDeepEnsemble
+        if ensemble_size > 1
+        else un.training.LitSegmentation
+    )
+
     if retrain:
-        model = un.training.LitSegmentation.load_from_checkpoint(checkpoint_path)
+        model = lit_model_cls.load_from_checkpoint(checkpoint_path)
     else:
         model = un.models.UNet(config=config, deep_supervision=deep_supervision)
-        model = un.training.LitSegmentation(model, config=config)
+        if isinstance(lit_model_cls, un.training.LitDeepEnsemble):
+            model = lit_model_cls(model, ensemble_size, config=config)
+        elif isinstance(lit_model_cls, un.training.LitSegmentation):
+            model = lit_model_cls(model, config=config)
 
-    data = un.training.SegmentationData(config)
+    data = un.training.SegmentationData(ensemble_size, config)
 
     tb_logger = TensorBoardLogger(
         save_dir="/media/tin/Expansion/honours/logs/", name="lightning_log_tb"
@@ -41,10 +50,6 @@ def main(
         filename="{epoch:02d}-{val_loss:.3f}",
         every_n_epochs=100,
         save_top_k=-1,
-    )
-    strat = DeepSpeedStrategy(
-        accelerator="gpu",
-        offload_optimizer=True,
     )
 
     trainer = Trainer(

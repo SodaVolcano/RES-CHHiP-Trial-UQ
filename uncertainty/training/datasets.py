@@ -112,6 +112,13 @@ class RandomPatchDataset(IterableDataset):
         to have a certain number of patches with a foreground class (oversampling)
     patch_size : tuple[int]
         Size of the patch to extract from the dataset.
+    fg_oversample_ratio : float
+        Ratio of patches with guaranteed foreground class to include in each batch. Hard
+        fixed with a minimum of 1 per batch.
+    ensemble_size : int
+        Number of models in the ensemble to fetch batch for. Batch size is `batch_size * ensemble_size`
+        intended to feed each ensemble member with `batch_size` number of patches, each with
+        oversampled patches.
     transform : Callable[[tuple[np.ndarray, np.ndarray]], tuple[np.ndarray, np.ndarray]]
         Function to apply to the (x, y) patch pair. Default is the identity function.
         Intended to be used for data augmentation.
@@ -127,6 +134,7 @@ class RandomPatchDataset(IterableDataset):
         batch_size: int,
         patch_size: tuple[int, ...],
         fg_oversample_ratio: float,
+        ensemble_size: int = 1,
         transform: Callable[
             [tuple[np.ndarray, np.ndarray]], tuple[np.ndarray, np.ndarray]
         ] = tz.identity,
@@ -138,6 +146,7 @@ class RandomPatchDataset(IterableDataset):
         self.transform = transform
         self.patch_size = patch_size
         self.fg_ratio = fg_oversample_ratio
+        self.ensemble_size = ensemble_size
         self.batch_size = batch_size
         self.affine = RandomAffine3D(
             5, align_corners=True, shears=0, scale=(0.9, 1.1), p=0.15
@@ -220,6 +229,18 @@ class RandomPatchDataset(IterableDataset):
             tz.concat,
         )
 
+    def __ensemble_iter(self):
+        """
+        Concatenate `self.ensemble_size` number of iterators
+
+        Ensure oversample property is maintained for batch fed to each ensemble member
+        """
+        return tz.pipe(
+            range(self.ensemble_size),
+            curried.map(lambda _: self.__oversampled_iter()),
+            tz.concat,
+        )
+
     @torch.no_grad()
     def __iter__(self):
         """
@@ -233,7 +254,7 @@ class RandomPatchDataset(IterableDataset):
 
         while True:
             if len(x) == 0:
-                batch = (vol_mask for vol_mask in self.__oversampled_iter())
+                batch = (vol_mask for vol_mask in self.__ensemble_iter())
                 x, y = zip(*batch)
                 # Apply augmentation batch-wise, more efficient
                 x = self.affine(torch.stack(x))

@@ -154,6 +154,7 @@ def training_config() -> dict[str, int | str | list[int | float | str] | type]:
         "optimiser": optim.SGD,  # type: ignore
         "optimiser_kwargs": {"momentum": 0.99, "nesterov": True},
         # Learning rate scheduler, decrease learning rate at certain epochs
+        # WARNING: interval is ignored in ensemble training because of manual optimisation
         "lr_scheduler": lambda optimiser: optim.lr_scheduler.PolynomialLR(
             optimiser, total_iters=750, power=0.9
         ),
