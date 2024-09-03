@@ -278,9 +278,9 @@ class LitDeepEnsemble(lit.LightningModule):
             lambda args: [cls(*args) for _ in range(self.ensemble_size)],
         )  # type: ignore
 
-    def forward(self, x):
+    def forward(self, x, logits=True):
         def call_model(params: dict, buffers: dict, x: torch.Tensor) -> torch.Tensor:
-            return functional_call(self.models[0], (params, buffers), (x,))
+            return functional_call(self.models[0], (params, buffers), (x, logits))
 
         # each model should have different randomness (dropout)
         return vmap(call_model, in_dims=(0, 0, None), randomness="different")(
@@ -324,7 +324,7 @@ class LitDeepEnsemble(lit.LightningModule):
     @torch.no_grad()
     def validation_step(self, batch: torch.Tensor):
         x, y = batch
-        y_preds = [model(x) for model in self.models]
+        y_preds = self.forward(torch.repeat_interleave(x, self.ensemble_size, dim=0))
 
         loss_dict = {
             f"val_loss_{i}": self.loss(y_pred, y) for i, y_pred in enumerate(y_preds)
@@ -364,7 +364,7 @@ class LitDeepEnsemble(lit.LightningModule):
     @torch.no_grad()
     def test_step(self, batch: torch.Tensor):
         x, y = batch
-        y_preds = [model(x) for model in self.models]
+        y_preds = self.forward(torch.repeat_interleave(x, self.ensemble_size, dim=0))
 
         loss_dict = {
             f"test_loss_{i}": self.loss(y_pred, y) for i, y_pred in enumerate(y_preds)
