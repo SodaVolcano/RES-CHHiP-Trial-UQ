@@ -10,6 +10,8 @@ from uncertainty.config import Configuration
 import torch
 from lightning.pytorch.loggers import TensorBoardLogger
 
+LitDeepEnsemble = un.training.LitDeepEnsemble
+LitSegmentation = un.training.LitSegmentation
 
 def main(
     config: Configuration,
@@ -23,18 +25,18 @@ def main(
     torch.autograd.set_detect_anomaly(True)
 
     lit_model_cls = (
-        un.training.LitDeepEnsemble
+        LitDeepEnsemble
         if ensemble_size > 1
-        else un.training.LitSegmentation
+        else LitSegmentation
     )
 
     if retrain:
         model = lit_model_cls.load_from_checkpoint(checkpoint_path)
     else:
         model = un.models.UNet(config=config, deep_supervision=deep_supervision)
-        if isinstance(lit_model_cls, un.training.LitDeepEnsemble):
-            model = lit_model_cls(model, ensemble_size, config=config)
-        elif isinstance(lit_model_cls, un.training.LitSegmentation):
+        if lit_model_cls is LitDeepEnsemble:
+            model = lit_model_cls(model, ensemble_size=ensemble_size, config=config)
+        elif lit_model_cls is LitSegmentation:
             model = lit_model_cls(model, config=config)
         else:
             raise ValueError(f"Unknown model class: {lit_model_cls}")

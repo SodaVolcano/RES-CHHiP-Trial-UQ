@@ -229,6 +229,7 @@ class RandomPatchDataset(IterableDataset):
             tz.concat,
         )
 
+    @torch.no_grad()
     def __ensemble_iter(self):
         """
         Concatenate `self.ensemble_size` number of iterators

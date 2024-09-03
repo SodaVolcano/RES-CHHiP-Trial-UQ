@@ -115,7 +115,7 @@ def unet_config() -> dict[str, int | float | str | type[nn.Module]]:
         "n_kernels_init": 32,
         "n_kernels_max": 512,  # maximum allowed number of kernels for a level
         # Number of resolutions/blocks; height of U-Net
-        "n_levels": 5,
+        "n_levels": 6,
         # Number of class to predict
         "n_kernels_last": 3,
         "final_layer_activation": nn.Sigmoid,
@@ -128,7 +128,7 @@ def logger_config() -> dict[str, str]:
     Preset configuration for logger
     """
     return {
-        "log_sink": "/media/tin/Expansion/honours/logs//out_{time}.log",
+        "log_sink": "./logs/out_{time}.log",
         "log_format": "{time:YYYY-MM-DD at HH:mm:ss} {level} {message}",
         "log_level": "DEBUG",
         "log_retention": "7 days",
@@ -140,10 +140,10 @@ def training_config() -> dict[str, int | str | list[int | float | str] | type]:
     Preset configuration for training
     """
     return {
-        "model_checkpoint_path": "/media/tin/Expansion/honours/checkpoints/unet",
+        "model_checkpoint_path": "./checkpoints/unet",
         # from nnU-Net settings
         "deep_supervision": True,
-        "n_epochs": 750,
+        "n_epochs": 500,
         "n_batches_per_epoch": 250,
         "n_batches_val": 50,  # Number of batches when using random sampler for validation set
         "batch_size": 2,

@@ -27,7 +27,7 @@ from ..config import Configuration
 from .augmentations import augmentations
 
 
-def __seed_with_time(id: int):
+def _seed_with_time(id: int):
     seed_everything(int(time.time() + (id * 3)), verbose=False)
 
 
@@ -74,12 +74,12 @@ class SegmentationData(lit.LightningDataModule):
                 ensemble_size=self.ensemble_size,
                 transform=self.augmentations,
             ),
-            num_workers=14,
+            num_workers=8,
             batch_size=self.config["batch_size"],
             prefetch_factor=1,
             # persistent_workers=True,
             pin_memory=True,
-            worker_init_fn=__seed_with_time,
+            worker_init_fn=_seed_with_time,
         )
 
     def val_dataloader(self):
@@ -97,7 +97,7 @@ class SegmentationData(lit.LightningDataModule):
             prefetch_factor=1,
             pin_memory=True,
             # persistent_workers=True,
-            worker_init_fn=__seed_with_time,
+            worker_init_fn=_seed_with_time,
         )
 
     def test_dataloader(self):
@@ -230,7 +230,7 @@ class LitSegmentation(lit.LightningModule):
             self.model.parameters(), **self.config["optimiser_kwargs"]
         )
         lr_scheduler = self.config["lr_scheduler"](optimiser)  # type: ignore
-        return {"optimiser": optimiser, "lr_scheduler": lr_scheduler}
+        return {"optimizer": optimiser, "lr_scheduler": lr_scheduler}
 
 
 class LitDeepEnsemble(lit.LightningModule):
@@ -268,20 +268,21 @@ class LitDeepEnsemble(lit.LightningModule):
 
         self.automatic_optimization = False  # activate manual optimization
 
-    def __init_ensemble(self, model) -> list[nn.Module]:
+    def __init_ensemble(self, model) -> nn.ModuleList:
         cls = type(model)
         return tz.pipe(
             cls,
-            lambda cls: inspect.signature(cls.__init__),
-            lambda sig: sig.parameters.values(),
+            lambda cls: inspect.signature(cls.__init__).parameters,
+            curried.keyfilter(lambda k: k != "self"),
+            lambda sig: sig.values(),
             curried.map(lambda param: getattr(model, param.name)),
-            lambda args: [cls(*args) for _ in range(self.ensemble_size)],
+            tuple,
+            lambda args: nn.ModuleList([cls(*args) for _ in range(self.ensemble_size)]).to("cuda"),
         )  # type: ignore
 
     def forward(self, x, logits=True):
         def call_model(params: dict, buffers: dict, x: torch.Tensor) -> torch.Tensor:
             return functional_call(self.models[0], (params, buffers), (x, logits))
-
         # each model should have different randomness (dropout)
         return vmap(call_model, in_dims=(0, 0, None), randomness="different")(
             self.ensemble_params, self.ensemble_buffers, x
@@ -399,7 +400,4 @@ class LitDeepEnsemble(lit.LightningModule):
         )
         opts = [optimiser_fn(model.parameters()) for model in self.models]
         lr_schedulers = [self.config["lr_scheduler"](optimiser) for optimiser in opts]  # type: ignore
-        return {
-            "optimiser": opts,
-            "lr_scheduler": lr_schedulers,
-        }
+        return opts, lr_schedulers
