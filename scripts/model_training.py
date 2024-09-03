@@ -36,6 +36,8 @@ def main(
             model = lit_model_cls(model, ensemble_size, config=config)
         elif isinstance(lit_model_cls, un.training.LitSegmentation):
             model = lit_model_cls(model, config=config)
+        else:
+            raise ValueError(f"Unknown model class: {lit_model_cls}")
 
     data = un.training.SegmentationData(ensemble_size, config)
 
