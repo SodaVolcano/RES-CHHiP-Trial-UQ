@@ -2,7 +2,7 @@ from .augmentations import (
     augmentations,
 )
 from .datasets import H5Dataset, SlidingPatchDataset, RandomPatchDataset
-from .lightning import LitSegmentation, SegmentationData, LitDeepEnsemble
+from .lightning import LitSegmentation, SegmentationData
 
 __all__ = [
     "augmentations",
@@ -11,5 +11,4 @@ __all__ = [
     "H5Dataset",
     "SlidingPatchDataset",
     "RandomPatchDataset",
-    "LitDeepEnsemble",
 ]

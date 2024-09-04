@@ -3,7 +3,6 @@ import os
 from typing import Optional
 
 
-from torch.func import functional_call, stack_module_state  # type: ignore
 import toolz as tz
 from toolz import curried
 import torch.utils
@@ -165,8 +164,12 @@ class LitSegmentation(lit.LightningModule):
         else:
             self.loss = DiceBCELoss(class_weights, logits=True)
 
-    def forward(self, x):
-        return self.model(x)
+    def __dump_tensors(self, x, y, y_pred, dice, loss, val_counter):
+        name = os.path.join("./batches", f"batch_{val_counter}.pt")
+        torch.save({"x": x, "y": y, "y_pred": y_pred, "dice": dice, "loss": loss}, name)
+
+    def forward(self, x, logits: bool = False):
+        return self.model(x, logits)
 
     def training_step(self, batch: torch.Tensor):
         x, y = batch
@@ -230,176 +233,4 @@ class LitSegmentation(lit.LightningModule):
             self.model.parameters(), **self.config["optimiser_kwargs"]
         )
         lr_scheduler = self.config["lr_scheduler"](optimiser)  # type: ignore
-        return {"optimiser": optimiser, "lr_scheduler": lr_scheduler}
-
-
-class LitDeepEnsemble(lit.LightningModule):
-    """
-    Train an ensemble of models.
-
-    `config["n_batches"]` is the number of batches to train for.
-    """
-
-    def __init__(
-        self,
-        model,
-        ensemble_size: int,
-        config: Configuration,
-        class_weights: Optional[torch.Tensor] = None,
-    ):
-        super().__init__()
-        self.save_hyperparameters()
-        self.config = config
-        self.class_weights = class_weights
-        self.ensemble_size = ensemble_size
-
-        self.models = self.__init_ensemble(model)
-        self.ensemble_params, self.ensemble_buffers = stack_module_state(self.models)
-        self.deep_supervision = (
-            hasattr(model, "deep_supervision") and model.deep_supervision
-        )
-        if self.deep_supervision:
-            self.loss = DeepSupervisionLoss(DiceBCELoss(class_weights, logits=True))
-        else:
-            self.loss = DiceBCELoss(class_weights, logits=True)
-        self.dice_eval = MultilabelF1Score(num_labels=config["output_channel"])
-        self.running_loss = RunningMean(window=10)
-        self.val_counter = 0
-
-        self.automatic_optimization = False  # activate manual optimization
-
-    def __init_ensemble(self, model) -> list[nn.Module]:
-        cls = type(model)
-        return tz.pipe(
-            cls,
-            lambda cls: inspect.signature(cls.__init__),
-            lambda sig: sig.parameters.values(),
-            curried.map(lambda param: getattr(model, param.name)),
-            lambda args: [cls(*args) for _ in range(self.ensemble_size)],
-        )  # type: ignore
-
-    def forward(self, x, logits=True):
-        def call_model(params: dict, buffers: dict, x: torch.Tensor) -> torch.Tensor:
-            return functional_call(self.models[0], (params, buffers), (x, logits))
-
-        # each model should have different randomness (dropout)
-        return vmap(call_model, in_dims=(0, 0, None), randomness="different")(
-            self.ensemble_params, self.ensemble_buffers, x
-        )
-
-    def optimise_single_model(
-        self,
-        y: torch.Tensor,
-        y_pred: torch.Tensor,
-        optimiser: nn.Module,
-        lr_scheduler: nn.Module,
-    ) -> torch.Tensor:
-        loss = self.loss(y_pred, y)
-        optimiser.zero_grad()
-        self.manual_backward(loss)
-        optimiser.step()
-        lr_scheduler.step()
-        return loss
-
-    def training_step(self, batch: torch.Tensor):
-        optimisers, lr_schedulers = self.optimizers()  # type: ignore
-        x, y = batch
-        y_preds = torch.split(self.forward(x), x.shape[0] // self.ensemble_size, dim=0)
-        ys = torch.split(y, x.shape[0] // self.ensemble_size, dim=0)
-        loss_dict = {
-            f"loss_{i}": self.optimise_single_model(y, y_pred, optimiser, lr_scheduler)
-            for i, (y, y_pred, optimiser, lr_scheduler) in enumerate(
-                zip(ys, y_preds, optimisers, lr_schedulers)
-            )
-        }
-        self.log_dict(loss_dict, prog_bar=False)
-        self.running_loss(sum(loss_dict.values().detach()) / len(loss_dict))
-        self.log(
-            "train_loss",
-            self.running_loss.compute(),
-            sync_dist=True,
-            prog_bar=True,
-        )
-
-    @torch.no_grad()
-    def validation_step(self, batch: torch.Tensor):
-        x, y = batch
-        y_preds = self.forward(torch.repeat_interleave(x, self.ensemble_size, dim=0))
-
-        loss_dict = {
-            f"val_loss_{i}": self.loss(y_pred, y) for i, y_pred in enumerate(y_preds)
-        }
-        if self.deep_supervision:
-            y_preds = [y_pred[-1] for y_pred in y_preds]
-        dice_dict = {
-            f"val_dice_{i}": self.dice_eval(y_pred, y)
-            for i, y_pred in enumerate(y_preds)
-        }
-        if self.val_counter % 10:
-            [
-                __dump_tensors(x, y, y_pred, dice, loss, self.val_counter, i)
-                for i, (y_pred, dice, loss) in enumerate(
-                    zip(y_preds, dice_dict.values(), loss_dict.values())
-                )
-            ]
-            self.val_counter += 1
-
-        self.log_dict(loss_dict, prog_bar=False)
-        self.log_dict(dice_dict, prog_bar=False)
-        self.log(
-            "val_loss",
-            sum(loss_dict.values()) / len(loss_dict),
-            sync_dist=True,
-            prog_bar=True,
-        )
-        self.log(
-            "val_dice",
-            sum(dice_dict.values()) / len(dice_dict),
-            sync_dist=True,
-            prog_bar=True,
-        )
-
-        return loss_dict
-
-    @torch.no_grad()
-    def test_step(self, batch: torch.Tensor):
-        x, y = batch
-        y_preds = self.forward(torch.repeat_interleave(x, self.ensemble_size, dim=0))
-
-        loss_dict = {
-            f"test_loss_{i}": self.loss(y_pred, y) for i, y_pred in enumerate(y_preds)
-        }
-        if self.deep_supervision:
-            y_preds = [y_pred[-1] for y_pred in y_preds]
-        dice_dict = {
-            f"test_dice_{i}": self.dice_eval(y_pred, y)
-            for i, y_pred in enumerate(y_preds)
-        }
-
-        self.log_dict(loss_dict, prog_bar=False)
-        self.log_dict(dice_dict, prog_bar=False)
-        self.log(
-            "test_loss",
-            sum(loss_dict.values()) / len(loss_dict),
-            sync_dist=True,
-            prog_bar=True,
-        )
-        self.log(
-            "test_dice",
-            sum(dice_dict.values()) / len(dice_dict),
-            sync_dist=True,
-            prog_bar=True,
-        )
-
-        return loss_dict
-
-    def configure_optimizers(self):  # type: ignore
-        optimiser_fn = lambda params: self.config["optimiser"](
-            params, **self.config["optimiser_kwargs"]
-        )
-        opts = [optimiser_fn(model.parameters()) for model in self.models]
-        lr_schedulers = [self.config["lr_scheduler"](optimiser) for optimiser in opts]  # type: ignore
-        return {
-            "optimiser": opts,
-            "lr_scheduler": lr_schedulers,
-        }
+        return {"optimizer": optimiser, "lr_scheduler": lr_scheduler}
