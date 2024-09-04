@@ -3,7 +3,6 @@ import os
 from typing import Optional
 
 
-from sympy import Q
 import toolz as tz
 from toolz import curried
 import torch.utils
@@ -154,8 +153,8 @@ class LitSegmentation(lit.LightningModule):
         name = os.path.join("./batches", f"batch_{val_counter}.pt")
         torch.save({"x": x, "y": y, "y_pred": y_pred, "dice": dice, "loss": loss}, name)
 
-    def forward(self, x):
-        return self.model(x)
+    def forward(self, x, logits: bool = False):
+        return self.model(x, logits)
 
     def training_step(self, batch: torch.Tensor):
         x, y = batch
@@ -220,31 +219,3 @@ class LitSegmentation(lit.LightningModule):
         )
         lr_scheduler = self.config["lr_scheduler"](optimiser)  # type: ignore
         return {"optimizer": optimiser, "lr_scheduler": lr_scheduler}
-
-
-class LitDeepEnsemble(lit.LightningDataModule):
-    def __init__(
-        self,
-        model,
-        ensemble_size: int,
-        config: Configuration,
-        class_weights: Optional[torch.Tensor] = None,
-    ):
-        super().__init__()
-        self.save_hyperparameters()
-        self.config = config
-        self.class_weights = class_weights
-        self.ensemble_size = ensemble_size
-
-        self.automatic_optimization = False  # activate manual optimization
-        self.__init_ensemble()
-
-    def __init_ensemble(self):
-        cls = type(self.model)
-        self.model = tz.pipe(
-            cls,
-            lambda cls: inspect.signature(cls.__init__),
-            lambda sig: sig.parameters.values(),
-            curried.map(lambda param: getattr(self.model, param.name)),
-            lambda args: nn.ModuleList([cls(*args) for _ in range(self.ensemble_size)]),
-        )

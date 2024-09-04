@@ -13,7 +13,6 @@ from lightning.pytorch.strategies import DeepSpeedStrategy
 
 def main(
     config: Configuration,
-    ensemble_size: int,
     checkpoint_path: str,
     retrain: bool,
     deep_supervision: bool,
@@ -61,7 +60,7 @@ def main(
         logger=tb_logger,
     )
     trainer.fit(model, data)
-    # don't train, prevent possible data-snooping :(
+    # don't test, prevent possible data-snooping :(
     # trainer.test(model, data)
 
 
@@ -75,12 +74,6 @@ if __name__ == "__main__":
         type=str,
         help="Path to the dataset.h5 file containing list of (x, y) pairs.",
         default=os.path.join(config["staging_dir"], config["staging_fname"]),
-    )
-    parser.add_argument(
-        "--ensemble_size",
-        type=int,
-        help="Number of models in the ensemble. Default is 1 (no ensemble training).",
-        default=1,
     )
     parser.add_argument(
         "--checkpoint_path",
@@ -108,7 +101,6 @@ if __name__ == "__main__":
 
     main(
         config,
-        args.ensemble_size,
         checkpoint_path,
         args.retrain,
         deep_supervision=not args.no_deep_supervision,
