@@ -58,14 +58,6 @@ Configuration = TypedDict(
 def data_config() -> dict[str, int | str | float | tuple[int, ...]]:
     """
     Preset configuration for data
-
-    Parameters
-    ----------
-    n_levels : int
-        Number of levels in the U-Net, used to calculate input shape
-        to ensure it's divisible by 2 * (n_levels - 1). The
-        dimensions are divided that many times in the U-Net so setting
-        it to a divisible number ensure no row/col is discarded.
     """
     return {
         # Directory containing folders of DICOM slices
@@ -128,7 +120,7 @@ def logger_config() -> dict[str, str]:
     Preset configuration for logger
     """
     return {
-        "log_sink": "/media/tin/Expansion/honours/logs//out_{time}.log",
+        "log_sink": "./logs/out_{time}.log",
         "log_format": "{time:YYYY-MM-DD at HH:mm:ss} {level} {message}",
         "log_level": "DEBUG",
         "log_retention": "7 days",
@@ -140,7 +132,7 @@ def training_config() -> dict[str, int | str | list[int | float | str] | type]:
     Preset configuration for training
     """
     return {
-        "model_checkpoint_path": "/media/tin/Expansion/honours/checkpoints/unet",
+        "model_checkpoint_path": "./checkpoints/unet_2",
         # from nnU-Net settings
         "deep_supervision": True,
         "n_epochs": 750,

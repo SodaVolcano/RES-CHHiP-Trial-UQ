@@ -26,7 +26,7 @@ from ..config import Configuration
 from .augmentations import augmentations
 
 
-def __seed_with_time(id: int):
+def _seed_with_time(id: int):
     seed_everything(int(time.time() + (id * 3)), verbose=False)
 
 
@@ -48,18 +48,32 @@ class SegmentationData(lit.LightningDataModule):
     Wrapper class for PyTorch dataset to be used with PyTorch Lightning
     """
 
-    def __init__(self, ensemble_size: int, config: Configuration):
+    def __init__(
+        self,
+        config: Configuration,
+        checkpoint_path: str,
+        train_val_indices: tuple[list[int], list[int]] | None = None,
+    ):
         super().__init__()
         self.config = config
         self.train_fname = os.path.join(config["staging_dir"], config["train_fname"])
         self.test_fname = os.path.join(config["staging_dir"], config["test_fname"])
         self.augmentations = augmentations(p=1)
-        self.ensemble_size = ensemble_size
 
         indices = list(range(len(H5Dataset(self.train_fname))))
-        self.train_indices, self.val_indices = random_split(
-            indices, [1 - config["val_split"], config["val_split"]]  # type: ignore
-        )
+        if train_val_indices:
+            self.train_indices, self.val_indices = train_val_indices
+        else:
+            self.train_indices, self.val_indices = random_split(
+                indices, [1 - config["val_split"], config["val_split"]]  # type: ignore
+            )
+            torch.save(
+                {
+                    "train_indices": list(self.train_indices),
+                    "val_indices": list(self.val_indices),
+                },
+                os.path.join(checkpoint_path, "indices.pt"),
+            )
 
     def train_dataloader(self):
         return DataLoader(
@@ -70,7 +84,6 @@ class SegmentationData(lit.LightningDataModule):
                 self.config["batch_size"],
                 patch_size=self.config["patch_size"],
                 fg_oversample_ratio=self.config["foreground_oversample_ratio"],
-                ensemble_size=self.ensemble_size,
                 transform=self.augmentations,
             ),
             num_workers=14,
@@ -78,7 +91,7 @@ class SegmentationData(lit.LightningDataModule):
             prefetch_factor=1,
             # persistent_workers=True,
             pin_memory=True,
-            worker_init_fn=__seed_with_time,
+            worker_init_fn=_seed_with_time,
         )
 
     def val_dataloader(self):
@@ -96,7 +109,7 @@ class SegmentationData(lit.LightningDataModule):
             prefetch_factor=1,
             pin_memory=True,
             # persistent_workers=True,
-            worker_init_fn=__seed_with_time,
+            worker_init_fn=_seed_with_time,
         )
 
     def test_dataloader(self):
@@ -153,6 +166,7 @@ class LitSegmentation(lit.LightningModule):
         # Original dice, used for evaluation
         self.dice_eval = MultilabelF1Score(num_labels=config["output_channel"])
         self.running_loss = RunningMean(window=10)
+        self.running_dice = RunningMean(window=10)
         self.val_counter = 0
 
         self.model = model
@@ -175,8 +189,21 @@ class LitSegmentation(lit.LightningModule):
         x, y = batch
         y_pred = self.model(x, logits=True)
         loss = self.loss(y_pred, y)
+        self.__dump_tensors(x, y, y_pred, 0, loss, self.val_counter)
+        self.val_counter += 1
 
+        if self.deep_supervision:
+            y_pred = y_pred[-1]
+        dice = self.dice_eval(y_pred, y)
+
+        self.running_dice(dice.detach())
         self.running_loss(loss.detach())
+        self.log(
+            "train_dice",
+            self.running_dice.compute(),
+            sync_dist=True,
+            prog_bar=True,
+        )
         self.log(
             "train_loss",
             self.running_loss.compute(),
@@ -199,7 +226,7 @@ class LitSegmentation(lit.LightningModule):
 
         if self.val_counter % 10:
             __dump_tensors(x, y, y_pred, dice, loss, self.val_counter)
-            self.val_counter += 1
+        self.val_counter += 1
 
         self.log(
             "val_loss",
