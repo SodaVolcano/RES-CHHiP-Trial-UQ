@@ -10,9 +10,6 @@ from uncertainty.config import Configuration
 import torch
 from lightning.pytorch.loggers import TensorBoardLogger
 
-LitDeepEnsemble = un.training.LitDeepEnsemble
-LitSegmentation = un.training.LitSegmentation
-
 def main(
     config: Configuration,
     checkpoint_path: str,

@@ -135,7 +135,7 @@ def training_config() -> dict[str, int | str | list[int | float | str] | type]:
         "model_checkpoint_path": "./checkpoints/unet_2",
         # from nnU-Net settings
         "deep_supervision": True,
-        "n_epochs": 500,
+        "n_epochs": 1000,
         "n_batches_per_epoch": 250,
         "n_batches_val": 50,  # Number of batches when using random sampler for validation set
         "batch_size": 2,

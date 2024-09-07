@@ -54,6 +54,7 @@ class SegmentationData(lit.LightningDataModule):
         checkpoint_path: str,
         train_val_indices: tuple[list[int], list[int]] | None = None,
     ):
+        os.makedirs(config["model_checkpoint_path"], exist_ok=True)
         super().__init__()
         self.config = config
         self.train_fname = os.path.join(config["staging_dir"], config["train_fname"])
