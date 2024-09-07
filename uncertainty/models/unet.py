@@ -77,7 +77,7 @@ class ConvLayer(nn.Module):
                 else nn.Identity()
             ),
             activation(),
-            nn.Dropout(dropout_rate, inplace=True),
+            nn.Dropout3d(dropout_rate, inplace=True),
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -399,14 +399,42 @@ class MCDropoutUNet(nn.Module):
         super().__init__()
         self.model = model
 
+    def forward_single(self, x: torch.Tensor, logits: bool) -> torch.Tensor:
+        """
+        Single forward pass for an input of shape (B, C, D, H, W)
+        """
+        return self.model(x, logits=logits)
+
     @override
-    def forward(self, x: torch.Tensor, logits: bool = False) -> torch.Tensor:
-        return self.model(x, logits)
+    def forward(
+        self, x: torch.Tensor, n_forwards: int = 10, logits: bool = False
+    ) -> torch.Tensor:
+        """
+        Produce multiple outputs by performing forward pass with dropout multiple times
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            Input tensor of shape (B, C, D, H, W)
+        n_forward : int
+            Number of forward passes
+        logits : bool
+            Whether to return logits or not
+
+        Returns
+        -------
+        torch.Tensor
+            Tensor of shape (B, n_forward, C', D, H, W) where C' is
+            the number of classes in the output
+        """
+        return torch.stack(
+            [self.forward_single(x, logits) for _ in range(n_forwards)], dim=1
+        )
 
     @override
     def eval(self):
         def activate_dropout(module):
-            if isinstance(module, nn.Dropout):
+            if isinstance(module, nn.Dropout3d):
                 module.train(True)
 
         # Apply dropout during evaluation

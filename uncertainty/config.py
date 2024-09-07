@@ -58,14 +58,6 @@ Configuration = TypedDict(
 def data_config() -> dict[str, int | str | float | tuple[int, ...]]:
     """
     Preset configuration for data
-
-    Parameters
-    ----------
-    n_levels : int
-        Number of levels in the U-Net, used to calculate input shape
-        to ensure it's divisible by 2 * (n_levels - 1). The
-        dimensions are divided that many times in the U-Net so setting
-        it to a divisible number ensure no row/col is discarded.
     """
     return {
         # Directory containing folders of DICOM slices
@@ -140,7 +132,7 @@ def training_config() -> dict[str, int | str | list[int | float | str] | type]:
     Preset configuration for training
     """
     return {
-        "model_checkpoint_path": "./checkpoints/unet",
+        "model_checkpoint_path": "./checkpoints/unet_2",
         # from nnU-Net settings
         "deep_supervision": True,
         "n_epochs": 500,

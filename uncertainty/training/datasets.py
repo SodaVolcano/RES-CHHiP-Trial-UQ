@@ -63,7 +63,9 @@ class SlidingPatchDataset(IterableDataset):
 
         x_patches, y_patches = tz.pipe(
             self.dataset[idx],
-            curried.map(lambda arr: arr.numpy()),
+            curried.map(
+                lambda arr: arr.numpy() if isinstance(arr, torch.Tensor) else arr
+            ),
             curried.map(
                 lambda arr: view_as_windows(
                     arr, (arr.shape[0], *self.patch_size), self.patch_step
@@ -230,19 +232,6 @@ class RandomPatchDataset(IterableDataset):
         )
 
     @torch.no_grad()
-    def __ensemble_iter(self):
-        """
-        Concatenate `self.ensemble_size` number of iterators
-
-        Ensure oversample property is maintained for batch fed to each ensemble member
-        """
-        return tz.pipe(
-            range(self.ensemble_size),
-            curried.map(lambda _: self.__oversampled_iter()),
-            tz.concat,
-        )
-
-    @torch.no_grad()
     def __iter__(self):
         """
         Return infinite stream of sampled patches
@@ -251,17 +240,18 @@ class RandomPatchDataset(IterableDataset):
         foreground class, and number of such patch in the batch is guaranteed
         to be `round(fg_oversample_ratio * batch_size)`
         """
-        x, y = [], []
+        batch = []
 
         while True:
-            if len(x) == 0:
-                batch = (vol_mask for vol_mask in self.__ensemble_iter())
+            if len(batch) == 0:
+                batch = (vol_mask for vol_mask in self.__oversampled_iter())
                 x, y = zip(*batch)
                 # Apply augmentation batch-wise, more efficient
                 x = self.affine(torch.stack(x))
                 y = self.affine_mask(torch.stack(y), self.affine._params)
 
-            yield next(map(self.transform, zip(x, y)))
+                batch = list(map(self.transform, zip(x, y)))
+            yield batch.pop()
 
     @torch.no_grad()
     def __del__(self):

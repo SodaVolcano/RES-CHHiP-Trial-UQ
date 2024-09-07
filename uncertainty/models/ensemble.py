@@ -35,7 +35,7 @@ class DeepEnsemble(nn.Module):
         """
         super().__init__()
         self.models = (
-            [model(*args, **kwargs) for _ in range(ensemble_size)]
+            nn.ModuleList([model(*args, **kwargs) for _ in range(ensemble_size)])
             if isinstance(model, Callable)
             else model
         )
