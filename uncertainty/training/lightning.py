@@ -240,7 +240,7 @@ class LitSegmentation(lit.LightningModule):
                     f"val_dice_{organ_name}",
                     organ_dice,
                     sync_dist=True,
-                    prog_bar=True,
+                    prog_bar=False,
                 )
 
         if self.val_counter % 10:
