@@ -13,7 +13,7 @@ import torch
 from torch import nn, vmap
 from torch.utils.data import DataLoader, random_split
 from torchmetrics.aggregation import RunningMean
-from torchmetrics.classification import MultilabelF1Score
+from torchmetrics.classification import MultilabelF1Score, BinaryF1Score
 
 from uncertainty.training.datasets import (
     H5Dataset,
@@ -173,6 +173,7 @@ class LitSegmentation(lit.LightningModule):
         self.class_weights = class_weights
         # Original dice, used for evaluation
         self.dice_eval = MultilabelF1Score(num_labels=config["output_channel"])
+        self.dice_eval_single = BinaryF1Score()
         self.running_loss = RunningMean(window=10)
         self.running_dice = RunningMean(window=10)
         self.val_counter = 0
@@ -233,9 +234,9 @@ class LitSegmentation(lit.LightningModule):
         # Get dice of each organ
         for channel, organ_name in zip(range(y_pred.shape[1]), ORGAN_MATCHES.keys()):
             with torch.no_grad():
-                organ_dice = self.dice_eval(
-                    y_pred[:, channel : channel + 1, ...],
-                    y[:, channel : channel + 1, ...],
+                organ_dice = self.dice_eval_single(
+                    y_pred[:, channel, ...],
+                    y[:, channel, ...],
                 )
                 self.log(
                     f"val_dice_{organ_name}",
