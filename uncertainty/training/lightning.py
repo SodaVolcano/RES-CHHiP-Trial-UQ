@@ -30,7 +30,7 @@ def _seed_with_time(id: int):
     seed_everything(int(time.time() + (id * 3)), verbose=False)
 
 
-def __dump_tensors(
+def _dump_tensors(
     x: torch.Tensor,
     y: torch.Tensor,
     y_pred: torch.Tensor,
@@ -187,10 +187,6 @@ class LitSegmentation(lit.LightningModule):
         else:
             self.loss = DiceBCELoss(class_weights, logits=True)
 
-    def __dump_tensors(self, x, y, y_pred, dice, loss, val_counter):
-        name = os.path.join("./batches", f"batch_{val_counter}.pt")
-        torch.save({"x": x, "y": y, "y_pred": y_pred, "dice": dice, "loss": loss}, name)
-
     def forward(self, x, logits: bool = False):
         return self.model(x, logits)
 
@@ -198,8 +194,8 @@ class LitSegmentation(lit.LightningModule):
         x, y = batch
         y_pred = self.model(x, logits=True)
         loss = self.loss(y_pred, y)
-        self.__dump_tensors(x, y, y_pred, 0, loss, self.val_counter)
-        self.val_counter += 1
+        # _dump_tensors(x, y, y_pred, 0, loss, self.val_counter)
+        # self.val_counter += 1
 
         if self.deep_supervision:
             y_pred = y_pred[-1]
@@ -246,7 +242,7 @@ class LitSegmentation(lit.LightningModule):
                 )
 
         if self.val_counter % 10:
-            __dump_tensors(x, y, y_pred, dice, loss, self.val_counter)
+            _dump_tensors(x, y, y_pred, dice, loss, self.val_counter)
         self.val_counter += 1
 
         self.log(
