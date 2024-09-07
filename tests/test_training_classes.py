@@ -19,7 +19,7 @@ class TestLitSegmentation:
             "optimiser_kwargs": {},
             "lr_scheduler": mocker.Mock(),
         }
-        lit_segmentation = LitSegmentation(model=model, config=config)  # type: ignore
+        lit_segmentation = LitSegmentation(model=model, config=config, save_hyperparams=False)  # type: ignore
         assert lit_segmentation.model == model
         assert lit_segmentation.config == config
         assert lit_segmentation.deep_supervision is False
@@ -35,7 +35,7 @@ class TestLitSegmentation:
             "optimiser_kwargs": {},
             "lr_scheduler": mocker.Mock(),
         }
-        lit_segmentation = LitSegmentation(model=model, config=config)  # type: ignore
+        lit_segmentation = LitSegmentation(model=model, config=config, save_hyperparams=False)  # type: ignore
 
         y_pred = torch.randn(
             3, config["output_channel"], 100, 100, 100

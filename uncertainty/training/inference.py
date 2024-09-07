@@ -171,7 +171,7 @@ def sliding_inference(
 
     x_padded = _pad_image(x.detach().numpy(), patch_size, subdivisions)
     stride = (1,) + _get_stride(patch_size, subdivisions)
-    x_patches = view_as_windows(x_padded, (x_padded.shape[0], *patch_size), stride)
+    x_patches = view_as_windows(x_padded, (x_padded.shape[0], *patch_size), stride)  # type: ignore
 
     y_pred_patches = np.zeros_like(x_patches)
     for idx in np.ndindex(x_patches.shape[:-4]):

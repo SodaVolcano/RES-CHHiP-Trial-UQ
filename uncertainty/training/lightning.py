@@ -3,6 +3,7 @@ import os
 from typing import Optional
 
 
+import dill
 from ..constants import ORGAN_MATCHES
 import torch.utils
 from pytorch_lightning import seed_everything
@@ -157,9 +158,16 @@ class LitSegmentation(lit.LightningModule):
         model: nn.Module,
         config: Configuration,
         class_weights: Optional[torch.Tensor] = None,
+        save_hyperparams: bool = True,
     ):
         super().__init__()
-        self.save_hyperparameters(ignore=["model"])
+        if save_hyperparams:
+            self.save_hyperparameters(ignore=["model"])
+            with open(
+                os.path.join(config["model_checkpoint_path"], "config.pkl"), "wb"
+            ) as f:
+                dill.dump(config, f)
+
         self.config = config
         self.class_weights = class_weights
         # Original dice, used for evaluation
