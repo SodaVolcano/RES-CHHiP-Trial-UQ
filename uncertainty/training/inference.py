@@ -1,7 +1,7 @@
 """
 Functions for performing inference on a model.
 
-Functions related to smooth stitching are based off of
+Based off of the following code:
     https://github.com/bnsreenu/python_for_microscopists/blob/master/229_smooth_predictions_by_blending_patches/smooth_tiled_predictions.py
 which is based off of
     https://github.com/Vooban/Smoothly-Blend-Image-Patches
@@ -16,6 +16,7 @@ which is based off of
 #
 #   - smooth stitching
 
+from typing import Callable
 import toolz as tz
 from skimage.util import view_as_windows
 from functools import reduce
@@ -119,16 +120,17 @@ def _reconstruct_image(
 ):
     reconstructed_arr = np.zeros(img_size)
     stride = _get_stride(patches.shape[5:], subdivisions)
+
     for idx in np.ndindex(patches.shape[:-4]):
         x_pos, y_pos, z_pos = np.multiply(idx[1:], stride)
         patch = patches[idx] * window
-
         reconstructed_arr[
             :,
             x_pos : x_pos + patch.shape[1],
             y_pos : y_pos + patch.shape[2],
             z_pos : z_pos + patch.shape[3],
         ] += patch
+
     return reconstructed_arr / np.average(window)
 
 
@@ -137,7 +139,7 @@ def _get_stride(patch_size: tuple[int, int, int], subdivisions: tuple[int, int, 
 
 
 def sliding_inference(
-    model: nn.Module,
+    model: Callable[[torch.Tensor], torch.Tensor],
     x: torch.Tensor,
     patch_size: tuple[int, int, int],
     subdivisions: tuple[int, int, int] | int,
@@ -148,6 +150,20 @@ def sliding_inference(
 
     The model predicts patches of the image which are then stitched together to
     form the full prediction.
+
+    Parameters
+    ----------
+    model : Callable[[torch.Tensor], torch.Tensor]
+        Model to perform inference with, should take in a tensor of shape (B, C, D, H, W)
+        and output a tensor of shape (B, C, D, H, W)
+    x : torch.Tensor
+        Full image to perform inference on of shape (C, D, H, W)
+    patch_size : tuple[int, int, int]
+        Size of the patches to use for inference
+    subdivisions : tuple[int, int, int] | int
+        Number of subdivisions to use when stitching patches together
+    batch_size : int
+        Size to batch the patches when performing inference
     """
     window = _spline_window_3d(patch_size)
     if isinstance(subdivisions, int):
@@ -158,7 +174,6 @@ def sliding_inference(
     x_patches = view_as_windows(x_padded, (x_padded.shape[0], *patch_size), stride)
 
     y_pred_patches = np.zeros_like(x_patches)
-
     for idx in np.ndindex(x_patches.shape[:-4]):
         y_pred_patches[idx] = tz.pipe(
             x_patches[idx],
@@ -168,4 +183,21 @@ def sliding_inference(
 
     y_pred = _reconstruct_image(x_padded.shape, y_pred_patches, subdivisions, window)
     y_pred = _unpad_image(y_pred, patch_size, subdivisions)
-    return y_pred
+    return (y_pred > 0).astype(np.uint8)
+
+
+# batched inference
+# partition buffer into list of 2D list of idx
+# for each partition
+#     get patches
+#     stack into batch
+#     run model
+#     add to y_pred_patches using idx
+
+
+# for idx in patches...   (0, 0, 1), (0, 0, 2) etc
+#     get patch in idx
+#     add to zero array
+# so... delay evaluation until reconstruction...
+# make iterator that keep buffer of 2 idx, when need to return next patch, run
+# model eval and return (idx, patch)!   idx is np.ndindex

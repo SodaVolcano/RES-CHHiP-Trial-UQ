@@ -3,8 +3,7 @@ import os
 from typing import Optional
 
 
-import toolz as tz
-from toolz import curried
+from ..constants import ORGAN_MATCHES
 import torch.utils
 from pytorch_lightning import seed_everything
 import time
@@ -69,8 +68,8 @@ class SegmentationData(lit.LightningDataModule):
             )
             torch.save(
                 {
-                    "train_indices": list(self.train_indices),
-                    "val_indices": list(self.val_indices),
+                    "train_indices": list(self.train_indices),  # type: ignore
+                    "val_indices": list(self.val_indices),  # type: ignore
                 },
                 os.path.join(checkpoint_path, "indices.pt"),
             )
@@ -222,7 +221,17 @@ class LitSegmentation(lit.LightningModule):
             y_pred = y_pred[-1]
         dice = self.dice_eval(y_pred, y)
 
-        # TODO: get dice of each organ
+        # Get dice of each organ
+        for channel, organ_name in zip(range(y_pred.shape[1]), ORGAN_MATCHES.keys()):
+            organ_dice = self.dice_eval(
+                y_pred[:, channel : channel + 1, ...], y[:, channel : channel + 1, ...]
+            )
+            self.log(
+                f"val_dice_{organ_name}",
+                organ_dice,
+                sync_dist=True,
+                prog_bar=True,
+            )
 
         if self.val_counter % 10:
             __dump_tensors(x, y, y_pred, dice, loss, self.val_counter)
