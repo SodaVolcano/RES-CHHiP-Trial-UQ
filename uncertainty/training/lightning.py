@@ -31,6 +31,7 @@ def _seed_with_time(id: int):
 
 
 def _dump_tensors(
+    path: str,
     x: torch.Tensor,
     y: torch.Tensor,
     y_pred: torch.Tensor,
@@ -39,7 +40,7 @@ def _dump_tensors(
     val_counter: int,
     ensemble_id: int = 0,
 ):
-    name = os.path.join("./batches", f"batch_{val_counter}_member_{ensemble_id}.pt")
+    name = os.path.join(path, f"batch_{val_counter}_member_{ensemble_id}.pt")
     torch.save({"x": x, "y": y, "y_pred": y_pred, "dice": dice, "loss": loss}, name)
 
 
@@ -194,7 +195,7 @@ class LitSegmentation(lit.LightningModule):
         x, y = batch
         y_pred = self.model(x, logits=True)
         loss = self.loss(y_pred, y)
-        # _dump_tensors(x, y, y_pred, 0, loss, self.val_counter)
+        # _dump_tensors(self.config["model_checkpoint_path"], x, y, y_pred, 0, loss, self.val_counter)
         # self.val_counter += 1
 
         if self.deep_supervision:
@@ -242,7 +243,15 @@ class LitSegmentation(lit.LightningModule):
                 )
 
         if self.val_counter % 10:
-            _dump_tensors(x, y, y_pred, dice, loss, self.val_counter)
+            _dump_tensors(
+                self.config["model_checkpoint_path"],
+                x,
+                y,
+                y_pred,
+                dice,
+                loss,
+                self.val_counter,
+            )
         self.val_counter += 1
 
         self.log(
