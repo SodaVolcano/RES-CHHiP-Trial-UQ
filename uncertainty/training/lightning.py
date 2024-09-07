@@ -38,9 +38,8 @@ def _dump_tensors(
     dice: torch.Tensor,
     loss: torch.Tensor,
     val_counter: int,
-    ensemble_id: int = 0,
 ):
-    name = os.path.join(path, f"batch_{val_counter}_member_{ensemble_id}.pt")
+    name = os.path.join(path, f"batches/batch_{val_counter}_dice_{dice}.pt")
     torch.save({"x": x, "y": y, "y_pred": y_pred, "dice": dice, "loss": loss}, name)
 
 
