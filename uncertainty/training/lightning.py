@@ -40,6 +40,7 @@ def _dump_tensors(
     val_counter: int,
 ):
     name = os.path.join(path, f"batches/batch_{val_counter}_dice_{dice}.pt")
+    os.makedirs(os.path.dirname(name), exist_ok=True)
     torch.save({"x": x, "y": y, "y_pred": y_pred, "dice": dice, "loss": loss}, name)
 
 
