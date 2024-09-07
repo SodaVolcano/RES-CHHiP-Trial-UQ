@@ -4,6 +4,7 @@ from lightning import Trainer
 import os
 import torch
 
+import dill
 from scripts.__helpful_parser import HelpfulParser
 from uncertainty.config import Configuration
 import torch
@@ -96,6 +97,9 @@ if __name__ == "__main__":
     config["staging_dir"] = os.path.dirname(args.data_path)
     config["staging_fname"] = os.path.basename(args.data_path)
     checkpoint_path = args.checkpoint_path
+    if args.retrain:
+        with open(os.path.join(checkpoint_path, "config.pkl"), "rb") as f:
+            config = dill.load(f)
 
     main(
         config,

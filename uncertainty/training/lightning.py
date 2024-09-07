@@ -231,15 +231,17 @@ class LitSegmentation(lit.LightningModule):
 
         # Get dice of each organ
         for channel, organ_name in zip(range(y_pred.shape[1]), ORGAN_MATCHES.keys()):
-            organ_dice = self.dice_eval(
-                y_pred[:, channel : channel + 1, ...], y[:, channel : channel + 1, ...]
-            )
-            self.log(
-                f"val_dice_{organ_name}",
-                organ_dice,
-                sync_dist=True,
-                prog_bar=True,
-            )
+            with torch.no_grad():
+                organ_dice = self.dice_eval(
+                    y_pred[:, channel : channel + 1, ...],
+                    y[:, channel : channel + 1, ...],
+                )
+                self.log(
+                    f"val_dice_{organ_name}",
+                    organ_dice,
+                    sync_dist=True,
+                    prog_bar=False,
+                )
 
         if self.val_counter % 10:
             __dump_tensors(x, y, y_pred, dice, loss, self.val_counter)
