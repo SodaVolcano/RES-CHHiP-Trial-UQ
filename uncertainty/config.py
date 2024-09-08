@@ -107,7 +107,7 @@ def unet_config() -> dict[str, int | float | str | type[nn.Module]]:
         "n_kernels_init": 32,
         "n_kernels_max": 512,  # maximum allowed number of kernels for a level
         # Number of resolutions/blocks; height of U-Net
-        "n_levels": 5,
+        "n_levels": 6,
         # Number of class to predict
         "n_kernels_last": 3,
         "final_layer_activation": nn.Sigmoid,

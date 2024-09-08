@@ -52,10 +52,9 @@ class SegmentationData(lit.LightningDataModule):
     def __init__(
         self,
         config: Configuration,
-        checkpoint_path: str,
+        checkpoint_path: str | None = None,
         train_val_indices: tuple[list[int], list[int]] | None = None,
     ):
-        os.makedirs(config["model_checkpoint_path"], exist_ok=True)
         super().__init__()
         self.config = config
         self.train_fname = os.path.join(config["staging_dir"], config["train_fname"])
@@ -69,6 +68,8 @@ class SegmentationData(lit.LightningDataModule):
             self.train_indices, self.val_indices = random_split(
                 indices, [1 - config["val_split"], config["val_split"]]  # type: ignore
             )
+            os.makedirs(config["model_checkpoint_path"], exist_ok=True)
+            assert checkpoint_path is not None, "Checkpoint path must be provided"
             torch.save(
                 {
                     "train_indices": list(self.train_indices),  # type: ignore
@@ -242,7 +243,7 @@ class LitSegmentation(lit.LightningModule):
                     prog_bar=False,
                 )
 
-        if self.val_counter % 10:
+        if self.val_counter % 10 == 0:
             _dump_tensors(
                 self.config["model_checkpoint_path"],
                 x,
