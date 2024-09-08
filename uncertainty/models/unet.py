@@ -77,7 +77,7 @@ class ConvLayer(nn.Module):
                 else nn.Identity()
             ),
             activation(),
-            nn.Dropout3d(dropout_rate, inplace=True),
+            nn.Dropout3d(dropout_rate),
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
