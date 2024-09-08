@@ -17,6 +17,7 @@ logs/
 *.ipynb
 *.pt
 *.pkl
+*.ckpt
 
 .devenv*
 devenv.local.nix

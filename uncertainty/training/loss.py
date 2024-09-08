@@ -55,11 +55,10 @@ class DiceBCELoss(nn.Module):
     ):
         super().__init__()
         self.bce = (
-            nn.BCEWithLogitsLoss(class_weights)
-            if logits is not None
-            else nn.BCELoss(class_weights)
+            nn.BCEWithLogitsLoss(class_weights) if logits else nn.BCELoss(class_weights)
         )
         self.dice = SmoothDiceLoss(smooth)
+        self.logits = logits
 
     def forward(
         self,
@@ -74,7 +73,7 @@ class DiceBCELoss(nn.Module):
             If True, return both BCE and Dice losses separately in that order
         """
         bce = self.bce(y_pred, y)
-        dice = self.dice(y_pred, y, True)
+        dice = self.dice(y_pred, y, self.logits)
         return (bce, dice) if separate else bce + dice
 
 
