@@ -14,7 +14,7 @@ class SmoothDiceLoss(nn.Module):
         intersection = (y_pred.flatten() * y.flatten()).sum()
         return (2 * intersection + self.smooth) / (y_pred.sum() + y.sum() + self.smooth)
 
-    def generalised_dice(self, y_preds: torch.Tensor, ys: torch.Tensor, logits: bool):
+    def generalised_dice(self, y_pred: torch.Tensor, y: torch.Tensor, logits: bool):
         """
         Input (C, ...), targets (C, ...)
 
@@ -22,7 +22,7 @@ class SmoothDiceLoss(nn.Module):
         """
         return torch.mean(
             torch.stack(
-                [self.dice(y_preds[i], ys[i], logits) for i in range(y_preds.shape[0])]
+                [self.dice(y_pred[i], y[i], logits) for i in range(y_pred.shape[0])]
             ),
             dim=0,
         )

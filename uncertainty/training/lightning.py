@@ -243,7 +243,7 @@ class LitSegmentation(lit.LightningModule):
                     prog_bar=False,
                 )
 
-        if self.val_counter % 10 == 0:
+        if self.val_counter == 2:
             _dump_tensors(
                 self.config["model_checkpoint_path"],
                 x,
@@ -253,7 +253,7 @@ class LitSegmentation(lit.LightningModule):
                 loss,
                 self.val_counter,
             )
-        self.val_counter += 1
+            self.val_counter = 0
 
         self.log(
             "val_loss",
@@ -268,6 +268,9 @@ class LitSegmentation(lit.LightningModule):
             prog_bar=True,
         )
         return loss
+
+    def on_validation_epoch_end(self):
+        self.val_counter += 1
 
     @torch.no_grad()
     def test_step(self, batch: torch.Tensor):
