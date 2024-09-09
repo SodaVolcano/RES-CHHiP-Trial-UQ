@@ -7,9 +7,12 @@ which is based off of
     https://github.com/Vooban/Smoothly-Blend-Image-Patches
 """
 
+from tqdm import tqdm
+import random
 import numpy as np
 from toolz import curried
-
+from torch import nn
+import lightning as lit
 
 from typing import Callable, Iterable
 import toolz as tz
@@ -19,7 +22,8 @@ from scipy.signal.windows import triang
 import torch
 import numpy as np
 
-from uncertainty.utils.wrappers import curry
+from ..utils.wrappers import curry
+from ..models import MCDropoutUNet
 
 
 def _calc_pad_amount(
@@ -48,7 +52,6 @@ def _pad_image(
     image : np.ndarray
         Image to pad of shape (C, D, H, W)
     """
-    print([(0, 0)] + _calc_pad_amount(patch_sizes, subdivisions))
     return np.pad(
         image,
         [(0, 0)] + _calc_pad_amount(patch_sizes, subdivisions),
@@ -107,7 +110,7 @@ def _unpad_image(
 
 
 def _reconstruct_image(
-    img_size: tuple[int, int, int],
+    img_size: tuple[int, int, int, int],
     idx_patches: Iterable[tuple[tuple[int, ...], np.ndarray]],
     window: np.ndarray,
     stride: tuple[int, int, int],
@@ -132,13 +135,16 @@ def _get_stride(
     return tuple(p_size // subdiv for p_size, subdiv in zip(patch_size, subdivisions))  # type: ignore
 
 
+@curry
 @torch.no_grad()
 def sliding_inference(
     model: Callable[[torch.Tensor], torch.Tensor],
     x: torch.Tensor,
     patch_size: tuple[int, int, int],
-    subdivisions: tuple[int, int, int] | int,
     batch_size: int,
+    subdivisions: tuple[int, int, int] | int = 2,
+    output_channels: int = 3,
+    prog_bar: bool = True,
 ):
     """
     Perform inference on full image using sliding patch approach
@@ -157,17 +163,21 @@ def sliding_inference(
         Size of the patches to use for inference
     subdivisions : tuple[int, int, int] | int
         Number of subdivisions to use when stitching patches together, e.g. 2 means
-        half of the patch will overlap.
+        half of the patch will overlap
     batch_size : int
         Size to batch the patches when performing inference
+    output_channels : int
+        Number of output channels of the model
+    prog_bar : bool
+        Whether to display a progress bar
     """
     window = _spline_window_3d(patch_size)
     if isinstance(subdivisions, int):
         subdivisions = (subdivisions, subdivisions, subdivisions)
 
     x_padded = _pad_image(x.numpy(), patch_size, subdivisions)
-    stride = (1,) + _get_stride(patch_size, subdivisions)
-    x_patches = view_as_windows(x_padded, (x_padded.shape[0], *patch_size), stride)  # type: ignore
+    stride = _get_stride(patch_size, subdivisions)
+    x_patches = view_as_windows(x_padded, (x_padded.shape[0], *patch_size), (1,) + stride)  # type: ignore
 
     patch_indices = [idx for idx in np.ndindex(x_patches.shape[:-4])]
     # iterator yielding (idx, y_pred_patch) tuples
@@ -186,9 +196,84 @@ def sliding_inference(
         tz.concat,
         curried.map(lambda y_pred: y_pred.numpy()),
         lambda y_pred_patches: zip(patch_indices, y_pred_patches),
+        (lambda it: tqdm(it, total=len(patch_indices))) if prog_bar else tz.identity,
     )
 
-    stride = _get_stride(x_patches.shape[5:], subdivisions)
-    y_pred = _reconstruct_image(x_padded.shape, y_pred_patches_it, window, stride)
+    y_pred = _reconstruct_image(
+        (output_channels,) + x_padded.shape[1:], y_pred_patches_it, window, stride
+    )
     y_pred = _unpad_image(y_pred, patch_size, subdivisions)
+    # Remove smoothing artefacts
     return (y_pred > 0).astype(np.uint8)
+
+
+@torch.no_grad()
+def mc_dropout_inference(
+    base_model: nn.Module | lit.LightningModule,
+    x: torch.Tensor,
+    patch_size: tuple[int, int, int],
+    batch_size: int,
+    n_outputs: int,
+    subdivisions: tuple[int, int, int] | int = 2,
+    output_channels: int = 3,
+    prog_bar: bool = True,
+) -> Iterable[torch.Tensor]:
+    """
+    Perform `n_outputs` inferences on one full image using Monte Carlo dropout
+
+    The model is run `n_outputs` times with dropout enabled to produce
+    multiple predictions of the image. Patch-based inference is used where
+    the full image is split into patches and the model is run on each patch.
+    Patches belonging to the same image will be passed to a model with the same
+    dropout mask.
+
+    Parameters
+    ----------
+    base_model : nn.Module | lit.LightningModule
+        Model to perform inference with, produces deterministic predictions. Must
+        have `nn.dropout` layers and be trained with dropout enabled.
+    x : torch.Tensor
+        Full image to perform inference on of shape (C, D, H, W)
+    n_outputs : int
+        Number of predictions to make
+    subdivisions : tuple[int, int, int] | int
+        Number of subdivisions to use when stitching patches together, e.g. 2 means
+        half of the patch will overlap
+    batch_size : int
+        Size to batch the patches when performing inference
+    output_channels : int
+        Number of output channels of the model
+    prog_bar : bool
+        Whether to display a progress bar
+
+    Returns
+    -------
+    Iterable[torch.Tensor]
+        Iterator of `n_outputs` predictions of the full image
+    """
+    mcdo_model = MCDropoutUNet(base_model)
+    mcdo_model.eval()
+
+    @curry
+    def consistent_dropout_model(seed: int, x: torch.Tensor):
+        """
+        Model with consistent dropout mask using `seed`
+        """
+        torch.manual_seed(seed)
+        return mcdo_model(x)
+
+    return tz.pipe(
+        # Generate seed to use for each inference
+        [random.randint(0, 2**32 - 1) for _ in range(n_outputs)],
+        curried.map(consistent_dropout_model),
+        curried.map(
+            sliding_inference(
+                patch_size=patch_size,
+                subdivisions=subdivisions,
+                batch_size=batch_size,
+                output_channels=output_channels,
+                prog_bar=prog_bar,
+            )
+        ),
+        curried.map(lambda inference: inference(x)),
+    )  # type: ignore

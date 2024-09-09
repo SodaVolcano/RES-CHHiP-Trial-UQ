@@ -12,6 +12,7 @@ import toolz as tz
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import lightning as lit
 
 from ..config import Configuration
 from ..utils.sequence import growby_accum
@@ -345,12 +346,16 @@ class Decoder(nn.Module):
         logits : bool
             Whether to return logits or not
         """
-        if self.deep_supervision:
+        if self.deep_supervision and self.training:
             return self._forward_deep_supervision(x, skips, logits)
 
         for level, skip in zip(self.levels, reversed(skips)):
             x = level(x, skip)
-        x = self.last_conv(x)
+        x = (
+            self.last_conv[-1](x)
+            if isinstance(self.last_conv, nn.ModuleList)
+            else self.last_conv(x)
+        )
         return self.last_activation(x) if not logits else x
 
 
@@ -394,47 +399,31 @@ class UNet(nn.Module):
 class MCDropoutUNet(nn.Module):
     """
     Wrapper around U-Net to apply dropout during evaluation
+
+    Note: this class only sets `nn.Dropout` layers to training mode during
+    evaluation. It only passes the input through the model once so to
+    get multiple predictions, use `uncertainty.training.inference.mc_dropout_inference`.
+
+    Parameters
+    ----------
+    model : nn.Module | lit.LightningModule
+        U-Net model
     """
 
     @override
-    def __init__(self, model: UNet):
+    def __init__(self, model: nn.Module | lit.LightningModule):
         """
         Wrap an existing U-Net or create a new one using the provided configuration
         """
         super().__init__()
         self.model = model
 
-    def forward_single(self, x: torch.Tensor, logits: bool) -> torch.Tensor:
+    @override
+    def forward(self, x: torch.Tensor, logits: bool = False) -> torch.Tensor:
         """
         Single forward pass for an input of shape (B, C, D, H, W)
         """
         return self.model(x, logits=logits)
-
-    @override
-    def forward(
-        self, x: torch.Tensor, n_forwards: int = 10, logits: bool = False
-    ) -> torch.Tensor:
-        """
-        Produce multiple outputs by performing forward pass with dropout multiple times
-
-        Parameters
-        ----------
-        x : torch.Tensor
-            Input tensor of shape (B, C, D, H, W)
-        n_forward : int
-            Number of forward passes
-        logits : bool
-            Whether to return logits or not
-
-        Returns
-        -------
-        torch.Tensor
-            Tensor of shape (B, n_forward, C', D, H, W) where C' is
-            the number of classes in the output
-        """
-        return torch.stack(
-            [self.forward_single(x, logits) for _ in range(n_forwards)], dim=1
-        )
 
     @override
     def eval(self):

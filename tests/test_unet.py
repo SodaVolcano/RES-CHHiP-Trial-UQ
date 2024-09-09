@@ -415,10 +415,10 @@ class TestMCDropoutUNet:
 
         model = MCDropoutUNet(model=unet_model)  # type: ignore
         input_ = torch.randn(2, 1, 128, 128, 128)
-        output = model(input_, n_forwards=5)
+        output = model(input_)
 
         assert model.model is unet_model
-        assert output.shape == (2, 5, 1, 128, 128, 128)
+        assert output.shape == (2, 1, 128, 128, 128)
 
     # Test that passing the same input produces different outputs
     def test_same_input_different_output(self):
@@ -447,7 +447,8 @@ class TestMCDropoutUNet:
         # Prepare input tensor
         x = torch.randn(1, 3, 100, 100, 100)
 
-        outputs = model(x, logits=True, n_forwards=2)
+        output_1 = model(x, logits=True)
+        output_2 = model(x, logits=True)
 
         # check all Dropout layers are in train mode
         assert all(
@@ -456,7 +457,7 @@ class TestMCDropoutUNet:
             if isinstance(layer, nn.Dropout)
         )
         # Check that the two outputs are different
-        assert not torch.allclose(outputs[0][0], outputs[0][1])
+        assert not torch.allclose(output_1, output_2)
 
         output_3 = unet2(x, logits=True)
         output_4 = unet2(x, logits=True)
