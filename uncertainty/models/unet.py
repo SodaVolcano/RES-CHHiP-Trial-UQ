@@ -77,7 +77,7 @@ class ConvLayer(nn.Module):
                 else nn.Identity()
             ),
             activation(),
-            nn.Dropout3d(dropout_rate) if dropout_rate > 0 else nn.Identity(),
+            nn.Dropout(dropout_rate) if dropout_rate > 0 else nn.Identity(),
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -439,7 +439,7 @@ class MCDropoutUNet(nn.Module):
     @override
     def eval(self):
         def activate_dropout(module):
-            if isinstance(module, nn.Dropout3d):
+            if isinstance(module, nn.Dropout):
                 module.train(True)
 
         # Apply dropout during evaluation
