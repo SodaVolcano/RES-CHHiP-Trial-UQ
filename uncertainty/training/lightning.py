@@ -179,6 +179,7 @@ class LitSegmentation(lit.LightningModule):
         self.running_loss = RunningMean(window=10)
         self.running_dice = RunningMean(window=10)
         self.val_counter = 0
+        self.val_batch_num = 0
 
         self.model = model
         self.deep_supervision = (
@@ -243,7 +244,7 @@ class LitSegmentation(lit.LightningModule):
                     prog_bar=False,
                 )
 
-        if self.val_counter == 2:
+        if self.val_counter == 4:
             _dump_tensors(
                 self.config["model_checkpoint_path"],
                 x,
@@ -251,8 +252,9 @@ class LitSegmentation(lit.LightningModule):
                 y_pred,
                 dice,
                 loss,
-                self.val_counter,
+                self.val_batch_num,
             )
+            self.val_batch_num += 1
             self.val_counter = 0
 
         self.log(

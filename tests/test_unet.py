@@ -44,7 +44,7 @@ class TestConvLayer:
         assert isinstance(conv_layer.layers[0], nn.Conv3d)
         assert isinstance(conv_layer.layers[1], nn.InstanceNorm3d)
         assert isinstance(conv_layer.layers[2], nn.ReLU)
-        assert isinstance(conv_layer.layers[3], nn.Dropout3d)
+        assert isinstance(conv_layer.layers[3], nn.Dropout)
 
 
 class TestConvBlock:
@@ -60,6 +60,7 @@ class TestConvBlock:
             "instance_norm_decay": 0.1,
         }
         conv_block = ConvBlock(
+            level=1,
             in_channels=1,
             out_channels=64,
             n_convolutions=2,
@@ -80,6 +81,7 @@ class TestConvBlock:
             "instance_norm_decay": 0.1,
         }
         conv_block = ConvBlock(
+            level=1,
             in_channels=1,
             out_channels=64,
             n_convolutions=2,
@@ -451,7 +453,7 @@ class TestMCDropoutUNet:
         assert all(
             layer.training
             for layer in model.model.modules()
-            if isinstance(layer, nn.Dropout3d)
+            if isinstance(layer, nn.Dropout)
         )
         # Check that the two outputs are different
         assert not torch.allclose(outputs[0][0], outputs[0][1])
