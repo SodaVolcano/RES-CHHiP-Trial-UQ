@@ -7,21 +7,15 @@ which is based off of
     https://github.com/Vooban/Smoothly-Blend-Image-Patches
 """
 
+import numpy as np
+from toolz import curried
 
-# spline
-# sliding_inference: take model, 1 (x, y), and output full img prediction
-#   - sliding window - get slides (change slidingdataset)
-#   - feed B size batch to model
-#   - reconstruct full image
-#
-#   - smooth stitching
 
-from typing import Callable
+from typing import Callable, Iterable
 import toolz as tz
 from skimage.util import view_as_windows
 from functools import reduce
 from scipy.signal.windows import triang
-from torch import nn
 import torch
 import numpy as np
 
@@ -114,16 +108,14 @@ def _unpad_image(
 
 def _reconstruct_image(
     img_size: tuple[int, int, int],
-    patches: np.ndarray,
-    subdivisions: tuple[int, int, int],
+    idx_patches: Iterable[tuple[tuple[int, ...], np.ndarray]],
     window: np.ndarray,
+    stride: tuple[int, int, int],
 ):
     reconstructed_arr = np.zeros(img_size)
-    stride = _get_stride(patches.shape[5:], subdivisions)
-
-    for idx in np.ndindex(patches.shape[:-4]):
+    for idx, patch in idx_patches:
         x_pos, y_pos, z_pos = np.multiply(idx[1:], stride)
-        patch = patches[idx] * window
+        patch *= window
         reconstructed_arr[
             :,
             x_pos : x_pos + patch.shape[1],
@@ -134,10 +126,13 @@ def _reconstruct_image(
     return reconstructed_arr / np.average(window)
 
 
-def _get_stride(patch_size: tuple[int, int, int], subdivisions: tuple[int, int, int]):
-    return tuple(p_size // subdiv for p_size, subdiv in zip(patch_size, subdivisions))
+def _get_stride(
+    patch_size: tuple[int, int, int], subdivisions: tuple[int, int, int]
+) -> tuple[int, int, int]:
+    return tuple(p_size // subdiv for p_size, subdiv in zip(patch_size, subdivisions))  # type: ignore
 
 
+@torch.no_grad()
 def sliding_inference(
     model: Callable[[torch.Tensor], torch.Tensor],
     x: torch.Tensor,
@@ -161,7 +156,8 @@ def sliding_inference(
     patch_size : tuple[int, int, int]
         Size of the patches to use for inference
     subdivisions : tuple[int, int, int] | int
-        Number of subdivisions to use when stitching patches together
+        Number of subdivisions to use when stitching patches together, e.g. 2 means
+        half of the patch will overlap.
     batch_size : int
         Size to batch the patches when performing inference
     """
@@ -169,35 +165,30 @@ def sliding_inference(
     if isinstance(subdivisions, int):
         subdivisions = (subdivisions, subdivisions, subdivisions)
 
-    x_padded = _pad_image(x.detach().numpy(), patch_size, subdivisions)
+    x_padded = _pad_image(x.numpy(), patch_size, subdivisions)
     stride = (1,) + _get_stride(patch_size, subdivisions)
     x_patches = view_as_windows(x_padded, (x_padded.shape[0], *patch_size), stride)  # type: ignore
 
-    y_pred_patches = np.zeros_like(x_patches)
-    for idx in np.ndindex(x_patches.shape[:-4]):
-        y_pred_patches[idx] = tz.pipe(
-            x_patches[idx],
-            model,
-            lambda y_pred: y_pred.detach().numpy(),
-        )
+    patch_indices = [idx for idx in np.ndindex(x_patches.shape[:-4])]
+    # iterator yielding (idx, y_pred_patch) tuples
+    y_pred_patches_it = tz.pipe(
+        patch_indices,
+        # get the x_patch at each index
+        curried.map(lambda idx: x_patches[idx]),
+        curried.map(lambda x_patch: torch.from_numpy(x_patch)),
+        list,
+        torch.stack,
+        # split into batches
+        lambda x_patches: torch.split(x_patches, batch_size),
+        curried.map(model),
+        # unbatch the predictions and concat the result tuples into a single list
+        curried.map(lambda y_pred_patches: torch.unbind(y_pred_patches, dim=0)),
+        tz.concat,
+        curried.map(lambda y_pred: y_pred.numpy()),
+        lambda y_pred_patches: zip(patch_indices, y_pred_patches),
+    )
 
-    y_pred = _reconstruct_image(x_padded.shape, y_pred_patches, subdivisions, window)
+    stride = _get_stride(x_patches.shape[5:], subdivisions)
+    y_pred = _reconstruct_image(x_padded.shape, y_pred_patches_it, window, stride)
     y_pred = _unpad_image(y_pred, patch_size, subdivisions)
     return (y_pred > 0).astype(np.uint8)
-
-
-# batched inference
-# partition buffer into list of 2D list of idx
-# for each partition
-#     get patches
-#     stack into batch
-#     run model
-#     add to y_pred_patches using idx
-
-
-# for idx in patches...   (0, 0, 1), (0, 0, 2) etc
-#     get patch in idx
-#     add to zero array
-# so... delay evaluation until reconstruction...
-# make iterator that keep buffer of 2 idx, when need to return next patch, run
-# model eval and return (idx, patch)!   idx is np.ndindex
