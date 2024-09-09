@@ -166,6 +166,7 @@ class LitSegmentation(lit.LightningModule):
         super().__init__()
         if save_hyperparams:
             self.save_hyperparameters(ignore=["model"])
+            os.makedirs(config["model_checkpoint_path"], exist_ok=True)
             with open(
                 os.path.join(config["model_checkpoint_path"], "config.pkl"), "wb"
             ) as f:
