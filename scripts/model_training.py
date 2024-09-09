@@ -21,7 +21,7 @@ def main(
     torch.autograd.set_detect_anomaly(True)
 
     model = un.models.UNet(config, deep_supervision)
-    model = un.training.LitSegmentation(model, config=config)
+    model = un.training.LitSegmentation(model, config=config, save_hyperparams=True)
 
     train_val_indices = None
     if retrain:

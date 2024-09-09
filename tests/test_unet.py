@@ -60,6 +60,7 @@ class TestConvBlock:
             "instance_norm_decay": 0.1,
         }
         conv_block = ConvBlock(
+            level=1,
             in_channels=1,
             out_channels=64,
             n_convolutions=2,
@@ -80,6 +81,7 @@ class TestConvBlock:
             "instance_norm_decay": 0.1,
         }
         conv_block = ConvBlock(
+            level=1,
             in_channels=1,
             out_channels=64,
             n_convolutions=2,

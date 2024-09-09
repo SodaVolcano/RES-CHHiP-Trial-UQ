@@ -6,7 +6,7 @@ References:
     https://github.com/milesial/Pytorch-UNet/tree/master
 """
 
-from typing import Callable, List, Optional, Tuple, override
+from typing import Callable, List, Tuple, override
 
 import toolz as tz
 import torch
@@ -77,7 +77,7 @@ class ConvLayer(nn.Module):
                 else nn.Identity()
             ),
             activation(),
-            nn.Dropout3d(dropout_rate),
+            nn.Dropout3d(dropout_rate) if dropout_rate > 0 else nn.Identity(),
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -91,6 +91,7 @@ class ConvBlock(nn.Module):
 
     def __init__(
         self,
+        level: int,
         in_channels: int,
         out_channels: int,
         n_convolutions: int,
@@ -101,6 +102,8 @@ class ConvBlock(nn.Module):
 
         Parameters
         ----------
+        level : int
+            Level of the U-Net (zero-indexed)
         in_channels : int
             Number of input channels
         out_channels : int
@@ -121,7 +124,7 @@ class ConvBlock(nn.Module):
                     kernel_size=config["kernel_size"],
                     use_instance_norm=config["use_instance_norm"],
                     activation=config["activation"],
-                    dropout_rate=config["dropout_rate"],
+                    dropout_rate=config["dropout_rate"] if level > 0 else 0.0,
                     inorm_epsilon=config["instance_norm_epsilon"],
                     inorm_momentum=config["instance_norm_decay"],
                 )
@@ -148,6 +151,7 @@ class DownConvBlock(nn.Module):
         self.layer = nn.Sequential(
             nn.MaxPool3d(kernel_size=2, stride=(2, 2, 2)),
             ConvBlock(
+                level=level,
                 in_channels=_calc_n_kernels(
                     config["n_kernels_init"], level - 1, config["n_kernels_max"]
                 ),
@@ -190,6 +194,7 @@ class Encoder(nn.Module):
         )
 
         self.init_block = ConvBlock(
+            level=0,
             in_channels=config["input_channel"],
             out_channels=config["n_kernels_init"],
             n_convolutions=config["n_convolutions_per_block"],
@@ -225,6 +230,7 @@ class UpConvBlock(nn.Module):
             stride=(2, 2, 2),
         )
         self.conv = ConvBlock(
+            level=level,
             # in_channel is doubled because skip connection is concatenated to input
             in_channels=_calc_n_kernels(
                 config["n_kernels_init"], level, config["n_kernels_max"]
