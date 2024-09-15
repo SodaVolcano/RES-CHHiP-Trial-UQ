@@ -14,6 +14,8 @@ from toolz import curried
 from torch import nn
 import lightning as lit
 
+from kornia.augmentation import RandomAffine3D
+import torchio as tio
 from typing import Callable, Iterable
 import toolz as tz
 from skimage.util import view_as_windows
@@ -21,6 +23,9 @@ from functools import reduce
 from scipy.signal.windows import triang
 import torch
 import numpy as np
+
+from uncertainty.training.augmentations import inverse_affine_transform
+from uncertainty.utils.logging import logger_wraps
 
 from ..utils.wrappers import curry
 from ..models import MCDropoutUNet
@@ -135,6 +140,7 @@ def _get_stride(
     return tuple(p_size // subdiv for p_size, subdiv in zip(patch_size, subdivisions))  # type: ignore
 
 
+@logger_wraps()
 @curry
 @torch.no_grad()
 def sliding_inference(
@@ -206,31 +212,41 @@ def sliding_inference(
     return y_pred
 
 
+@curry
+def _to_prob_map(it: Iterable[torch.Tensor], n: int) -> torch.Tensor:
+    return reduce(torch.add, it) / n
+
+
+@logger_wraps()
 @torch.no_grad()
 def mc_dropout_inference(
-    base_model: nn.Module | lit.LightningModule,
+    model: nn.Module | lit.LightningModule,
     x: torch.Tensor,
     patch_size: tuple[int, int, int],
     batch_size: int,
     n_outputs: int,
     subdivisions: tuple[int, int, int] | int = 2,
     output_channels: int = 3,
+    prob_map: bool = False,
     prog_bar: bool = True,
-) -> Iterable[torch.Tensor]:
+) -> Iterable[torch.Tensor] | torch.Tensor:
     """
-    Return iterator of `n_outputs` each performing MC Dropout inference on the full image
+    Perform `n_outputs` MC Dropout inference on the full image
 
-    The iterator runs `base_model` `n_outputs` times with dropout enabled to
-    get multiple predictions of the image. Patch-based inference is used where
-    the full image is split into patches and the model is run on each patch before
-    stitching back into the original full image. For the same image, the model will
-    have the same dropout mask applied when predicting its patches.
+    `model` is run `n_outputs` times with dropout enabled to get
+    multiple predictions of the image. Patch-based inference is used
+    where the full image is split into patches and the model is run on
+    each patch before stitching back into the original full image. For
+    the same image, the model will have the same dropout mask applied
+    when predicting its patches.
 
     Parameters
     ----------
-    base_model : nn.Module | lit.LightningModule
-        Model to perform inference with, produces deterministic predictions. Must
-        have `nn.dropout` layers and be trained with dropout enabled.
+    model : nn.Module | lit.LightningModule
+        Base model to perform inference with, produces deterministic predictions. Must
+        have `nn.Dropout` layers and be trained with dropout enabled. Should take in a
+        tensor of shape `(batch_size, *x.shape)` and output a tensor of shape
+        `(batch_size, out_channels, *patch_size)`.
     x : torch.Tensor
         Full image to perform inference on of shape (C, D, H, W)
     n_outputs : int
@@ -242,15 +258,19 @@ def mc_dropout_inference(
         Size to batch the patches when performing inference
     output_channels : int
         Number of output channels of the model
+    prob_map: bool
+        Whether to output a single probability map aggregated from the outputs
     prog_bar : bool
-        Whether to display a progress bar
+        Whether to display a progress bar for each forward pass of a batch
+        of patches
 
     Returns
     -------
-    Iterable[torch.Tensor]
-        Iterator of `n_outputs` predictions of the full image
+    Iterable[torch.Tensor] | torch.Tensor
+        Iterator of `n_outputs` predictions of the full image, or a single
+        probability map if `prob_map` is True
     """
-    mcdo_model = MCDropoutUNet(base_model)
+    mcdo_model = MCDropoutUNet(model)
     mcdo_model.eval()
 
     @curry
@@ -265,6 +285,71 @@ def mc_dropout_inference(
         # Generate seed to use for each inference
         [random.randint(0, 2**32 - 1) for _ in range(n_outputs)],
         curried.map(consistent_dropout_model),
+        list,
+        lambda models: ensemble_inference(
+            models,
+            x,
+            patch_size,
+            batch_size,
+            subdivisions,
+            output_channels,
+            prob_map,
+            prog_bar,
+        ),
+    )  # type: ignore
+
+
+@logger_wraps()
+@torch.no_grad()
+def ensemble_inference(
+    models: list[Callable[[torch.Tensor], torch.Tensor]],
+    x: torch.Tensor,
+    patch_size: tuple[int, int, int],
+    batch_size: int,
+    subdivisions: tuple[int, int, int] | int = 2,
+    output_channels: int = 3,
+    prob_map: bool = False,
+    prog_bar: bool = True,
+) -> Iterable[torch.Tensor] | torch.Tensor:
+    """
+    Perform inference on full image using each model in `models`
+
+    Input `x` is passed through each model in `models` to get multiple
+    predictions of the image. Patch-based inference is used where the
+    full image is split into patches and the model is run on each patch
+    before stitching back into the original full image.
+
+    Parameters
+    ----------
+    models : list[Callable[[torch.Tensor], torch.Tensor]]
+        List of models to perform inference with, each produces deterministic
+        predictions (e.g. `torch.nn.Module` or `lightning.LightningModule`).
+        Should each take in a tensor of shape `(batch_size, *x.shape)` and
+        output a tensor of shape `(batch_size, out_channels, *patch_size)`.
+    x : torch.Tensor
+        Full image to perform inference on of shape (C, D, H, W)
+    subdivisions : tuple[int, int, int] | int
+        Number of subdivisions to use when stitching patches together, e.g. 2 means
+        half of the patch will overlap
+    batch_size : int
+        Size to batch the patches when performing inference
+    output_channels : int
+        Number of output channels of the model
+    prob_map: bool
+        Whether to output a single probability map aggregated from the outputs
+    prog_bar : bool
+        Whether to display a progress bar for each forward pass of a batch
+        of patches
+
+    Returns
+    -------
+    Iterable[torch.Tensor] | torch.Tensor
+        Iterator of `n_outputs` predictions of the full image, or a single
+        probability map if `prob_map` is True
+    """
+    return tz.pipe(
+        models,
+        # Put each model in parameter `model` of `sliding_inference`
         curried.map(
             sliding_inference(
                 patch_size=patch_size,
@@ -276,4 +361,98 @@ def mc_dropout_inference(
         ),
         curried.map(lambda inference: inference(x)),
         curried.map(torch.from_numpy),
+        _to_prob_map(n=len(models)) if prob_map else tz.identity,
     )  # type: ignore
+
+
+def tta_inference(
+    model: nn.Module | lit.LightningModule,
+    x: torch.Tensor,
+    aug: tio.Compose,
+    batch_affine: RandomAffine3D,
+    patch_size: tuple[int, int, int],
+    batch_size: int,
+    n_outputs: int,
+    subdivisions: tuple[int, int, int] | int = 2,
+    output_channels: int = 3,
+    prob_map: bool = False,
+    prog_bar: bool = True,
+) -> Iterable[torch.Tensor] | torch.Tensor:
+    """
+    Augment the input `x` `n_outputs` times and perform inference on the augmented images
+
+    `n_outputs` augmented images are generated from `x` using `aug` and `batch_affine`
+    and then patch-based inference is performed on each augmented image using `model`,
+    where the full image is split into patches and the model is run on each patch before
+    stitching back into the original full image. Note that augmentation is not applied
+    to the patches but to the full image to ensure the same augmentation is applied
+    to all patches.
+
+    Parameters
+    ----------
+    model : nn.Module | lit.LightningModule
+        Model to perform inference with, should take in a tensor of shape
+        `(batch_size, *x.shape)` and output a tensor of shape
+        `(batch_size, out_channels, *patch_size)`.
+    x : torch.Tensor
+        Full image to perform inference on of shape (C, D, H, W)
+    aug : tio.Compose
+        Augmentation to apply to the full image
+    batch_affine : RandomAffine3D
+        Kornia affine transform to apply to the full image
+    subdivisions : tuple[int, int, int] | int
+        Number of subdivisions to use when stitching patches together, e.g. 2 means
+        half of the patch will overlap
+    batch_size : int
+        Size to batch the patches when performing inference
+    output_channels : int
+        Number of output channels of the model
+    prob_map: bool
+        Whether to output a single probability map aggregated from the outputs
+    prog_bar : bool
+        Whether to display a progress bar for each forward pass of a batch
+        of patches
+
+    Returns
+    -------
+    Iterable[torch.Tensor] | torch.Tensor
+        Iterator of `n_outputs` predictions of the full image, or a single
+        probability map if `prob_map` is True
+    """
+
+    x_subjs = [tio.Subject(volume=tio.ScalarImage(tensor=x)) for _ in range(n_outputs)]
+
+    def aug_forward_unaug(x: torch.Tensor):
+        """
+        Apply batch affine transform to `x`, run inference, then apply the inverse
+        """
+        return tz.pipe(
+            x,  # shape (C, D, H, W)
+            lambda x: torch.unsqueeze(x, 0),  # shape (1, C, D, H, W)
+            lambda x: batch_affine(x, return_transform=True),
+            sliding_inference(
+                model=model,
+                patch_size=patch_size,
+                subdivisions=subdivisions,
+                batch_size=batch_size,
+                output_channels=output_channels,
+                prog_bar=prog_bar,
+            ),
+            inverse_affine_transform(batch_affine._params),
+        )
+
+    def assign_mask_to_subject(subj: tio.Subject, mask: torch.Tensor):
+        subj["mask"] = tio.LabelMap(tensor=mask)
+        return subj
+
+    return tz.pipe(
+        x_subjs,
+        curried.map(lambda subj: aug(subj)),
+        curried.map(lambda subj: subj["volume"].data),
+        curried.map(aug_forward_unaug),
+        curried.map(lambda y_pred: torch.from_numpy(y_pred)),
+        lambda y_preds: zip(x_subjs, y_preds),
+        curried.map(lambda subj_pred: assign_mask_to_subject(*subj_pred)),
+        curried.map(lambda subj: subj.apply_inverse_transform(warn=False)["mask"].data),
+        _to_prob_map(n=n_outputs) if prob_map else tz.identity,
+    )
