@@ -28,7 +28,7 @@ from ..models import MCDropoutUNet
 
 def _calc_pad_amount(
     patch_sizes: tuple[int, int, int], subdivisions: tuple[int, int, int]
-):
+) -> list[tuple[int, ...]]:
     """
     Calculate padding on each side of the image for each dimension
     """
@@ -45,7 +45,7 @@ def _pad_image(
     image: np.ndarray,
     patch_sizes: tuple[int, int, int],
     subdivisions: tuple[int, int, int],
-):
+) -> np.ndarray:
     """
     Parameters
     ----------
@@ -60,7 +60,7 @@ def _pad_image(
 
 
 @curry
-def _spline_window_1d(window_size: int, power: int = 2):
+def _spline_window_1d(window_size: int, power: int = 2) -> np.ndarray:
     """
     Create a 1d spline window of size `patch_size` with power `power`
     """
@@ -76,7 +76,7 @@ def _spline_window_1d(window_size: int, power: int = 2):
     return window / np.average(window)
 
 
-def _spline_window_3d(window_sizes: tuple[int, int, int], power: int = 2):
+def _spline_window_3d(window_sizes: tuple[int, int, int], power: int = 2) -> np.ndarray:
     """
     Create a 3d spline window of size `patch_size` with power `power`
     """
@@ -93,7 +93,7 @@ def _unpad_image(
     image: np.ndarray,
     patch_sizes: tuple[int, int, int],
     subdivisions: tuple[int, int, int],
-):
+) -> np.ndarray:
     """
     Parameters
     ----------
@@ -114,7 +114,7 @@ def _reconstruct_image(
     idx_patches: Iterable[tuple[tuple[int, ...], np.ndarray]],
     window: np.ndarray,
     stride: tuple[int, int, int],
-):
+) -> np.ndarray:
     reconstructed_arr = np.zeros(img_size)
     for idx, patch in idx_patches:
         x_pos, y_pos, z_pos = np.multiply(idx[1:], stride)
@@ -203,8 +203,7 @@ def sliding_inference(
         (output_channels,) + x_padded.shape[1:], y_pred_patches_it, window, stride
     )
     y_pred = _unpad_image(y_pred, patch_size, subdivisions)
-    # Remove smoothing artefacts
-    return (y_pred > 0).astype(np.uint8)
+    return y_pred
 
 
 @torch.no_grad()
@@ -219,13 +218,13 @@ def mc_dropout_inference(
     prog_bar: bool = True,
 ) -> Iterable[torch.Tensor]:
     """
-    Perform `n_outputs` inferences on one full image using Monte Carlo dropout
+    Return iterator of `n_outputs` each performing MC Dropout inference on the full image
 
-    The model is run `n_outputs` times with dropout enabled to produce
-    multiple predictions of the image. Patch-based inference is used where
-    the full image is split into patches and the model is run on each patch.
-    Patches belonging to the same image will be passed to a model with the same
-    dropout mask.
+    The iterator runs `base_model` `n_outputs` times with dropout enabled to
+    get multiple predictions of the image. Patch-based inference is used where
+    the full image is split into patches and the model is run on each patch before
+    stitching back into the original full image. For the same image, the model will
+    have the same dropout mask applied when predicting its patches.
 
     Parameters
     ----------
@@ -257,7 +256,7 @@ def mc_dropout_inference(
     @curry
     def consistent_dropout_model(seed: int, x: torch.Tensor):
         """
-        Model with consistent dropout mask using `seed`
+        Use the same `seed` for all forward pass of `mcdo_model`
         """
         torch.manual_seed(seed)
         return mcdo_model(x)
@@ -276,4 +275,5 @@ def mc_dropout_inference(
             )
         ),
         curried.map(lambda inference: inference(x)),
+        curried.map(torch.from_numpy),
     )  # type: ignore
