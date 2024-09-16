@@ -14,6 +14,11 @@ from toolz import curried
 class TTA(nn.Module):
     """
     Produce multiple outputs using test-time augmentation (TTA)
+
+    **NOTE**: This class applies augmentation to each patch which may
+    not produce consistent segmentation in each patch when stitching the
+    results together. For full-image inference using model trained with
+    patch-based learning, use `uncertainty.inference.tta_inference`.
     """
 
     def __init__(

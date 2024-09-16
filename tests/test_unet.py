@@ -10,7 +10,7 @@ Encoder = uncertainty.models.unet.Encoder
 Decoder = uncertainty.models.unet.Decoder
 UpConvBlock = uncertainty.models.unet.UpConvBlock
 UNet = uncertainty.models.unet.UNet
-MCDropoutUNet = uncertainty.models.unet.MCDropoutUNet
+MCDropoutUNet = uncertainty.models.MCDropoutUNet
 
 
 class TestConvLayer:

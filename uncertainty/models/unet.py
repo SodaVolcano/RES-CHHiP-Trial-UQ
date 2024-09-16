@@ -6,20 +6,36 @@ References:
     https://github.com/milesial/Pytorch-UNet/tree/master
 """
 
-from typing import Callable, List, Tuple, override
+from typing import Callable, List, Tuple
 
 import toolz as tz
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import lightning as lit
 
 from ..config import Configuration
+from ..utils.wrappers import curry
 from ..utils.sequence import growby_accum
 
 
 def _calc_n_kernels(n_init: int, level: int, bound: int):
     return min(bound, n_init * 2**level)
+
+
+@curry
+def _concat_with_skip(x: torch.Tensor, skip: torch.Tensor) -> torch.Tensor:
+    # use last 3 dimensions, because we are in (N, C, D, H, W) format
+    diff_dims = [skip.size(i) - x.size(i) for i in range(2, 5)]
+    # (left, right), (top, bottom), (front, back)
+    bounds = tz.interleave(
+        [
+            [dim // 2 for dim in diff_dims],
+            [dim - dim // 2 for dim in diff_dims],
+        ]
+    )
+    # pad scans from END of list, so we need to reverse bounds!
+    x = F.pad(x, list(reversed(list(bounds))))
+    return torch.cat([skip, x], dim=1)
 
 
 class ConvLayer(nn.Module):
@@ -245,20 +261,7 @@ class UpConvBlock(nn.Module):
         )
 
     def forward(self, x: torch.Tensor, skip: torch.Tensor) -> torch.Tensor:
-        x = self.up(x)
-        # use last 3 dimensions in (N, C, D, H, W) format
-        diff_dims = [skip.size(i) - x.size(i) for i in range(2, 5)]
-        # left, right, top, bottom, front, back
-        bounds = tz.interleave(
-            [
-                [dim // 2 for dim in diff_dims],
-                [dim - dim // 2 for dim in diff_dims],
-            ]
-        )
-        # pad scans from END of list, so we need to reverse bounds!
-        x = F.pad(x, list(reversed(list(bounds))))
-        x = torch.cat([skip, x], dim=1)
-        return self.conv(x)
+        return tz.pipe(x, self.up, _concat_with_skip(skip=skip), self.conv)
 
 
 class Decoder(nn.Module):
@@ -299,8 +302,8 @@ class Decoder(nn.Module):
                             bias=False,
                         )
                         if level != config["n_levels"] - 2
-                        else nn.Identity()
-                    )  # ignore lowest level from deep supervision
+                        else nn.Identity()  # lowest 2 levels have no deep supervision, so no conv!
+                    )
                     for level in range(config["n_levels"] - 2, -1, -1)
                 ]
             )
@@ -351,6 +354,7 @@ class Decoder(nn.Module):
 
         for level, skip in zip(self.levels, reversed(skips)):
             x = level(x, skip)
+
         x = (
             self.last_conv[-1](x)
             if isinstance(self.last_conv, nn.ModuleList)
@@ -394,44 +398,3 @@ class UNet(nn.Module):
 
     def last_activation(self, x: torch.Tensor) -> torch.Tensor:
         return self.decoder.last_activation(x)
-
-
-class MCDropoutUNet(nn.Module):
-    """
-    Wrapper around U-Net to apply dropout during evaluation
-
-    Note: this class only sets `nn.Dropout` layers to training mode during
-    evaluation. It only passes the input through the model once so to
-    get multiple predictions, use `uncertainty.training.inference.mc_dropout_inference`.
-
-    Parameters
-    ----------
-    model : nn.Module | lit.LightningModule
-        U-Net model
-    """
-
-    @override
-    def __init__(self, model: nn.Module | lit.LightningModule):
-        """
-        Wrap an existing U-Net or create a new one using the provided configuration
-        """
-        super().__init__()
-        self.model = model
-
-    @override
-    def forward(self, x: torch.Tensor, logits: bool = False) -> torch.Tensor:
-        """
-        Single forward pass for an input of shape (B, C, D, H, W)
-        """
-        return self.model(x, logits=logits)
-
-    @override
-    def eval(self):
-        def activate_dropout(module):
-            if isinstance(module, nn.Dropout):
-                module.train(True)
-
-        # Apply dropout during evaluation
-        self.model.eval()
-        self.model.apply(activate_dropout)
-        return self

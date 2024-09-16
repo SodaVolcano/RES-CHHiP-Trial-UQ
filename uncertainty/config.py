@@ -1,8 +1,7 @@
-from typing import Callable, Final, TypedDict
+from typing import Callable, TypedDict
 
 import torch
 from torch import nn, optim
-from deepspeed.ops.adam import DeepSpeedCPUAdam
 
 Configuration = TypedDict(
     "Configuration",
@@ -141,8 +140,6 @@ def training_config() -> dict[str, int | str | list[int | float | str] | type]:
         "batch_size": 2,
         "batch_size_eval": 4,  # batch size for both validation and test
         "initialiser": nn.init.kaiming_normal_,  # type: ignore
-        # "optimiser": DeepSpeedCPUAdam,  # type: ignore
-        # "optimiser_kwargs": {},
         "optimiser": optim.SGD,  # type: ignore
         "optimiser_kwargs": {"momentum": 0.99, "nesterov": True},
         # Learning rate scheduler, decrease learning rate at certain epochs

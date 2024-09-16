@@ -10,7 +10,7 @@ from pytorch_lightning import seed_everything
 import time
 import lightning as lit
 import torch
-from torch import nn, vmap
+from torch import nn
 from torch.utils.data import DataLoader, random_split
 from torchmetrics.aggregation import RunningMean
 from torchmetrics.classification import MultilabelF1Score, BinaryF1Score
