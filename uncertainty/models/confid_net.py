@@ -1,4 +1,4 @@
-from typing import Callable, override
+from typing import Callable
 from torch import nn
 import torch
 

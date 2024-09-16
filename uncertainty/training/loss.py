@@ -102,3 +102,19 @@ class DeepSupervisionLoss(nn.Module):
             weight * self.loss(y_pred, y_scaled)
             for weight, y_pred, y_scaled in zip(reversed(weights), y_preds, ys)
         )
+
+
+class ConfidNetMSELoss(nn.Module):
+    """
+    https://github.com/valeoai/ConfidNet
+    """
+
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, xs: torch.Tensor, y: torch.Tensor):
+        """
+        Compute L2 loss between predicted and actual class probability/confidence
+        """
+        y_pred, confidence = xs
+        return torch.mean(((confidence - (y_pred * y)) ** 2).sum(dim=1))
