@@ -10,7 +10,9 @@ from .unet import UNet, _concat_with_skip, _calc_n_kernels
 
 class UNetConfidNetEncoder(nn.Module):
     """
-    Convert a U-Net into a ConfidNet encoder by removing the last decoder level
+    Convert a U-Net into a ConfidNet encoder
+
+    Outputs both the input to ConfidNet and output of the segmentation model.
     """
 
     def __init__(self, unet: UNet):
@@ -23,16 +25,30 @@ class UNetConfidNetEncoder(nn.Module):
         """
         Modify decoder of U-Net to skip the last level
         """
-        for level, skip in zip(self.unet.decoder.levels[:-1], reversed(skips)):  # type: ignore
+        confidnet_in = x  # input to auxiliary network (confidnet)
+        for i, (level, skip) in enumerate(
+            zip(self.unet.decoder.levels, reversed(skips))
+        ):
             x = level(x, skip)
-        return tz.pipe(
-            x,
-            self.unet.decoder.levels[-1].up,
-            _concat_with_skip(skip=skips[0]),
-            self.last_activation if logits else tz.identity,
+            if i == len(skips) - 2:  # level 1 of unet
+                confidnet_in = x
+        x = (
+            self.unet.decoder.last_conv[-1](x)
+            if isinstance(self.unet.decoder.last_conv, nn.ModuleList)
+            else self.unet.decoder.last_conv(x)
         )
+        if not logits:
+            x = self.last_activation(x)
 
-    def forward(self, x: torch.Tensor, logits: bool = False) -> torch.Tensor:
+        return tz.pipe(
+            confidnet_in,
+            # upconv and concat with skip but don't do final convolution
+            self.unet.decoder.levels[-1].up if len(skips) > 1 else tz.identity,
+            _concat_with_skip(skip=skips[0]),
+            lambda confid_in: (confid_in, x),
+        )  # type: ignore
+
+    def forward(self, x: torch.Tensor, logits: bool) -> torch.Tensor:
         encoded, skip = self.unet.encoder(x)
         return self._decoder_forward(encoded, skip, logits)
 
@@ -59,7 +75,7 @@ class UNetConfidNet(nn.Module):
         input_dim = _calc_n_kernels(
             config["n_kernels_init"], 1, config["n_kernels_max"]
         )
-        output_dim = config["output_channel"]
+        output_dim = config["n_kernels_last"]
 
         dims = [input_dim] + hidden_conv_dims + [output_dim]
         self.activation = activation()
@@ -78,9 +94,13 @@ class UNetConfidNet(nn.Module):
         for param in self.unet.parameters():
             param.requires_grad = False
 
-    def forward(self, x: torch.Tensor):
+    def forward(self, x: torch.Tensor, logits: bool = False):
+        """
+        Return (confidence, segmentation), logits only apply to segmentation
+        """
+        encoder_out, seg_out = self.encoder(x, logits=logits)
         return tz.pipe(
-            x,
-            self.encoder,
+            encoder_out,
             *self.conv_activations,  # pass through all convolutions and activations
+            lambda confidence: (confidence, seg_out),
         )

@@ -19,7 +19,6 @@ Configuration = TypedDict(
         "patch_step": int,
         "foreground_oversample_ratio": float,
         "intensity_range": tuple[int, int],
-        "output_channel": int,
         "val_split": float,
         "test_split": float,
         "kernel_size": int,
@@ -77,8 +76,6 @@ def data_config() -> dict[str, int | str | float | tuple[int, ...]]:
         # % of sampled patches guaranteed to contain foreground
         "foreground_oversample_ratio": 1 / 3,
         "intensity_range": (0, 1),
-        # Number of organs, mask only
-        "output_channel": 3,
         "test_split": 0.2,  # percentage of total dataset for testing
         "val_split": 0.2,  # percentage of training data (after test split) to use for validation
     }

@@ -29,7 +29,7 @@ class TestUNetConfidNetEncoder:
             "dropout_rate": 0.8,
             "instance_norm_epsilon": 1e-5,
             "instance_norm_decay": 0.1,
-            "n_levels": 2,
+            "n_levels": 3,
             "input_channel": 1,
             "n_kernels_last": 1,
             "final_layer_activation": nn.Sigmoid,
@@ -38,8 +38,10 @@ class TestUNetConfidNetEncoder:
         encoder = UNetConfidNetEncoder(unet)
         test_tensor = torch.randn(2, 1, 64, 64, 64)
 
-        result = encoder(test_tensor)
-        assert result.shape == (2, config["n_kernels_init"] * 2, 64, 64, 64)
+        result = encoder(test_tensor, logits=False)
+        assert len(result) == 2
+        assert result[0].shape == (2, config["n_kernels_init"] * 2, 64, 64, 64)
+        assert result[1].shape == (2, 1, 64, 64, 64)
 
 
 class TestUNetConfidNet:
@@ -55,9 +57,8 @@ class TestUNetConfidNet:
             "dropout_rate": 0.8,
             "instance_norm_epsilon": 1e-5,
             "instance_norm_decay": 0.1,
-            "n_levels": 2,
+            "n_levels": 3,
             "input_channel": 3,
-            "output_channel": 1,
             "n_kernels_last": 1,
             "final_layer_activation": nn.Sigmoid,
         }
@@ -71,4 +72,5 @@ class TestUNetConfidNet:
         assert isinstance(model.encoder, nn.Module)
         assert all(p.requires_grad for p in model.unet.parameters()) == False
         assert len(model.conv_activations) == 5  # 4 hidden + 1 output
-        assert result.shape == (2, 1, 64, 64, 64)
+        assert result[0].shape == (2, 1, 64, 64, 64)
+        assert result[1].shape == (2, 1, 64, 64, 64)

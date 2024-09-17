@@ -77,8 +77,7 @@ def _spline_window_1d(window_size: int, power: int = 2) -> np.ndarray:
     window_inner[:intersection] = 0
     window_inner[-intersection:] = 0
 
-    window = window_inner + window_outer
-    return window / np.average(window)
+    return window_inner + window_outer
 
 
 def _spline_window_3d(window_sizes: tuple[int, int, int], power: int = 2) -> np.ndarray:
@@ -91,7 +90,7 @@ def _spline_window_3d(window_sizes: tuple[int, int, int], power: int = 2) -> np.
     # Compute the outer product to form a 3D window
     window_3d = reduce(np.outer, window_xyz).reshape(window_sizes)
 
-    return window_3d / np.average(window_3d)
+    return window_3d
 
 
 def _unpad_image(
@@ -131,7 +130,7 @@ def _reconstruct_image(
             z_pos : z_pos + patch.shape[3],
         ] += patch
 
-    return reconstructed_arr / np.average(window)
+    return reconstructed_arr
 
 
 def _get_stride(
@@ -212,11 +211,6 @@ def sliding_inference(
     return y_pred
 
 
-@curry
-def _to_prob_map(it: Iterable[torch.Tensor], n: int) -> torch.Tensor:
-    return reduce(torch.add, it) / n
-
-
 @logger_wraps()
 @torch.no_grad()
 def mc_dropout_inference(
@@ -227,9 +221,8 @@ def mc_dropout_inference(
     n_outputs: int,
     subdivisions: tuple[int, int, int] | int = 2,
     output_channels: int = 3,
-    prob_map: bool = False,
     prog_bar: bool = True,
-) -> Iterable[torch.Tensor] | torch.Tensor:
+) -> Iterable[torch.Tensor]:
     """
     Perform `n_outputs` MC Dropout inference on the full image
 
@@ -258,17 +251,14 @@ def mc_dropout_inference(
         Size to batch the patches when performing inference
     output_channels : int
         Number of output channels of the model
-    prob_map: bool
-        Whether to output a single probability map aggregated from the outputs
     prog_bar : bool
         Whether to display a progress bar for each forward pass of a batch
         of patches
 
     Returns
     -------
-    Iterable[torch.Tensor] | torch.Tensor
-        Iterator of `n_outputs` predictions of the full image, or a single
-        probability map if `prob_map` is True
+    Iterable[torch.Tensor]
+        Iterator of `n_outputs` predictions of the full image.
     """
     mcdo_model = MCDropoutUNet(model)
     mcdo_model.eval()
@@ -293,7 +283,6 @@ def mc_dropout_inference(
             batch_size,
             subdivisions,
             output_channels,
-            prob_map,
             prog_bar,
         ),
     )  # type: ignore
@@ -308,9 +297,8 @@ def ensemble_inference(
     batch_size: int,
     subdivisions: tuple[int, int, int] | int = 2,
     output_channels: int = 3,
-    prob_map: bool = False,
     prog_bar: bool = True,
-) -> Iterable[torch.Tensor] | torch.Tensor:
+) -> Iterable[torch.Tensor]:
     """
     Perform inference on full image using each model in `models`
 
@@ -335,17 +323,14 @@ def ensemble_inference(
         Size to batch the patches when performing inference
     output_channels : int
         Number of output channels of the model
-    prob_map: bool
-        Whether to output a single probability map aggregated from the outputs
     prog_bar : bool
         Whether to display a progress bar for each forward pass of a batch
         of patches
 
     Returns
     -------
-    Iterable[torch.Tensor] | torch.Tensor
-        Iterator of `n_outputs` predictions of the full image, or a single
-        probability map if `prob_map` is True
+    Iterable[torch.Tensor]
+        Iterator of `n_outputs` predictions of the full image.
     """
     return tz.pipe(
         models,
@@ -361,10 +346,11 @@ def ensemble_inference(
         ),
         curried.map(lambda inference: inference(x)),
         curried.map(torch.from_numpy),
-        _to_prob_map(n=len(models)) if prob_map else tz.identity,
     )  # type: ignore
 
 
+@logger_wraps()
+@torch.no_grad()
 def tta_inference(
     model: nn.Module | lit.LightningModule,
     x: torch.Tensor,
@@ -375,9 +361,8 @@ def tta_inference(
     n_outputs: int,
     subdivisions: tuple[int, int, int] | int = 2,
     output_channels: int = 3,
-    prob_map: bool = False,
     prog_bar: bool = True,
-) -> Iterable[torch.Tensor] | torch.Tensor:
+) -> Iterable[torch.Tensor]:
     """
     Augment the input `x` `n_outputs` times and perform inference on the augmented images
 
@@ -407,52 +392,58 @@ def tta_inference(
         Size to batch the patches when performing inference
     output_channels : int
         Number of output channels of the model
-    prob_map: bool
-        Whether to output a single probability map aggregated from the outputs
     prog_bar : bool
         Whether to display a progress bar for each forward pass of a batch
         of patches
 
     Returns
     -------
-    Iterable[torch.Tensor] | torch.Tensor
-        Iterator of `n_outputs` predictions of the full image, or a single
-        probability map if `prob_map` is True
+    Iterable[torch.Tensor]
+        Iterator of `n_outputs` predictions of the full image.
     """
-
-    x_subjs = [tio.Subject(volume=tio.ScalarImage(tensor=x)) for _ in range(n_outputs)]
 
     def aug_forward_unaug(x: torch.Tensor):
         """
         Apply batch affine transform to `x`, run inference, then apply the inverse
         """
-        return tz.pipe(
+        x_aug = tz.pipe(
             x,  # shape (C, D, H, W)
-            lambda x: torch.unsqueeze(x, 0),  # shape (1, C, D, H, W)
+            lambda x: x.unsqueeze(0),  # shape (1, C, D, H, W)
             lambda x: batch_affine(x, return_transform=True),
+            lambda x: x[0],  # shape (C, D, H, W)
+        )
+        return tz.pipe(
+            x_aug,
             sliding_inference(
-                model=model,
+                model,
                 patch_size=patch_size,
                 subdivisions=subdivisions,
                 batch_size=batch_size,
                 output_channels=output_channels,
                 prog_bar=prog_bar,
             ),
-            inverse_affine_transform(batch_affine._params),
+            lambda pred: torch.from_numpy(pred).unsqueeze(0),  # back to (1, C, D, H, W)
+            lambda pred: (
+                inverse_affine_transform(batch_affine._params)(pred)
+                if not x_aug.equal(x)  # if the affine transform was applied
+                else pred
+            ),
+            lambda pred: pred.squeeze(0),  # back to (C, D, H, W)
         )
 
     def assign_mask_to_subject(subj: tio.Subject, mask: torch.Tensor):
         subj["mask"] = tio.LabelMap(tensor=mask)
         return subj
 
+    x_subjs_aug = [
+        aug(tio.Subject(volume=tio.ScalarImage(tensor=x))) for _ in range(n_outputs)
+    ]
+
     return tz.pipe(
-        x_subjs,
-        curried.map(lambda subj: aug(subj)),
+        x_subjs_aug,
         curried.map(lambda subj: subj["volume"].data),
         curried.map(aug_forward_unaug),
-        curried.map(lambda y_pred: torch.from_numpy(y_pred)),
-        lambda y_preds: zip(x_subjs, y_preds),
+        lambda y_preds: zip(x_subjs_aug, y_preds),
         curried.map(lambda subj_pred: assign_mask_to_subject(*subj_pred)),
         curried.map(lambda subj: subj.apply_inverse_transform(warn=False)["mask"].data),
-        _to_prob_map(n=n_outputs) if prob_map else tz.identity,
-    )
+    )  # type: ignore

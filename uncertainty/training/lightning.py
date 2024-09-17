@@ -175,7 +175,7 @@ class LitSegmentation(lit.LightningModule):
         self.config = config
         self.class_weights = class_weights
         # Original dice, used for evaluation
-        self.dice_eval = MultilabelF1Score(num_labels=config["output_channel"])
+        self.dice_eval = MultilabelF1Score(num_labels=config["n_kernels_last"])
         self.dice_eval_single = BinaryF1Score()
         self.running_loss = RunningMean(window=10)
         self.running_dice = RunningMean(window=10)
