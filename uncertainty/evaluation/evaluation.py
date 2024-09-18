@@ -8,23 +8,12 @@ from .metrics import _get_metric_func
 from tqdm import tqdm
 
 
+@torch.no_grad()
 @curry
 def evaluate_prediction(
     prediction: torch.Tensor,
     label: torch.Tensor,
-    metric_names: list[
-        Literal[
-            "hd",
-            "hd95",
-            "asd",
-            "assd",
-            "dice",
-            "recall",
-            "sen",
-            "precision",
-            "ppv",
-        ]
-    ],
+    metric_names: list[str],
     average: Literal["micro", "macro", "none"] = "macro",
 ) -> torch.Tensor:
     """
@@ -37,7 +26,18 @@ def evaluate_prediction(
     label : torch.Tensor
         The ground truth tensor.
     metric_names : list[Literal]
-        List of metric names to evaluate.
+        List of metric names to evaluate. Can be any of
+        - "hd": Hausdorff distance
+        - "hd95": Hausdorff distance at 95th percentile
+        - "asd": Average surface distance
+        - "assd": Average symmetric surface distance
+        - "dice": Dice similarity coefficient
+        - "surface_dice_<float>": Surface Dice similarity coefficient at tolerance <float>
+        - "recall": Recall
+        - "sen": Sensitivity
+        - "precision": Precision
+        - "ppv": Positive predictive value
+
     average : Literal["micro", "macro", "none"]
         Averaging method for the metrics.
         - "micro": Calculate metrics globally across all classes.
@@ -58,22 +58,11 @@ def evaluate_prediction(
     )  # type: ignore
 
 
+@torch.no_grad()
 def evaluate_predictions(
     predictions: torch.Tensor | list[torch.Tensor] | tuple[torch.Tensor],
     label: torch.Tensor,
-    metric_names: list[
-        Literal[
-            "hd",
-            "hd95",
-            "asd",
-            "assd",
-            "dice",
-            "recall",
-            "sen",
-            "precision",
-            "ppv",
-        ]
-    ],
+    metric_names: list[Literal[str]],
     average: Literal["micro", "macro", "none"] = "macro",
     summarise: bool = True,
     prog_bar: bool = False,
@@ -88,7 +77,18 @@ def evaluate_predictions(
     label : torch.Tensor
         The ground truth tensor of shape (C, ...)
     metric_names : list[Literal]
-        List of metric names to evaluate
+        List of metric names to evaluate. Can be any of
+        - "hd": Hausdorff distance
+        - "hd95": Hausdorff distance at 95th percentile
+        - "asd": Average surface distance
+        - "assd": Average symmetric surface distance
+        - "dice": Dice similarity coefficient
+        - "surface_dice_<float>": Surface Dice similarity coefficient at tolerance <float>
+        - "recall": Recall
+        - "sen": Sensitivity
+        - "precision": Precision
+        - "ppv": Positive predictive value
+
     average : Literal["micro", "macro", "none"]
         Averaging mode for the channel-wise metrics per prediction
         - "micro": Calculate metrics globally across all channels

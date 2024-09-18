@@ -12,6 +12,7 @@ from toolz import curried
 import numpy as np
 
 from ..utils.wrappers import curry
+from .surface_dice import compute_surface_dice_at_tolerance, compute_surface_distances
 
 
 @curry
@@ -19,7 +20,7 @@ def _distance_with_default(
     distance: Callable[[np.ndarray, np.ndarray], float], pred: np.ndarray, y: np.ndarray
 ) -> float:
     """
-    Return default value if either `pred` or `y` are empty
+    Return default distance 0 if either `pred` or `y` are empty
     """
     return distance(pred, y) if pred.sum() > 0 and y.sum() > 0 else 0
 
@@ -28,6 +29,10 @@ def _average_methods(average: Literal["micro", "macro", "none"]) -> Callable[
     [np.ndarray, np.ndarray, Callable[[np.ndarray, np.ndarray], float]],
     torch.Tensor,
 ]:
+    """
+    Return a function that take in `preds`, `label`, and `metric` and compute
+    the metric between them and averages them according to `average`
+    """
     return {
         "micro": lambda pred, label, metric: torch.tensor(metric(pred, label)),
         "macro": lambda preds, label, metric: torch.mean(
@@ -81,8 +86,56 @@ def dice(
     )(prediction.unsqueeze(0), label.unsqueeze(0))
 
 
-def surface_dice(prediction: torch.Tensor, label: torch.Tensor):
-    pass
+@curry
+def surface_dice(
+    prediction: torch.Tensor,
+    label: torch.Tensor,
+    tolerance: float,
+    average: Literal["micro", "macro", "none"] = "macro",
+) -> torch.Tensor:
+    """
+    Compute the Surface Dice between two tensors of shape (C, ...) at specified tolerance.
+
+    The surface DICE measures the overlap of two surfaces instead of two volumes.
+    A surface element is counted as overlapping (or touching), when the closest
+    distance to the other surface is less or equal to the specified tolerance.
+    The DICE coefficient is in the range between 0.0 (no overlap) to 1.0
+    (perfect overlap).
+
+    Taken from https://github.com/google-deepmind/surface-distance
+
+    Parameters
+    ----------
+    prediction : torch.Tensor
+        The predicted tensor of shape (C, ...).
+    label : torch.Tensor
+        The ground truth tensor of shape (C, ...).
+    tolerance : float
+        Tolerance in mm.
+    average : Literal["micro", "macro", "weighted", "none"]
+        Averaging method for the metric.
+        - "micro": Calculate metrics globally across all classes.
+        - "macro": Calculate metrics for each class and average them.
+        - "weighted": Weighted averaging of metrics.
+        - "none": Return the metrics for each class separately.
+    """
+
+    def compute_surface_dice(pred: np.ndarray, y: np.ndarray) -> float:
+        """
+        Expects pred and y to be 3D binary masks with uniform 1 mm spacing
+        """
+        distances = compute_surface_distances(pred, y, (1, 1, 1))
+        return compute_surface_dice_at_tolerance(distances, tolerance)
+
+    return tz.pipe(
+        _prepare_tensors(prediction, label),
+        lambda pred_label: (pred_label[0] > 0.5, pred_label[1].astype(bool)),
+        lambda pred_label: _average_methods(average)(
+            pred_label[0],
+            pred_label[1],
+            _distance_with_default(compute_surface_dice),
+        ),
+    )  # type: ignore
 
 
 def hausdorff_distance(
@@ -265,133 +318,19 @@ def generalised_energy_distance(
     pass
 
 
-def _get_metric_func(
-    name: Literal[
-        "hd",
-        "hd95",
-        "asd",
-        "assd",
-        "dice",
-        "recall",
-        "precision",
-        "ppv",
-    ]
-):
+def _get_metric_func(name: str):
+
+    tolerance = float(name.split("_")[-1]) if "surface_dice" in name else 0
+
     return {
         "hd": hausdorff_distance,
         "hd95": hausdorff_distance_95,
         "asd": average_surface_distance,
         "assd": average_symmetric_surface_distance,
         "dice": dice,
+        f"surface_dice_{tolerance}": surface_dice(tolerance=tolerance),
         "recall": recall,
         "sen": recall,
         "precision": precision,
         "ppv": precision,
     }[name]
-
-
-@curry
-def evaluate_prediction(
-    prediction: torch.Tensor,
-    label: torch.Tensor,
-    metric_names: list[
-        Literal[
-            "hd",
-            "hd95",
-            "asd",
-            "assd",
-            "dice",
-            "recall",
-            "sen",
-            "precision",
-            "ppv",
-        ]
-    ],
-    average: Literal["micro", "macro", "none"] = "macro",
-) -> torch.Tensor:
-    """
-    Evaluate a `prediction` against a `label` tensor using a list of metrics.
-
-    Parameters
-    ----------
-    prediction : torch.Tensor
-        The predicted tensor.
-    label : torch.Tensor
-        The ground truth tensor.
-    metric_names : list[Literal]
-        List of metric names to evaluate.
-    average : Literal["micro", "macro", "none"]
-        Averaging method for the metrics.
-        - "micro": Calculate metrics globally across all classes.
-        - "macro": Calculate metrics for each class and average them.
-        - "none": Return the metrics for each class separately.
-
-    Returns
-    -------
-    torch.Tensor
-        Concatenated metrics for the prediction.
-    """
-    return tz.pipe(
-        metric_names,
-        curried.map(_get_metric_func),
-        curried.map(lambda metric: metric(prediction, label, average=average)),
-        list,
-        torch.tensor,
-    )  # type: ignore
-
-
-def evaluate_predictions(
-    predictions: torch.Tensor | list[torch.Tensor] | tuple[torch.Tensor],
-    label: torch.Tensor,
-    metric_names: list[
-        Literal[
-            "hd",
-            "hd95",
-            "asd",
-            "assd",
-            "dice",
-            "recall",
-            "sen",
-            "precision",
-            "ppv",
-        ]
-    ],
-    average: Literal["micro", "macro", "none"] = "macro",
-    summarise: bool = True,
-) -> torch.Tensor:
-    """
-    Evaluate a list of `predictions` against a `label` tensor using a list of metrics
-
-    Parameters
-    ----------
-    predictions : torch.Tensor | list[torch.Tensor] | tuple[torch.Tensor]
-        List of predictions of shape (N, C, ...)
-    label : torch.Tensor
-        The ground truth tensor of shape (C, ...)
-    metric_names : list[Literal]
-        List of metric names to evaluate
-    average : Literal["micro", "macro", "none"]
-        Averaging mode for the channel-wise metrics per prediction
-        - "micro": Calculate metrics globally across all channels
-        - "macro": Calculate metrics for each channel, and calculate their mean
-        - "none": Return the metrics for each channel
-    summarise : bool
-        If True, the metrics are averaged across all predictions
-
-    Returns
-    -------
-    torch.Tensor
-        If `summarise` is True, a tensor of shape `(num_metrics,)` with the
-        average metrics across all predictions, or a tensor of shape
-        `(N, num_metrics)` if `summarise` is False
-    """
-
-    return tz.pipe(
-        predictions,
-        curried.map(
-            evaluate_prediction(label=label, metric_names=metric_names, average=average)
-        ),
-        list,
-        torch.stack,
-        lambda x: torch.mean(x, dim=0) if summarise else x,
-    )  # type: ignore

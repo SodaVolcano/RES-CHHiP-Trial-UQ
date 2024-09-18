@@ -11,6 +11,40 @@ import torch
 from lightning.pytorch.loggers import TensorBoardLogger
 
 
+"""
+input
+    path to checkpoints
+    best_model_name
+    path to one dataset
+    list of models
+        - model (best)
+        - ensemble
+        - tta (best)
+        - mc dropout (best)
+    list of metrics
+        - dice
+        - ...
+
+for each model...
+    1. load model
+    2. feed EACH instance into model and get patched output - inference
+        3. calculate metric for each organ
+            -> DSC [organ1, organ2, organ3]
+            -> HD [organ1, organ2, organ3]
+        4. get average organ-wise
+            e.g. model1: [0.8, 0.7, 0.6]
+                 model2: [0.7, 0.6, 0.5]
+                 model3: [0.6, 0.5, 0.4]
+                 torch.mean
+    4. lazyframe: model, metrics
+
+
+output
+    csv file
+    | model | organ_metrics...
+"""
+
+
 def main():
     pass
 
@@ -29,20 +63,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--checkpoint_path",
         type=str,
-        help="Path to save or load model checkpoints.",
+        help="Path a folder containing model checkpoint latest.pl, train-validation split indices indices.pt, and the model configuration object config.pkl.",
         default=config["model_checkpoint_path"],
-    )
-    parser.add_argument(
-        "--retrain",
-        action="store_true",
-        help="Whether to retrain a model saved in the model checkpoint",
-        default=False,
-    )
-    parser.add_argument(
-        "--no_deep_supervision",
-        action="store_false",
-        help="Disable deep supervision during training.",
-        default=not config["deep_supervision"],
     )
 
     args = parser.parse_args()
