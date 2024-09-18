@@ -21,7 +21,7 @@ from uncertainty.training.datasets import (
     SlidingPatchDataset,
 )
 
-from .loss import DeepSupervisionLoss, DiceBCELoss
+from .loss import ConfidNetMSELoss, DeepSupervisionLoss, DiceBCELoss
 from ..config import Configuration
 from .augmentations import augmentations
 
@@ -269,6 +269,103 @@ class LitSegmentation(lit.LightningModule):
         self.log(
             "val_dice",
             dice,
+            sync_dist=True,
+            prog_bar=True,
+        )
+        return loss
+
+    def on_validation_epoch_end(self):
+        self.val_counter += 1
+
+    @torch.no_grad()
+    def test_step(self, batch: torch.Tensor):
+        x, y = batch
+        y_pred = self.model(x, logits=False)
+        loss = self.loss(y_pred, y)
+        if self.deep_supervision:
+            y_pred = y_pred[-1]
+        dice = self.dice_eval(y_pred, y)
+
+        self.log("test_loss", loss, sync_dist=True, prog_bar=True)
+        self.log("test_dice", dice, sync_dist=True, prog_bar=True)
+        return loss
+
+    def configure_optimizers(self):  # type: ignore
+        optimiser = self.config["optimiser"](
+            self.model.parameters(), **self.config["optimiser_kwargs"]
+        )
+        lr_scheduler = self.config["lr_scheduler"](optimiser)  # type: ignore
+        return {"optimizer": optimiser, "lr_scheduler": lr_scheduler}
+
+
+class LitConfidNet(lit.LightningModule):
+    """ """
+
+    def __init__(
+        self,
+        model: nn.Module,
+        config: Configuration,
+        class_weights: Optional[torch.Tensor] = None,
+        save_hyperparams: bool = True,
+    ):
+        super().__init__()
+        if save_hyperparams:
+            self.save_hyperparameters(ignore=["model"])
+            os.makedirs(config["model_checkpoint_path"], exist_ok=True)
+            with open(
+                os.path.join(config["model_checkpoint_path"], "config.pkl"), "wb"
+            ) as f:
+                dill.dump(config, f)
+
+        self.config = config
+        self.class_weights = class_weights
+        self.running_loss = RunningMean(window=10)
+        self.val_counter = 0
+        self.val_batch_num = 0
+
+        self.model = model
+        self.loss = ConfidNetMSELoss()
+
+    def forward(self, x, logits: bool = False):
+        return self.model(x, logits)
+
+    def training_step(self, batch: torch.Tensor):
+        x, y = batch
+        y_pred = self.model(x, logits=True)
+        loss = self.loss(y_pred, y)
+
+        self.running_loss(loss.detach())
+        self.log(
+            "train_loss",
+            self.running_loss.compute(),
+            sync_dist=True,
+            prog_bar=True,
+        )
+        return loss
+
+    @torch.no_grad()
+    def validation_step(self, batch: torch.Tensor):
+        x, y = batch
+
+        y_pred = self.model(x, logits=True)
+        loss = self.loss(y_pred, y)
+
+        if self.val_counter == 4:
+            _dump_tensors(
+                self.config["model_checkpoint_path"],
+                x,
+                y,
+                y_pred,
+                0,
+                loss,
+                self.val_batch_num,
+            )
+            self.val_batch_num += 1
+            self.val_counter = 0
+
+        self.log(
+            "val_loss",
+            loss,
             sync_dist=True,
             prog_bar=True,
         )
