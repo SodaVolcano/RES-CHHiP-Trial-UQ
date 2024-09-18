@@ -59,24 +59,30 @@ def inverse_affine_transform(
     affine_inv = torch.inverse(affine_matrix)
     # expects (B, 3, 4) affine matrix so cut off last row
     return lambda x: warp_affine3d(
-        x, affine_inv[:, :3], x.shape[2:], flags=flags, align_corners=align_corners
+        x.double(),
+        affine_inv[:, :3].double(),
+        x.shape[2:],
+        flags=flags,
+        align_corners=align_corners,
     )
 
 
 @logger_wraps(level="DEBUG")
-def torchio_augmentation(p: float = 1.0) -> tio.Compose:
+def torchio_augmentation(
+    p: float = 1.0, ps: list[float] = [0.15, 0.2, 0.2, 0.2]
+) -> tio.Compose:
     """
     Returns a torchio Compose object with a set of augmentations
     """
     return Compose(
         [
             RandomAnisotropy(
-                (0, 1, 2), scalars_only=True, p=0.15
+                (0, 1, 2), scalars_only=True, p=ps[0]
             ),  # simulate low quality
-            RandomBlur(p=0.2),
-            RandomGamma(p=0.2),
+            RandomBlur(p=ps[1]),
+            RandomGamma(p=ps[2]),
             # RandomElasticDeformation(num_control_points=5, p=0.15),
-            RandomFlip(axes=(0, 1, 2), p=0.2),
+            RandomFlip(axes=(0, 1, 2), p=ps[3]),
         ],
         p=p,
     )
@@ -105,10 +111,3 @@ def augmentations(
     return lambda arr: tz.pipe(
         arr, to_torchio_subject, torchio_augmentation(p=p), from_torchio_subject
     )
-
-
-def augmentations_batch(p: float = 1.0):
-    """
-    Apply augmentations to a batch of (volume, masks) pairs
-    """
-    pass  # TODO

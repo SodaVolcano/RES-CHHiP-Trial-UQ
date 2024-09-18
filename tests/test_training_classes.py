@@ -14,7 +14,7 @@ class TestLitSegmentation:
     def test_initialization_with_default_parameters(self, mocker):
         model = mocker.Mock(spec=nn.Module)
         config = {
-            "output_channel": 3,
+            "n_kernels_last": 3,
             "optimiser": mocker.Mock(),
             "optimiser_kwargs": {},
             "lr_scheduler": mocker.Mock(),
@@ -30,7 +30,7 @@ class TestLitSegmentation:
         model = mocker.Mock(spec=nn.Module)
         model.last_activation = nn.Sigmoid()
         config = {
-            "output_channel": 3,
+            "n_kernels_last": 3,
             "optimiser": mocker.Mock(),
             "optimiser_kwargs": {},
             "lr_scheduler": mocker.Mock(),
@@ -38,10 +38,10 @@ class TestLitSegmentation:
         lit_segmentation = LitSegmentation(model=model, config=config, save_hyperparams=False)  # type: ignore
 
         y_pred = torch.randn(
-            3, config["output_channel"], 100, 100, 100
+            3, config["n_kernels_last"], 100, 100, 100
         )  # Example random prediction tensor
         y = torch.randint(
-            0, 2, (3, config["output_channel"], 100, 100, 100), dtype=torch.float32
+            0, 2, (3, config["n_kernels_last"], 100, 100, 100), dtype=torch.float32
         )  # Example random ground truth tensor
 
         loss = lit_segmentation.loss(y_pred, y)
