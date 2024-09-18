@@ -2485,6 +2485,27 @@ files = [
 ]
 
 [[package]]
+name = "medpy"
+version = "0.5.2"
+description = "Medical image processing in Python"
+optional = false
+python-versions = "<4,>=3.5"
+files = [
+    {file = "medpy-0.5.2.tar.gz", hash = "sha256:f4233c2f4adc79abe4b8ff5b683ba4778322d4545e71d51d6a328ad31275972d"},
+]
+
+[package.dependencies]
+numpy = ">=1.24"
+scipy = ">=1.10"
+SimpleITK = ">=2.1"
+
+[package.extras]
+dev = ["pre-commit"]
+doc = ["numpydoc", "pydata-sphinx-theme", "sphinx (>=1.6)"]
+test = ["hypothesis", "pytest"]
+watershed = ["scikit-image"]
+
+[[package]]
 name = "mistune"
 version = "3.0.2"
 description = "A sane and fast Markdown parser with useful plugins and renderers"
@@ -5230,4 +5251,4 @@ multidict = ">=4.0"
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.12"
-content-hash = "7cbcf55faa7c1deed642e208a845e4bb8679e9e448f524a48fd8ca8b3e784cea"
+content-hash = "4ed9813d724b933802573c72ded4198bcda844fda8cf4213cb4ef5a7c07397fa"

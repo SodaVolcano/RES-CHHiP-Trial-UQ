@@ -75,3 +75,12 @@ def variance_map(
         Variance map computed from the input tensors
     """
     return _stack_if_sequence(preds).var(dim=0)
+
+
+def mean_uncertainty(
+    uncertainty_map: torch.Tensor,
+):
+    """
+    Compute mean uncertainty from an uncertainty map
+    """
+    return uncertainty_map.mean()
