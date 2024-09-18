@@ -40,11 +40,19 @@ def main(
         save_top_k=-1,
     )
 
+    checkpoint_last = ModelCheckpoint(
+        monitor="val_loss",
+        mode="min",
+        dirpath=f"{checkpoint_path}",
+        filename="last",
+        save_top_k=1,
+    )
+
     trainer = Trainer(
         max_epochs=config["n_epochs"],
         limit_train_batches=config["n_batches_per_epoch"],
         limit_val_batches=config["n_batches_val"],
-        callbacks=[checkpoint],
+        callbacks=[checkpoint, checkpoint_last],
         strategy="ddp",
         check_val_every_n_epoch=5,
         accelerator="gpu",
