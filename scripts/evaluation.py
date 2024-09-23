@@ -1,14 +1,8 @@
 from context import uncertainty as un
-from lightning.pytorch.callbacks import ModelCheckpoint
-from lightning import Trainer
 import os
-import torch
 
 import dill
 from scripts.__helpful_parser import HelpfulParser
-from uncertainty.config import Configuration
-import torch
-from lightning.pytorch.loggers import TensorBoardLogger
 
 
 """

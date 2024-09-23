@@ -1,3 +1,4 @@
+from itertools import combinations_with_replacement, product
 from typing import Callable, Literal
 import torch
 from torchmetrics.classification import (
@@ -310,12 +311,61 @@ def average_symmetric_surface_distance(
     )  # type: ignore
 
 
-def generalised_energy_distance(
-    prediction: torch.Tensor,
-    label: torch.Tensor,
-    average: Literal["micro", "macro", "none"] = "macro",
+def general_energy_distance(
+    a: torch.Tensor,
+    b: torch.Tensor,
+    distance: Callable[[torch.Tensor, torch.Tensor], torch.Tensor] = (
+        lambda x, y: 1 - dice(x > 0.5, y > 0.5)
+    ),
 ) -> torch.Tensor:
-    pass
+    """
+    Calculate the General Energy Distance (GED) between `a` and `b` using `distance`.
+
+    Parameters
+    ----------
+    a : torch.Tensor
+        Tensor of shape `(N, C, ...)` containing N samples of data sampled
+        from the first distribution.
+
+    b : torch.Tensor
+        Tensor of shape `(M, C, ...)` containing M samples of data sampled
+        from the second distribution.
+
+    distance : callable
+        A function that computes the distance between two samples (from tensors `a` and `b`)
+        that returns smaller value for more similar samples.
+        Default is 1 - dice(x > 0.5, y > 0.5).
+
+    Returns
+    -------
+    torch.Tensor
+        The computed General Energy Distance (GED) between the two tensors.
+        If the squared distance `ged_squared` is negative due to numerical precision
+        issues, the function returns 0.0.
+
+    Notes
+    -----
+    The General Energy Distance is defined as:
+
+    .. math::
+       D^2_{\text{GED}}(a, b) = 2E[ d(a_i, b_i) ] - E[ d(a_i, a_j) ] - E[ d(b_i, b_j) ]
+
+    Where:
+        - `d(a_i, b_i)` is the distance between samples `a_i` from `a` and `b_i` from `b`.
+        - `E[.]` denotes the expected value (i.e., mean over all sample pairs).
+    """
+    assert a.shape == b.shape, "Input arrays must have the same shape"
+    # lambda x, y: 1 - dice(x > 0.5, y > 0.5)
+    E_d_ab = np.mean([distance(x1, x2) for x1, x2 in product(a, b)])
+    E_d_aa = np.mean(
+        [distance(x1, x2) for x1, x2 in combinations_with_replacement(a, 2)]
+    )
+    E_d_bb = np.mean(
+        [distance(x1, x2) for x1, x2 in combinations_with_replacement(b, 2)]
+    )
+
+    ged_squared = 2 * E_d_ab - E_d_aa - E_d_bb
+    return torch.tensor(np.sqrt(ged_squared) if ged_squared >= 0 else 0.0)
 
 
 def _get_metric_func(name: str):

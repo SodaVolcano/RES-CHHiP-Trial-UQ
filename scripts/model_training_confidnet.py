@@ -87,9 +87,8 @@ if __name__ == "__main__":
     config["staging_dir"] = os.path.dirname(args.data_path)
     config["staging_fname"] = os.path.basename(args.data_path)
     checkpoint_path = args.checkpoint_path
-    if args.retrain:
-        with open(os.path.join(checkpoint_path, "config.pkl"), "rb") as f:
-            config = dill.load(f)
+    with open(os.path.join(checkpoint_path, "config.pkl"), "rb") as f:
+        config = dill.load(f)
 
     main(
         checkpoint_path,

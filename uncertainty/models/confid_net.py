@@ -1,11 +1,13 @@
 from typing import Callable
+from matplotlib.pylab import f
 from torch import nn
 import torch
 
 from uncertainty.config import Configuration, configuration
 import toolz as tz
 
-from .unet import UNet, _concat_with_skip, _calc_n_kernels
+from .unet_modules import _concat_with_skip, _calc_n_kernels
+from .unet import UNet
 
 
 class UNetConfidNetEncoder(nn.Module):

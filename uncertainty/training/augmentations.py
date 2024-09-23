@@ -14,7 +14,6 @@ import toolz as tz
 from torchio.transforms import (
     Compose,
     RandomFlip,
-    RandomAffine,
     RandomElasticDeformation,
     RandomBlur,
     RandomGamma,
