@@ -314,9 +314,11 @@ def average_symmetric_surface_distance(
 def general_energy_distance(
     a: torch.Tensor,
     b: torch.Tensor,
-    distance: Callable[[torch.Tensor, torch.Tensor], torch.Tensor] = (
-        lambda x, y: 1 - dice(x > 0.5, y > 0.5)
-    ),
+    distance: (
+        Literal["hd", "hd95", "asd", "assd", "dice"]
+        | Callable[[torch.Tensor, torch.Tensor], torch.Tensor]
+    ) = "dice",
+    average: Literal["micro", "macro", "none"] = "macro",
 ) -> torch.Tensor:
     """
     Calculate the General Energy Distance (GED) between `a` and `b` using `distance`.
@@ -326,15 +328,18 @@ def general_energy_distance(
     a : torch.Tensor
         Tensor of shape `(N, C, ...)` containing N samples of data sampled
         from the first distribution.
-
     b : torch.Tensor
         Tensor of shape `(M, C, ...)` containing M samples of data sampled
         from the second distribution.
-
-    distance : callable
+    distance : str | callable
         A function that computes the distance between two samples (from tensors `a` and `b`)
         that returns smaller value for more similar samples.
         Default is 1 - dice(x > 0.5, y > 0.5).
+    average : Literal["micro", "macro", "none"]
+        Averaging method for the metric, ignored if supplying custom `distance` function.
+        - "micro": Calculate metrics globally across all classes.
+        - "macro": Calculate metrics for each class and average them.
+        - "none": Return the metrics for each class
 
     Returns
     -------
@@ -355,20 +360,33 @@ def general_energy_distance(
         - `E[.]` denotes the expected value (i.e., mean over all sample pairs).
     """
     assert a.shape == b.shape, "Input arrays must have the same shape"
-    # lambda x, y: 1 - dice(x > 0.5, y > 0.5)
-    E_d_ab = np.mean([distance(x1, x2) for x1, x2 in product(a, b)])
+
+    calc_distance_ = (
+        (lambda x, y: (_get_metric_func(distance)(x > 0.5, y > 0.5, average=average)))
+        if isinstance(distance, str)
+        else distance
+    )
+    calc_distance = (
+        (lambda x1, y1: 1 - calc_distance_(x1, y1))
+        if distance == "dice"
+        else calc_distance_
+    )
+
+    E_d_ab = np.mean([calc_distance(x1, x2) for x1, x2 in product(a, b)], axis=0)
     E_d_aa = np.mean(
-        [distance(x1, x2) for x1, x2 in combinations_with_replacement(a, 2)]
+        [calc_distance(x1, x2) for x1, x2 in combinations_with_replacement(a, 2)],
+        axis=0,
     )
     E_d_bb = np.mean(
-        [distance(x1, x2) for x1, x2 in combinations_with_replacement(b, 2)]
+        [calc_distance(x1, x2) for x1, x2 in combinations_with_replacement(b, 2)],
+        axis=0,
     )
 
     ged_squared = 2 * E_d_ab - E_d_aa - E_d_bb
-    return torch.tensor(np.sqrt(ged_squared) if ged_squared >= 0 else 0.0)
+    return torch.tensor(np.clip(np.sqrt(ged_squared), 0, None))
 
 
-def _get_metric_func(name: str):
+def get_metric_func(name: str):
 
     tolerance = float(name.split("_")[-1]) if "surface_dice" in name else 0
 

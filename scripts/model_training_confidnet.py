@@ -17,16 +17,20 @@ def main(
     torch.set_float32_matmul_precision("medium")
     torch.autograd.set_detect_anomaly(True)
 
-    with open(os.path.join(checkpoint_path, "config.pkl"), "wb") as f:
+    with open("./checkpoints/unet_3/config.pkl", "rb") as f:
         config = dill.load(f)
 
     unet = un.models.UNet(config)
-    path = "dropout_epoch=699-val_loss=0.155.ckpt"
 
     model = un.training.LitSegmentation.load_from_checkpoint(
-        path, config=config, model=unet, save_hyperparams=False
+        f"./checkpoints/unet_3/last.ckpt",
+        config=config,
+        model=unet,
+        save_hyperparams=False,
     )
-    train_val_indices = torch.load(os.path.join(checkpoint_path, "indices.pt"))
+    model = un.models.UNetConfidNet(model.model, config)
+    model = un.training.lightning.LitConfidNet(model, config)
+    train_val_indices = torch.load("./checkpoints/unet_3/indices.pt")
 
     data = un.training.SegmentationData(config, checkpoint_path, train_val_indices)
 
@@ -87,9 +91,5 @@ if __name__ == "__main__":
     config["staging_dir"] = os.path.dirname(args.data_path)
     config["staging_fname"] = os.path.basename(args.data_path)
     checkpoint_path = args.checkpoint_path
-    with open(os.path.join(checkpoint_path, "config.pkl"), "rb") as f:
-        config = dill.load(f)
 
-    main(
-        checkpoint_path,
-    )
+    main(checkpoint_path)

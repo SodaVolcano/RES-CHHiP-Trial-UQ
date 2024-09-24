@@ -3,6 +3,7 @@ import h5py as h5
 from loguru import logger
 import numpy as np
 from typing import Iterable, Optional
+import torch
 
 from tqdm import tqdm
 import toolz as tz
@@ -43,6 +44,63 @@ def save_xy_to_h5(
 
 
 @logger_wraps(level="INFO")
+@curry
+def save_xy_pred_to_h5(
+    xy_preds: Iterable[tuple[np.ndarray, np.ndarray, np.ndarray]],
+    path: str,
+    name: str = "predictions.h5",
+) -> None:
+    """
+    Save stream of (volume, mask, predicted_mask) to an h5 file
+
+    Each tuple is given a numerical key as a string in the h5 file.
+    """
+
+    def create_datasets(
+        x: np.ndarray, y: np.ndarray, y_pred: np.ndarray, idx: int, hf: h5.File
+    ) -> None:
+        group = hf.create_group(f"{idx}")
+        group.create_dataset("x", data=x, compression="gzip")
+        group.create_dataset("y", data=y, compression="gzip")
+        group.create_dataset("y_pred", data=y_pred, compression="gzip")
+
+    with h5.File(os.path.join(path, name), "w") as hf:
+        [
+            create_datasets(*xy_pred, i, hf)
+            for i, xy_pred in tqdm(enumerate(xy_preds), desc="Saving to H5")
+        ]
+
+
+@logger_wraps(level="INFO")
+@curry
+def save_pred_to_h5(
+    xy_preds: Iterable[tuple[np.ndarray, np.ndarray, np.ndarray]],
+    indices: list[int],
+    path: str,
+    name: str = "predictions.h5",
+) -> None:
+    """
+    Save predictions and their index to an h5 file
+
+    """
+
+    def create_datasets(idx: int, y_pred: np.ndarray, hf: h5.File) -> None:
+        group = hf.create_group(f"{idx}")
+        if isinstance(y_pred, torch.Tensor):
+            group.create_dataset("y_pred", data=y_pred, compression="gzip")
+            return
+
+        for i, pred in enumerate(y_pred):
+            group.create_dataset(f"y_pred_{i}", data=pred, compression="gzip")
+
+    with h5.File(os.path.join(path, name), "w") as hf:
+        [
+            create_datasets(i, pred, hf)
+            for i, pred in tqdm(zip(indices, xy_preds), desc="Saving to H5")
+        ]
+
+
+@logger_wraps(level="INFO")
 def load_xy_from_h5(fname: str) -> Iterable[tuple[np.ndarray, np.ndarray]]:
     """
     Load instance-label pairs from an h5 file
@@ -50,6 +108,34 @@ def load_xy_from_h5(fname: str) -> Iterable[tuple[np.ndarray, np.ndarray]]:
     with h5.File(fname, "r") as hf:
         for key in hf.keys():
             yield hf[key]["x"][:], hf[key]["y"][:]  # type: ignore
+
+
+@logger_wraps(level="INFO")
+def load_xy_pred_from_h5(fname: str) -> Iterable[tuple[np.ndarray, np.ndarray]]:
+    """
+    Load instance-label-prediction from an h5 file
+    """
+    with h5.File(fname, "r") as hf:
+        for key in hf.keys():
+            yield hf[key]["x"][:], hf[key]["y"][:], hf[key]["y_pred"][:]  # type: ignore
+
+
+@logger_wraps(level="INFO")
+def load_pred_from_h5(
+    fname: str, keys: list[str] | None = None
+) -> Iterable[tuple[np.ndarray, np.ndarray]]:
+    """
+    Load predictions from an h5 file
+
+    keys: list of order of keys to load the data in,
+    used to ensure laod order is the same as dump order
+    """
+    with h5.File(fname, "r") as hf:
+        for key in keys or hf.keys():
+            if list(hf[key].keys()) == ["y_pred"]:
+                yield hf[key]["y_pred"][:]
+            else:
+                yield [hf[key][f"y_pred_{i}"][:] for i in range(len(hf[key].keys()))]
 
 
 @curry

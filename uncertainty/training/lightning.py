@@ -55,28 +55,38 @@ class SegmentationData(lit.LightningDataModule):
         checkpoint_path: str | None = None,
         train_val_indices: tuple[list[int], list[int]] | None = None,
     ):
+        """
+        Pass in checkpoint_path if you want to dump the indices
+        """
         super().__init__()
         self.config = config
         self.train_fname = os.path.join(config["staging_dir"], config["train_fname"])
         self.test_fname = os.path.join(config["staging_dir"], config["test_fname"])
         self.augmentations = augmentations(p=1)
 
-        indices = list(range(len(H5Dataset(self.train_fname))))
         if train_val_indices:
-            self.train_indices, self.val_indices = train_val_indices
+            self.train_indices, self.val_indices = (
+                train_val_indices["train_indices"],
+                train_val_indices["val_indices"],
+            )
         else:
+            indices = list(range(len(H5Dataset(self.train_fname))))
             self.train_indices, self.val_indices = random_split(
                 indices, [1 - config["val_split"], config["val_split"]]  # type: ignore
             )
-            os.makedirs(config["model_checkpoint_path"], exist_ok=True)
-            assert checkpoint_path is not None, "Checkpoint path must be provided"
-            torch.save(
-                {
-                    "train_indices": list(self.train_indices),  # type: ignore
-                    "val_indices": list(self.val_indices),  # type: ignore
-                },
-                os.path.join(checkpoint_path, "indices.pt"),
-            )
+
+        if not checkpoint_path:
+            return
+
+        os.makedirs(checkpoint_path, exist_ok=True)
+        assert checkpoint_path is not None, "Checkpoint path must be provided"
+        torch.save(
+            {
+                "train_indices": list(self.train_indices),  # type: ignore
+                "val_indices": list(self.val_indices),  # type: ignore
+            },
+            os.path.join(checkpoint_path, "indices.pt"),
+        )
 
     def train_dataloader(self):
         return DataLoader(
@@ -89,7 +99,7 @@ class SegmentationData(lit.LightningDataModule):
                 fg_oversample_ratio=self.config["foreground_oversample_ratio"],
                 transform=self.augmentations,
             ),
-            num_workers=14,
+            num_workers=8,
             batch_size=self.config["batch_size"],
             prefetch_factor=1,
             # persistent_workers=True,
@@ -388,7 +398,7 @@ class LitConfidNet(lit.LightningModule):
         return loss
 
     def configure_optimizers(self):  # type: ignore
-        optimiser = self.config["optimiser"](
+        optimiser = torch.optim.SGD(
             self.model.parameters(), **self.config["optimiser_kwargs"]
         )
         lr_scheduler = self.config["lr_scheduler"](optimiser)  # type: ignore

@@ -24,8 +24,8 @@ from scipy.signal.windows import triang
 import torch
 import numpy as np
 
-from uncertainty.training.augmentations import inverse_affine_transform
-from uncertainty.utils.logging import logger_wraps
+from ..training.augmentations import inverse_affine_transform
+from ..utils.logging import logger_wraps
 
 from ..utils.wrappers import curry
 from ..models import MCDropoutUNet
@@ -139,9 +139,10 @@ def _get_stride(
     return tuple(p_size // subdiv for p_size, subdiv in zip(patch_size, subdivisions))  # type: ignore
 
 
+# @torch.amp.custom_fwd(device_type='cuda')
+@torch.no_grad()
 @logger_wraps()
 @curry
-@torch.no_grad()
 def sliding_inference(
     model: Callable[[torch.Tensor], torch.Tensor],
     x: torch.Tensor,
@@ -150,7 +151,7 @@ def sliding_inference(
     subdivisions: tuple[int, int, int] | int = 2,
     output_channels: int = 3,
     prog_bar: bool = True,
-):
+) -> torch.Tensor:
     """
     Perform inference on full image using sliding patch approach
 
@@ -176,11 +177,13 @@ def sliding_inference(
     prog_bar : bool
         Whether to display a progress bar
     """
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
     window = _spline_window_3d(patch_size)
     if isinstance(subdivisions, int):
         subdivisions = (subdivisions, subdivisions, subdivisions)
 
-    x_padded = _pad_image(x.numpy(), patch_size, subdivisions)
+    x_padded = _pad_image(x.detach().numpy(), patch_size, subdivisions)
     stride = _get_stride(patch_size, subdivisions)
     x_patches = view_as_windows(x_padded, (x_padded.shape[0], *patch_size), (1,) + stride)  # type: ignore
 
@@ -190,16 +193,19 @@ def sliding_inference(
         patch_indices,
         # get the x_patch at each index
         curried.map(lambda idx: x_patches[idx]),
-        curried.map(lambda x_patch: torch.from_numpy(x_patch)),
+        # mvoe to cpu to prevent flooding GPU storage
+        curried.map(lambda x_patch: torch.from_numpy(x_patch).to("cpu")),
         list,
         torch.stack,
         # split into batches
         lambda x_patches: torch.split(x_patches, batch_size),
+        curried.map(lambda batch: batch.to(device)),  # move to GPU
         curried.map(model),
+        curried.map(lambda batch: batch.to("cpu")),  # ...and back
         # unbatch the predictions and concat the result tuples into a single list
         curried.map(lambda y_pred_patches: torch.unbind(y_pred_patches, dim=0)),
         tz.concat,
-        curried.map(lambda y_pred: y_pred.numpy()),
+        curried.map(lambda y_pred: y_pred.cpu().numpy()),
         lambda y_pred_patches: zip(patch_indices, y_pred_patches),
         (lambda it: tqdm(it, total=len(patch_indices))) if prog_bar else tz.identity,
     )
@@ -208,11 +214,12 @@ def sliding_inference(
         (output_channels,) + x_padded.shape[1:], y_pred_patches_it, window, stride
     )
     y_pred = _unpad_image(y_pred, patch_size, subdivisions)
-    return y_pred
+    return torch.from_numpy(y_pred)
 
 
 @logger_wraps()
 @torch.no_grad()
+@curry
 def mc_dropout_inference(
     model: nn.Module | lit.LightningModule,
     x: torch.Tensor,
@@ -290,6 +297,7 @@ def mc_dropout_inference(
 
 @logger_wraps()
 @torch.no_grad()
+@curry
 def ensemble_inference(
     models: list[Callable[[torch.Tensor], torch.Tensor]],
     x: torch.Tensor,
@@ -345,11 +353,11 @@ def ensemble_inference(
             )
         ),
         curried.map(lambda inference: inference(x)),
-        curried.map(torch.from_numpy),
     )  # type: ignore
 
 
 @logger_wraps()
+@curry
 @torch.no_grad()
 def tta_inference(
     model: nn.Module | lit.LightningModule,
@@ -422,7 +430,7 @@ def tta_inference(
                 output_channels=output_channels,
                 prog_bar=prog_bar,
             ),
-            lambda pred: torch.from_numpy(pred).unsqueeze(0),  # back to (1, C, D, H, W)
+            lambda pred: pred.unsqueeze(0),  # back to (1, C, D, H, W)
             lambda pred: (
                 inverse_affine_transform(batch_affine._params)(pred)
                 if not x_aug.equal(x)  # if the affine transform was applied

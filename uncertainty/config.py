@@ -73,6 +73,8 @@ def data_config() -> dict[str, int | str | float | tuple[int, ...]]:
         "patch_size": (256, 256, 64),
         # For sliding window patch samplers (used for validation and test set)
         "patch_step": 32,
+        # For sliding window patch inference
+        # "subdivisions": 2,
         # % of sampled patches guaranteed to contain foreground
         "foreground_oversample_ratio": 1 / 3,
         "intensity_range": (0, 1),
