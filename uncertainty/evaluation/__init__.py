@@ -23,6 +23,10 @@ from .metrics import (
     surface_dice,
     hausdorff_distance_95,
     general_energy_distance,
+    pairwise_dice,
+    aurc,
+    eaurc,
+    rc_curve_stats,
 )
 
 __all__ = [
@@ -47,4 +51,9 @@ __all__ = [
     "hausdorff_distance_95",
     "mean_entropy",
     "mean_variance",
+    "general_energy_distance",
+    "pairwise_dice",
+    "aurc",
+    "eaurc",
+    "rc_curve_stats",
 ]
