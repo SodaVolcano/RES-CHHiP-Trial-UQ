@@ -3,6 +3,7 @@ from .inference import (
     mc_dropout_inference,
     tta_inference,
     ensemble_inference,
+    get_inference_mode
 )
 from .visualisation import display_slices_grid, display_uncertainty_maps
 from .uncertainties import (
@@ -56,4 +57,5 @@ __all__ = [
     "aurc",
     "eaurc",
     "rc_curve_stats",
+    "get_inference_mode"
 ]

@@ -7,6 +7,7 @@ from typing import Any, Literal
 import torch
 import dill
 import os
+from loguru import logger
 
 
 def load_checkpoint(
@@ -27,13 +28,13 @@ def load_checkpoint(
     Parameters
     ----------
     ckpt_dir : str, optional
-        Folder containing "last.ckpt", "config.pkl", and "indices.pt" for
+        Folder containing "latest.ckpt", "config.pkl", and "indices.pt" for
         the model weights, configuration object, and train-validation split
         indices respectively. If they are not named as those files, pass in
         `model_path`, `config_path`, and `indices_path` instead of this parameter.
     model_path : str, optional
         Path to the model checkpoint file. If not provided, defaults to
-        "last.ckpt" in the `ckpt_dir`.
+        "latest.ckpt" in the `ckpt_dir`.
     config_path : str, optional
         Path to the configuration file. If not provided, defaults to
         "config.pkl" in the `ckpt_dir`.
@@ -60,7 +61,7 @@ def load_checkpoint(
     """
     config_path = config_path or os.path.join(ckpt_dir, "config.pkl")
     indices_path = indices_path or os.path.join(ckpt_dir, "indices.pt")
-    model_path = model_path or os.path.join(ckpt_dir, "last.ckpt")
+    model_path = model_path or os.path.join(ckpt_dir, "latest.ckpt")
     with open(config_path, "rb") as f:
         config = dill.load(f)
     indices = torch.load(indices_path, weights_only=True)
@@ -77,3 +78,43 @@ def load_checkpoint(
         model_path, model=model, config=config, save_hyperparams=False
     ).model
     return model, config, indices, train_dataset, val_dataset
+
+
+
+def checkpoint_dir_type(path, required_files: list[str] | set[str] = ["latest.ckpt", "indices.pt", "config.pkl"] ) -> Literal["single", "multiple", "invalid"]:
+    """
+    Return type of the checkpoint directory - "single", "multiple", or "invalid"
+
+    This function returns if the given directory contains a single model's checkpoint or
+    folders of model checkpoints. "single" is defined as a folder with at least the
+    required files while "multiple" is defined as a directory without the required files,
+    but have directories that **all** have the required files.
+
+    Parameters
+    ----------
+    path : str
+        The path to the checkpoint directory to be validated.
+
+    Returns
+    -------
+    Literal["single", "multiple", "invalid"]
+        'single' if all required files are found in the main directory, 
+        'multiple' if required files are found in subdirectories,
+        and "invalid" if otherwise.
+    """
+    required_files = set(required_files)
+
+    if not os.path.isdir(path):
+        logger.critical(f"The path {path} is not a valid directory.")
+        return "invalid"
+
+    if required_files.issubset(os.listdir(path)):
+        return 'single'
+
+    subdir_paths = [os.path.join(path, entry) for entry in os.listdir(path)]
+    bad_dirs = list(filter(lambda x: not(os.path.isdir(x) and required_files.issubset(os.listdir(x))), subdir_paths))
+    if not len(bad_dirs) == 0:
+        logger.critical(f"Folders of checkpoint detected but the following folder have bad structure: {bad_dirs}")
+        return "invalid"
+
+    return 'multiple'

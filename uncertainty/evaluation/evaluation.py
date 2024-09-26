@@ -73,7 +73,6 @@ def evaluate_predictions(
     metric_names: list[str],
     average: Literal["micro", "macro", "none"] = "macro",
     aggregate: bool = True,
-    prog_bar: bool = False,
 ) -> torch.Tensor:
     """
     Evaluate a list of `predictions` against a `label` tensor using a list of metrics
@@ -105,9 +104,7 @@ def evaluate_predictions(
         - "macro": Calculate metrics for each channel, and calculate their mean
         - "none": Return the metrics for each channel
     aggregate: bool
-        If True, all predictions are aggregated into a single map
-    prog_bar : bool
-        If True, display a progress bar
+        If True, all predictions are aggregated into a single map before evaluation
 
     Returns
     -------

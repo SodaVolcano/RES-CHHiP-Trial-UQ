@@ -455,3 +455,13 @@ def tta_inference(
         curried.map(lambda subj_pred: assign_mask_to_subject(*subj_pred)),
         curried.map(lambda subj: subj.apply_inverse_transform(warn=False)["mask"].data),
     )  # type: ignore
+
+
+
+def get_inference_mode(mode: str):
+    return {
+        "single": sliding_inference,
+        "tta": tta_inference,
+        "ensemble": ensemble_inference,
+        "mcdo": mc_dropout_inference,
+    }[mode]
