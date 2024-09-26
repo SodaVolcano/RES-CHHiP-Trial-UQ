@@ -298,9 +298,10 @@ class H5Dataset(Dataset):
         with h5.File(h5_file_path, "r") as f:
             self.keys = list(f.keys())
         self.config = config
+        self.indices = indices or list(range(len(self.keys)))
 
     def __len__(self) -> int:
-        return len(self.keys)
+        return len(self.indices)
 
     @torch.no_grad()
     def __getitem__(self, index: int):
@@ -310,7 +311,7 @@ class H5Dataset(Dataset):
             self.dataset = h5.File(self.h5_file_path, "r")
 
         return tz.pipe(
-            self.dataset[self.keys[index]],
+            self.dataset[self.keys[self.indices[index]]],
             # [:] changes data from dataset to numpy array
             lambda group: (group["x"][:], group["y"][:]),
             tuple,

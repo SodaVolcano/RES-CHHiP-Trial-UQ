@@ -507,6 +507,8 @@ def aurc(risks: torch.Tensor, confids: torch.Tensor) -> torch.Tensor:
     """
     Compute the Area Under the Risk-Confidence curve (AURC).
 
+    Average selective risk across the confidence thresholds.
+
     Parameters
     ----------
     risks : torch.Tensor

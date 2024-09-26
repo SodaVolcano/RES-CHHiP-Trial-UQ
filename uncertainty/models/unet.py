@@ -37,6 +37,7 @@ class UNet(nn.Module):
 
     def __init__(self, config: Configuration, deep_supervision: bool = True):
         super().__init__()
+        self.config = config
         self.encoder = Encoder(config)
         self.decoder = Decoder(config, deep_supervision=deep_supervision)
         self.deep_supervision = deep_supervision
