@@ -267,32 +267,41 @@ class H5Dataset(Dataset):
     ----------
     h5_file_path : str
         Path to the H5 file containing the dataset.
+    config: Configuration
+        Dictionary containing configurations.
+    indices: list[int] | None
+        Optinal list of indices. If specified, only elements
+        with the specified indices are fetched. Good for specifying
+        train-validation split. If the indices are shuffled, the
+        dataset will also be shuffled.
 
     Attributes
     ----------
     h5_file_path : str
         The file path of the H5 file.
-
     h5_file : h5py.File
         The opened H5 file object.
-
     keys : list of str
         List of keys corresponding to the dataset entries in the H5 file.
+    indices: list[int] | None
+        List of indices that can be fetched from the dataset.
     """
 
     def __init__(
         self,
         h5_file_path: str,
         config: Configuration = configuration(),
+        indices: list[int] | None = None,
     ):
         self.h5_file_path = h5_file_path
         self.dataset = None
         with h5.File(h5_file_path, "r") as f:
             self.keys = list(f.keys())
         self.config = config
+        self.indices = indices or list(range(len(self.keys)))
 
     def __len__(self) -> int:
-        return len(self.keys)
+        return len(self.indices)
 
     @torch.no_grad()
     def __getitem__(self, index: int):
@@ -302,7 +311,7 @@ class H5Dataset(Dataset):
             self.dataset = h5.File(self.h5_file_path, "r")
 
         return tz.pipe(
-            self.dataset[self.keys[index]],
+            self.dataset[self.keys[self.indices[index]]],
             # [:] changes data from dataset to numpy array
             lambda group: (group["x"][:], group["y"][:]),
             tuple,

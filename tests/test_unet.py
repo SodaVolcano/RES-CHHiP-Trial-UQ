@@ -3,12 +3,12 @@ from torch import nn
 from .context import uncertainty
 import torch
 
-ConvLayer = uncertainty.models.unet.ConvLayer
-ConvBlock = uncertainty.models.unet.ConvBlock
-DownConvBlock = uncertainty.models.unet.DownConvBlock
+ConvLayer = uncertainty.models.unet_modules.ConvLayer
+ConvBlock = uncertainty.models.unet_modules.ConvBlock
+DownConvBlock = uncertainty.models.unet_modules.DownConvBlock
 Encoder = uncertainty.models.unet.Encoder
 Decoder = uncertainty.models.unet.Decoder
-UpConvBlock = uncertainty.models.unet.UpConvBlock
+UpConvBlock = uncertainty.models.unet_modules.UpConvBlock
 UNet = uncertainty.models.unet.UNet
 MCDropoutUNet = uncertainty.models.MCDropoutUNet
 

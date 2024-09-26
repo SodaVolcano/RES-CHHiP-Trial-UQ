@@ -1,3 +1,4 @@
+from itertools import combinations_with_replacement, product
 from typing import Callable, Literal
 import torch
 from torchmetrics.classification import (
@@ -74,7 +75,7 @@ def dice(
     label : torch.Tensor
         The ground truth tensor of shape (C, ...).
     average : Literal["micro", "macro", "weighted", "none"]
-        Averaging method for the metric.
+        Averaging method for the class channels.
         - "micro": Calculate metrics globally across all classes.
         - "macro": Calculate metrics for each class and average them.
         - "weighted": Weighted averaging of metrics.
@@ -113,7 +114,7 @@ def surface_dice(
     tolerance : float
         Tolerance in mm.
     average : Literal["micro", "macro", "weighted", "none"]
-        Averaging method for the metric.
+        Averaging method for the class channels.
         - "micro": Calculate metrics globally across all classes.
         - "macro": Calculate metrics for each class and average them.
         - "weighted": Weighted averaging of metrics.
@@ -138,6 +139,48 @@ def surface_dice(
     )  # type: ignore
 
 
+def pairwise_dice(
+    predictions: torch.Tensor,
+    average: Literal["micro", "macro", "weighted", "none"] = "macro",
+    aggregate: bool = True,
+):
+    """
+    Compute the average pairwise dice similarity between all pairs of predictions.
+
+    Parameters
+    ----------
+    predictions : torch.Tensor
+        The predicted tensor of shape `(N, C, ...)`.
+    average : Literal["micro", "macro", "weighted", "none"]
+        Averaging method for the class channels.
+        - "micro": Calculate dice globally across all classes.
+        - "macro": Calculate dice for each class and average them.
+        - "weighted": Weighted averaging of dice scores.
+        - "none": Return the dice for each class separately.
+    aggregate : bool
+        Whether to average the dice scores into a single tensor or
+        to return the dice scores for each class separately. Have
+        no effect if `average != "none"`.
+
+    Returns
+    -------
+    torch.Tensor
+        The average pairwise dice similarity score of shape (1,) of
+        mean dice score across all pairs of predictions across all
+        classes if `aggregate=True` or (C,) if `aggregate=False` for
+        each of the C classes.
+    """
+    return tz.pipe(
+        predictions,
+        lambda preds: combinations_with_replacement(preds, 2),
+        curried.filter(lambda x: not x[0].equal(x[1])),
+        curried.map(lambda x: dice(x[0], x[1], average=average)),
+        list,
+        torch.stack,
+        lambda preds: torch.mean(preds, dim=0 if aggregate else None),
+    )
+
+
 def hausdorff_distance(
     prediction: torch.Tensor,
     label: torch.Tensor,
@@ -156,7 +199,7 @@ def hausdorff_distance(
     label : torch.Tensor
         The ground truth tensor of shape (C, ...).
     average : Literal["micro", "macro", "none"]
-        Averaging method for the metric.
+        Averaging method for the class channels.
         - "micro": Calculate metrics globally across all classes.
         - "macro": Calculate metrics for each class and average them.
         - "none": Return the metrics for each class separately.
@@ -187,7 +230,7 @@ def hausdorff_distance_95(
     label : torch.Tensor
         The ground truth tensor of shape (C, ...).
     average : Literal["micro", "macro", "none"]
-        Averaging method for the metric.
+        Averaging method for the class channels.
         - "micro": Calculate metrics globally across all classes.
         - "macro": Calculate metrics for each class and average them.
         - "none": Return the metrics for each class separately.
@@ -215,7 +258,7 @@ def recall(
     label : torch.Tensor
         The ground truth tensor of shape (C, ...).
     average : Literal["micro", "macro", "weighted", "none"]
-        Averaging method for the metric.
+        Averaging method for the class channels.
         - "micro": Calculate metrics globally across all classes.
         - "macro": Calculate metrics for each class and average them.
         - "weighted": Weighted averaging of metrics.
@@ -243,7 +286,7 @@ def precision(
     label : torch.Tensor
         The ground truth tensor of shape (C, ...).
     average : Literal["micro", "macro", "weighted", "none"]
-        Averaging method for the metric.
+        Averaging method for the class channels.
         - "micro": Calculate metrics globally across all classes.
         - "macro": Calculate metrics for each class and average them.
         - "weighted": Weighted averaging of metrics.
@@ -269,7 +312,7 @@ def average_surface_distance(
     label : torch.Tensor
         The ground truth tensor of shape (C, ...).
     average : Literal["micro", "macro", "none"]
-        Averaging method for the metric.
+        Averaging method for the class channels.
         - "micro": Calculate metrics globally across all classes.
         - "macro": Calculate metrics for each class and average them.
         - "none": Return the metrics for each class separately.
@@ -297,7 +340,7 @@ def average_symmetric_surface_distance(
     label : torch.Tensor
         The ground truth tensor of shape (C, ...).
     average : Literal["micro", "macro", "none"]
-        Averaging method for the metric.
+        Averaging method for the class channels.
         - "micro": Calculate metrics globally across all classes.
         - "macro": Calculate metrics for each class and average them.
         - "none": Return the metrics for each class separately.
@@ -310,15 +353,204 @@ def average_symmetric_surface_distance(
     )  # type: ignore
 
 
-def generalised_energy_distance(
-    prediction: torch.Tensor,
-    label: torch.Tensor,
+def general_energy_distance(
+    a: torch.Tensor,
+    b: torch.Tensor,
+    distance: (
+        Literal["hd", "hd95", "asd", "assd", "dice"]
+        | Callable[[torch.Tensor, torch.Tensor], torch.Tensor]
+    ) = "dice",
     average: Literal["micro", "macro", "none"] = "macro",
 ) -> torch.Tensor:
-    pass
+    """
+    Calculate the General Energy Distance (GED) between `a` and `b` using `distance`.
+
+    Parameters
+    ----------
+    a : torch.Tensor
+        Tensor of shape `(N, C, ...)` containing N samples of data sampled
+        from the first distribution.
+    b : torch.Tensor
+        Tensor of shape `(M, C, ...)` containing M samples of data sampled
+        from the second distribution.
+    distance : str | callable
+        A function that computes the distance between two samples (from tensors `a` and `b`)
+        that returns smaller value for more similar samples.
+        Default is 1 - dice(x > 0.5, y > 0.5).
+    average : Literal["micro", "macro", "none"]
+        Averaging method for the class channels. ignored if supplying custom `distance` function.
+        - "micro": Calculate metrics globally across all classes.
+        - "macro": Calculate metrics for each class and average them.
+        - "none": Return the metrics for each class
+
+    Returns
+    -------
+    torch.Tensor
+        The computed General Energy Distance (GED) between the two tensors.
+        If the squared distance `ged_squared` is negative due to numerical precision
+        issues, the function returns 0.0.
+
+    Notes
+    -----
+    The General Energy Distance is defined as:
+
+    .. math::
+       D^2_{\text{GED}}(a, b) = 2E[ d(a_i, b_i) ] - E[ d(a_i, a_j) ] - E[ d(b_i, b_j) ]
+
+    Where:
+        - `d(a_i, b_i)` is the distance between samples `a_i` from `a` and `b_i` from `b`.
+        - `E[.]` denotes the expected value (i.e., mean over all sample pairs).
+    """
+    assert a.shape == b.shape, "Input arrays must have the same shape"
+
+    calc_distance_ = (
+        (lambda x, y: (get_metric_func(distance)(x > 0.5, y > 0.5, average=average)))
+        if isinstance(distance, str)
+        else distance
+    )
+    calc_distance = (
+        (lambda x1, y1: 1 - calc_distance_(x1, y1))
+        if distance == "dice"
+        else calc_distance_
+    )
+
+    E_d_ab = np.mean([calc_distance(x1, x2) for x1, x2 in product(a, b)], axis=0)
+    E_d_aa = np.mean(
+        [calc_distance(x1, x2) for x1, x2 in combinations_with_replacement(a, 2)],
+        axis=0,
+    )
+    E_d_bb = np.mean(
+        [calc_distance(x1, x2) for x1, x2 in combinations_with_replacement(b, 2)],
+        axis=0,
+    )
+
+    ged_squared = 2 * E_d_ab - E_d_aa - E_d_bb
+    return torch.tensor(np.clip(np.sqrt(ged_squared), 0, None))
 
 
-def _get_metric_func(name: str):
+def rc_curve_stats(
+    risks: torch.Tensor, confids: torch.Tensor
+) -> tuple[list[float], list[torch.Tensor], list[float]]:
+    """
+    Return coverage, selective risk, weights for the Risk-Confidence curve.
+
+    RC-curve is produced by sliding a confidence threshold over `confids`.
+    In actuality, sliding the threshold just means we are iteratively removing
+    samples with the lowest confidence from calculation.
+
+    The selective risk is the average risk of all samples currently considered.
+    If we have N risks for N samples `sorted_risks` sorted in ascending confidence
+    using `confids`, the selective risk at the i-th point is:
+        R_s(i) = sum([r for r in sorted_risks[i:]]) / len(sorted_risks[i:])
+
+    The coverage is the fraction of samples above some threshold. If we have N samples,
+    the coverage at the i-th point is:
+        C(i) = (N - i) / N
+
+    Parameters
+    ----------
+    risks : np.ndarray
+        Array of shape `(N,)` containing the risk scores for N test samples.
+    confids : np.ndarray
+        Array of shape `(N,)` containing the confidence scores for N test samples.
+
+    Returns
+    -------
+    tuple[list[float], list[float], list[float]]
+        The coverages, selective risks, and weights for the Risk-Confidence curve.
+
+    References
+    ----------
+    Taken from:
+        https://arxiv.org/abs/2401.08501
+        https://github.com/IML-DKFZ/values
+    """
+    assert (
+        len(risks.shape) == 1 and len(confids.shape) == 1 and len(risks) == len(confids)
+    )
+
+    coverages = []
+    selective_risks = []
+
+    n_samples = len(risks)
+    idx_sorted = np.argsort(confids)
+
+    coverage = n_samples
+    error_sum = sum(risks[idx_sorted])
+
+    coverages.append(coverage / n_samples)
+    selective_risks.append(error_sum / n_samples)
+
+    weights = []
+
+    tmp_weight = 0
+    for i in range(0, len(idx_sorted) - 1):
+        coverage = coverage - 1
+        error_sum = error_sum - risks[idx_sorted[i]]
+        tmp_weight += 1
+        if i == 0 or confids[idx_sorted[i]] != confids[idx_sorted[i - 1]]:
+            coverages.append(coverage / n_samples)
+            selective_risks.append(error_sum / (n_samples - 1 - i))
+            weights.append(tmp_weight / n_samples)
+            tmp_weight = 0
+
+    # add a well-defined final point to the RC-curve.
+    if tmp_weight > 0:
+        coverages.append(0)
+        selective_risks.append(selective_risks[-1])
+        weights.append(tmp_weight / n_samples)
+
+    return coverages, selective_risks, weights
+
+
+def aurc(risks: torch.Tensor, confids: torch.Tensor) -> torch.Tensor:
+    """
+    Compute the Area Under the Risk-Confidence curve (AURC).
+
+    Average selective risk across the confidence thresholds.
+
+    Parameters
+    ----------
+    risks : torch.Tensor
+        Tensor of shape `(N,)` containing the risk scores for N test
+        samples.
+    confidences : torch.Tensor
+        Tensor of shape `(N,)` containing the confidence scores for N
+        test samples.
+
+    Returns
+    -------
+    torch.Tensor
+        The computed Area Under the Risk-Confidence curve (AURC).
+
+    References
+    ----------
+    Taken from:
+        https://arxiv.org/abs/2401.08501
+        https://github.com/IML-DKFZ/values
+    """
+
+    coverage, selective_risks, weights = rc_curve_stats(risks, confids)
+    return torch.sum(
+        torch.tensor(
+            [
+                (selective_risks[i] + selective_risks[i + 1]) * 0.5 * weights[i]
+                for i in range(len(weights))
+            ]
+        )
+    )
+
+
+def eaurc(risks: torch.Tensor, confids: torch.Tensor) -> torch.Tensor:
+    """Compute normalized AURC, i.e. subtract AURC of optimal CSF (given fixed risks)."""
+    n = len(risks)
+    # optimal confidence sorts risk. Asencding here because we start from coverage 1/n
+    selective_risks = np.sort(risks).cumsum() / np.arange(1, n + 1)
+    aurc_opt = selective_risks.sum() / n
+    return aurc(risks, confids) - aurc_opt
+
+
+def get_metric_func(name: str):
 
     tolerance = float(name.split("_")[-1]) if "surface_dice" in name else 0
 
@@ -329,6 +561,7 @@ def _get_metric_func(name: str):
         "assd": average_symmetric_surface_distance,
         "dice": dice,
         f"surface_dice_{tolerance}": surface_dice(tolerance=tolerance),
+        "pairwise_dice": pairwise_dice,
         "recall": recall,
         "sen": recall,
         "precision": precision,

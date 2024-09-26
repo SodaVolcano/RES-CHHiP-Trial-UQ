@@ -9,6 +9,8 @@ from .uncertainties import (
     probability_map,
     variance_map,
     entropy_map,
+    mean_entropy,
+    mean_variance,
 )
 from .evaluation import evaluate_prediction, evaluate_predictions
 from .metrics import (
@@ -20,6 +22,11 @@ from .metrics import (
     precision,
     surface_dice,
     hausdorff_distance_95,
+    general_energy_distance,
+    pairwise_dice,
+    aurc,
+    eaurc,
+    rc_curve_stats,
 )
 
 __all__ = [
@@ -42,4 +49,11 @@ __all__ = [
     "precision",
     "surface_dice",
     "hausdorff_distance_95",
+    "mean_entropy",
+    "mean_variance",
+    "general_energy_distance",
+    "pairwise_dice",
+    "aurc",
+    "eaurc",
+    "rc_curve_stats",
 ]

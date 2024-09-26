@@ -113,11 +113,11 @@ class ConfidNetMSELoss(nn.Module):
         super().__init__()
         self.weighting = weighting
 
-    def forward(self, xs: torch.Tensor, y: torch.Tensor):
+    def forward(self, conf_pred: torch.Tensor, y: torch.Tensor):
         """
         Compute L2 loss between predicted and actual class probability/confidence
         """
-        y_pred, confidence = xs
+        confidence, y_pred = conf_pred
         weights = torch.ones_like(y, dtype=torch.float)
         weights[((y_pred > 0.5).to(torch.float) != y)] *= self.weighting
         return torch.mean((weights * (confidence - (y_pred * y)) ** 2).sum(dim=1))

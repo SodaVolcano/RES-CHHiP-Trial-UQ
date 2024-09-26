@@ -237,23 +237,17 @@ def preprocess_data(
 
 @logger_wraps(level="INFO")
 @curry
-def _preprocess_data_configurable(
+def preprocess_data_configurable(
     volume_mask: tuple[np.ndarray, np.ndarray], config: Configuration = configuration()
 ):
     """
     Preprocess data according to the configuration
-
-    Used by DataLoaders to preprocess data during training, not meant to be called
-    directly.
     """
     BODY_MASK = volume_mask[0] > BODY_THRESH
     shape = volume_mask[0].shape[1:]
 
     def torchio_crop_or_pad(arr: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         """crop/pad array centered using the target mask to at least patch_size"""
-        if all(dim >= patch_dim for dim, patch_dim in zip(shape, config["patch_size"])):
-            return (arr, BODY_MASK)
-
         return tz.pipe(
             (arr, BODY_MASK),
             to_torchio_subject,

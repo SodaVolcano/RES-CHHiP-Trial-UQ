@@ -16,8 +16,9 @@ def main(
 
     scans = un.data.dicom.load_patient_scans(dicom_path, preprocess=preprocess)
     if preprocess:
-        scan = un.data.preprocessing.preprocess_dataset(scans, n_workers=n_workers)
-        scan = un.data.h5.save_xy_to_h5(scans, save_path)
+        scans = un.data.preprocessing.preprocess_dataset(scans, n_workers=n_workers)
+        scans = un.data.preprocessing.preprocess_data_configurable(scans)
+        un.data.h5.save_xy_to_h5(scans, save_path)
         return
 
     un.data.h5.save_scan_to_h5(scans, save_path)

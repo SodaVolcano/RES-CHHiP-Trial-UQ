@@ -9,6 +9,7 @@ def _stack_if_sequence(
     """
     Stack predictions if they are a sequence
     """
+    preds = list(preds) if not isinstance(preds, list | tuple | torch.Tensor) else preds
     if isinstance(preds, list | tuple):
         return torch.stack(preds)
     return preds
@@ -77,10 +78,20 @@ def variance_map(
     return _stack_if_sequence(preds).var(dim=0)
 
 
-def mean_uncertainty(
-    uncertainty_map: torch.Tensor,
-):
+def mean_variance(
+    preds: torch.Tensor | list[torch.Tensor] | tuple[torch.Tensor],
+) -> torch.Tensor:
     """
-    Compute mean uncertainty from an uncertainty map
+    Compute scalar uncertainty as average variance from list of predictions
     """
-    return uncertainty_map.mean()
+    return variance_map(preds).mean()
+
+
+def mean_entropy(
+    preds: torch.Tensor | list[torch.Tensor] | tuple[torch.Tensor],
+    smooth: float = 1e-10,
+) -> torch.Tensor:
+    """
+    Compute scalar uncertainty as average entropy from list of predictions
+    """
+    return entropy_map(preds, smooth).mean()

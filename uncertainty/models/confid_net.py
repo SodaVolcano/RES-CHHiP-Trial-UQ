@@ -5,7 +5,8 @@ import torch
 from uncertainty.config import Configuration, configuration
 import toolz as tz
 
-from .unet import UNet, _concat_with_skip, _calc_n_kernels
+from .unet_modules import _concat_with_skip, _calc_n_kernels
+from .unet import UNet
 
 
 class UNetConfidNetEncoder(nn.Module):
@@ -61,7 +62,7 @@ class UNetConfidNet(nn.Module):
         self,
         unet: UNet,
         config: Configuration,
-        hidden_conv_dims: list[int] = [256, 128, 64, 64],
+        hidden_conv_dims: list[int] = [128, 128, 64, 64],
         activation: Callable[[], nn.Module] = configuration()["activation"],
         last_activation: Callable[[], nn.Module] = nn.Sigmoid,
     ):
@@ -83,7 +84,12 @@ class UNetConfidNet(nn.Module):
         self.conv_activations = nn.ModuleList(
             [
                 nn.Sequential(
-                    nn.Conv3d(in_dim, out_dim, kernel_size=1, padding="same"),
+                    nn.Conv3d(
+                        in_dim,
+                        out_dim,
+                        kernel_size=3 if out_dim != output_dim else 1,
+                        padding="same",
+                    ),
                     self.activation if out_dim != output_dim else self.last_activation,
                 )
                 for in_dim, out_dim in zip(dims, dims[1:])
