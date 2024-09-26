@@ -17,8 +17,7 @@ VALID_IDENTIFIER: Final[str] = "[a-zA-Z_][a-zA-Z0-9_]*"
 # Hounsfield Units (HU), intensity range for CT images
 HU_RANGE: Final[tuple[int, int]] = (-1000, 3000)
 # Threshold value (HU) to binarise the scan to get mask of the body
-# Used to center the image before image is cropped to shape
-BODY_THRESH = -500
+BODY_THRESH = -800
 
 
 # ROI keep list, all names containing these as substring will be kept

@@ -3,9 +3,7 @@ import toolz as tz
 from toolz import curried
 import polars as pl
 import numpy as np
-from itertools import tee
 import os
-from datetime import datetime
 import sys
 
 sys.path.append("..")
@@ -24,6 +22,8 @@ from uncertainty.evaluation import (
 )
 from uncertainty.data.h5 import save_pred_to_h5, load_pred_from_h5, load_xy_from_h5
 from loguru import logger
+from tqdm import tqdm
+from uncertainty.utils.wrappers import curry
 
 
 def parameterised_inference(mode: str, n_outputs: int, model, config: dict):
@@ -46,8 +46,8 @@ def parameterised_inference(mode: str, n_outputs: int, model, config: dict):
         lambda inference: (
             inference(aug=aug, batch_affine=aug_batch) if mode == "tta" else inference
         ),
+        (lambda inference: inference(model=model)) if mode != "ensemble" else (lambda inference: inference(models=model)),
         lambda inference: lambda x: inference(
-            model=model,
             x=x,
             patch_size=config["patch_size"],
             subdivisions=2,
@@ -58,12 +58,13 @@ def parameterised_inference(mode: str, n_outputs: int, model, config: dict):
         ),
     )
 
-def dump_aggregated_maps(i_preds_y):
+@curry
+def dump_aggregated_maps(i_preds_y, map_folder_path):
     idx, preds_y = i_preds_y
     preds, y = list(preds_y[0]), preds_y[1]
 
     unique_folder_name = str(idx)
-    maps_folder = os.path.join("prediction_maps", unique_folder_name)
+    maps_folder = os.path.join(map_folder_path, unique_folder_name)
     os.makedirs(maps_folder, exist_ok=True)
 
     # Create filenames for the maps
@@ -77,7 +78,9 @@ def dump_aggregated_maps(i_preds_y):
 
     return preds, y
 
-def main(
+
+
+def perform_inference(
     checkpoint_dir: str,
     metric_names: list[str],
     mode: str,
@@ -85,11 +88,25 @@ def main(
     class_names: list[str] | None,
     out_path: str,
     n_outputs: int,
-    dataset_path: str
+    dataset_path: str,
+    map_path: str
 ):
+    detected_dir_type = checkpoint_dir_type(checkpoint_dir)
+    if (detected_dir_type != "multiple" and mode in ["ensemble"]) or (detected_dir_type != "single" and mode in ["tta", "mcdo", "single"]):
+        logger.critical("Invalid checkpoint path for the given inference mode.")
+        exit(1)
 
-    model, config, indices, _, val = load_checkpoint(checkpoint_dir)
-    model.eval()
+    if detected_dir_type == "single":
+        model, config, _, _, _ = load_checkpoint(checkpoint_dir)
+        model.eval()
+    else:
+        model = []
+        config = None
+        for ckpt in os.listdir(checkpoint_dir):
+            one_model, config, _, _, _ = load_checkpoint(os.path.join(checkpoint_dir, ckpt))
+            one_model.eval()
+            model.append(one_model)
+
 
     torch.set_grad_enabled(False)
 
@@ -130,8 +147,9 @@ def main(
         ),
         curried.map(lambda xy: (inference(xy[0]), xy[1])),
         enumerate,
-        curried.map(dump_aggregated_maps) if mode != "single" else tz.identity,
+        curried.map(dump_aggregated_maps(map_folder_path=map_path) if mode != "single" else curried.get(1)),
         curried.map(lambda y_pred: evaluation(y_pred[0], y_pred[1], metric_names)),
+        tqdm,
         curried.map(lambda tensor: tensor.tolist()),
         lambda it: pl.LazyFrame(it, schema=col_names),
         lambda it: it.select(pl.col(col_names_sorted)),  # reorder columns
@@ -139,17 +157,49 @@ def main(
     )
 
 
+def main(
+    single_model_dir: str | None,
+    ensemble_dir: str | None,
+    inference_modes: list[str],
+    metric_names: list[str],
+    average: str,
+    class_names: list[str] | None,
+    out_path: str,
+    n_outputs: int,
+    dataset_path: str
+):
+    for mode in inference_modes:
+        checkpoint_dir = ensemble_dir if mode == "ensemble" else single_model_dir
+        perform_inference(
+            checkpoint_dir,
+            metric_names,
+            mode,
+            average,
+            class_names,
+            f"{mode}_{out_path}",
+            n_outputs,
+            dataset_path,
+            map_path=f"{mode}_prediction_maps"
+        )
+
+
+
 if __name__ == "__main__":
     parser = HelpfulParser(
         description="Load the model(s) from checkpoint(s), make inference on a dataset and output the metrics into a CSV file."
     )
     parser.add_argument(
-        "--checkpoint_dir",
+        "--ensemble_dir",
         type=str,
-        help='Path to the checkpoint directory containing "latest.ckpt", "indices.pt", and "config.pkl" or a directory containing these checkpoint directories with the same structure.',
-        default="./checkpoints/unet_single"
+        help='Path to a directory containing checkpoint directories each containing "latest.ckpt", "indices.pt", and "config.pkl". Not required if --modes does not contain "ensemble".',
+        default="./checkpoints/"
     )
-    # TODO: add option for test set too
+    parser.add_argument(
+        "--single_model_dir",
+        type=str,
+        help='Path to the checkpoint directory containing "latest.ckpt", "indices.pt", and "config.pkl" for a single model. Not required if --modes does not contain "single", "mcdo", and "tta".',
+        default="./unet_single/"
+    )
     parser.add_argument(
         "--metrics",
         type=str,
@@ -157,10 +207,11 @@ if __name__ == "__main__":
         default="dice,surface_dice_1.5,hd95,assd,sen,ppv",
     )
     parser.add_argument(
-        "--mode",
+        "--modes",
         type=str,
-        help="Inference mode, any of 'single', 'mcdo', 'tta', or 'ensemble'. Note that for 'ensemble', --checkpoint_dir MUST point to a directory containing directories of model checkpoints.",
-        default="tta",
+        help="List of comma-separated inference modes, any of 'single', 'mcdo', 'tta', or 'ensemble'.",
+        default="single",
+        #default="single,mcdo,tta,ensemble",
     )
     parser.add_argument(
         "--average",
@@ -175,7 +226,7 @@ if __name__ == "__main__":
         default='prostate,bladder,rectum',
     )
     parser.add_argument(
-        "--metric-out", type=str, help="Name of the output CSV file", default="eval.csv"
+        "--metric-out", type=str, help="Base name of the output CSV file", default="eval.csv"
     )
     parser.add_argument(
         "--n-outputs",
@@ -191,15 +242,12 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
-    detected_dir_type = checkpoint_dir_type(args.checkpoint_dir)
-    if (detected_dir_type != "multiple" and args.mode in ["ensemble"]) or (detected_dir_type != "single" and args.mode in ["tta", "mcdo", "single"]):
-        logger.critical("Invalid checkpoint path for the given inference mode.")
-        exit(1)
 
     main(
-        args.checkpoint_dir,
+        args.single_model_dir,
+        args.ensemble_dir,
+        args.modes.split(","),
         args.metrics.split(","),
-        args.mode,
         args.average,
         (
             args.class_names.split(",")

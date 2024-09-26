@@ -26,6 +26,7 @@ import numpy as np
 
 from ..training.augmentations import inverse_affine_transform
 from ..utils.logging import logger_wraps
+from ..constants import BODY_THRESH
 
 from ..utils.wrappers import curry
 from ..models import MCDropoutUNet
@@ -150,6 +151,7 @@ def sliding_inference(
     batch_size: int,
     subdivisions: tuple[int, int, int] | int = 2,
     output_channels: int = 3,
+    post_process: bool = True,
     prog_bar: bool = True,
 ) -> torch.Tensor:
     """
@@ -214,6 +216,10 @@ def sliding_inference(
         (output_channels,) + x_padded.shape[1:], y_pred_patches_it, window, stride
     )
     y_pred = _unpad_image(y_pred, patch_size, subdivisions)
+
+    # remove artefacts outside the body
+    if post_process:
+        y_pred *= (x > BODY_THRESH).repeat(3, 1, 1, 1).numpy()
     return torch.from_numpy(y_pred)
 
 
