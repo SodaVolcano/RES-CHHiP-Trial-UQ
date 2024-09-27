@@ -31,6 +31,7 @@ ROI_KEEP_LIST: Final[list[str]] = [
     "p_+_base_sv",
     "p_+_sv",
     "ctv",
+    "ctv_ct",
 ]
 
 # ROI exclusion list, remove ROI name before matching keep list
@@ -93,9 +94,11 @@ ORGAN_MATCHES: Final[dict[str, list[str]]] = {
     "prostate": [
         "prostate",
         "prostate+sv",
+        "ctv",
         "ctv1",
         "ctv2",
         "ctv3",
+        "ctv_ct",
         "prostate_+_sv",
         "p+sv",
         "prostate_&_sv",
