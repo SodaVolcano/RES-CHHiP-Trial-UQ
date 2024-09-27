@@ -151,7 +151,6 @@ def sliding_inference(
     batch_size: int,
     subdivisions: tuple[int, int, int] | int = 2,
     output_channels: int = 3,
-    post_process: bool = True,
     prog_bar: bool = True,
 ) -> torch.Tensor:
     """
@@ -217,10 +216,7 @@ def sliding_inference(
     )
     y_pred = _unpad_image(y_pred, patch_size, subdivisions)
 
-    # remove artefacts outside the body
-    if post_process:
-        y_pred *= (x > BODY_THRESH).repeat(3, 1, 1, 1).numpy()
-    return torch.from_numpy(y_pred)
+    return torch.from_numpy(y_pred).half()
 
 
 @logger_wraps()
@@ -355,10 +351,11 @@ def ensemble_inference(
                 subdivisions=subdivisions,
                 batch_size=batch_size,
                 output_channels=output_channels,
-                prog_bar=prog_bar,
+                prog_bar=False,
             )
         ),
         curried.map(lambda inference: inference(x)),
+        (lambda it: tqdm(it, total=len(models))) if prog_bar else tz.identity
     )  # type: ignore
 
 
@@ -434,7 +431,7 @@ def tta_inference(
                 subdivisions=subdivisions,
                 batch_size=batch_size,
                 output_channels=output_channels,
-                prog_bar=prog_bar,
+                prog_bar=False,
             ),
             lambda pred: pred.unsqueeze(0),  # back to (1, C, D, H, W)
             lambda pred: (
@@ -460,6 +457,7 @@ def tta_inference(
         lambda y_preds: zip(x_subjs_aug, y_preds),
         curried.map(lambda subj_pred: assign_mask_to_subject(*subj_pred)),
         curried.map(lambda subj: subj.apply_inverse_transform(warn=False)["mask"].data),
+        (lambda it: tqdm(it, total=n_outputs)) if prog_bar else tz.identity
     )  # type: ignore
 
 

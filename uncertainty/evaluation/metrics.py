@@ -139,47 +139,6 @@ def surface_dice(
     )  # type: ignore
 
 
-def pairwise_dice(
-    predictions: torch.Tensor,
-    average: Literal["micro", "macro", "weighted", "none"] = "macro",
-    aggregate: bool = True,
-):
-    """
-    Compute the average pairwise dice similarity between all pairs of predictions.
-
-    Parameters
-    ----------
-    predictions : torch.Tensor
-        The predicted tensor of shape `(N, C, ...)`.
-    average : Literal["micro", "macro", "weighted", "none"]
-        Averaging method for the class channels.
-        - "micro": Calculate dice globally across all classes.
-        - "macro": Calculate dice for each class and average them.
-        - "weighted": Weighted averaging of dice scores.
-        - "none": Return the dice for each class separately.
-    aggregate : bool
-        Whether to average the dice scores into a single tensor or
-        to return the dice scores for each class separately. Have
-        no effect if `average != "none"`.
-
-    Returns
-    -------
-    torch.Tensor
-        The average pairwise dice similarity score of shape (1,) of
-        mean dice score across all pairs of predictions across all
-        classes if `aggregate=True` or (C,) if `aggregate=False` for
-        each of the C classes.
-    """
-    return tz.pipe(
-        predictions,
-        lambda preds: combinations_with_replacement(preds, 2),
-        curried.filter(lambda x: not x[0].equal(x[1])),
-        curried.map(lambda x: dice(x[0], x[1], average=average)),
-        list,
-        torch.stack,
-        lambda preds: torch.mean(preds, dim=0 if aggregate else None),
-    )
-
 
 def hausdorff_distance(
     prediction: torch.Tensor,
@@ -561,7 +520,6 @@ def get_metric_func(name: str):
         "assd": average_symmetric_surface_distance,
         "dice": dice,
         f"surface_dice_{tolerance}": surface_dice(tolerance=tolerance),
-        "pairwise_dice": pairwise_dice,
         "recall": recall,
         "sen": recall,
         "precision": precision,

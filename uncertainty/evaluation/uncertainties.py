@@ -1,7 +1,12 @@
+from itertools import combinations_with_replacement
+from typing import Literal
 import torch
 
 from ..utils.wrappers import curry
 
+import toolz as tz
+from toolz import curried
+from .metrics import dice
 
 def _stack_if_sequence(
     preds: torch.Tensor | list[torch.Tensor] | tuple[torch.Tensor],
@@ -80,18 +85,98 @@ def variance_map(
 
 def mean_variance(
     preds: torch.Tensor | list[torch.Tensor] | tuple[torch.Tensor],
+    average: Literal["micro", "macro", "none"] = "macro",
 ) -> torch.Tensor:
     """
     Compute scalar uncertainty as average variance from list of predictions
+
+    Parameters
+    ----------
+    preds: torch.Tensor | list[torch.Tensor] | tuple[torch.Tensor],
+        Prediction, either a tensor of shape (N, C, ...) or a sequence of
+        (C, ...) tensors.
+    average : Literal["micro", "macro", "weighted", "none"]
+        Averaging method for the class channels.
+        - "micro": Calculate metrics globally across all classes.
+        - "macro": Calculate metrics for each class and average them.
+        - "none": Return the metrics for each class separately.
+ 
+    Returns
+    -------
+    torch.Tensor
+        Tensor of mean variance of shape (,) if average is not "none", else
+        a tensor of shape (C,)
     """
-    return variance_map(preds).mean()
+    var_map = variance_map(preds)
+    return var_map.mean() if average != "none" else torch.cat([var_map[i].mean().unsqueeze(0) for i in range(var_map.shape[0])])
 
 
 def mean_entropy(
     preds: torch.Tensor | list[torch.Tensor] | tuple[torch.Tensor],
+    average: Literal["micro", "macro", "none"] = "macro",
     smooth: float = 1e-10,
 ) -> torch.Tensor:
     """
     Compute scalar uncertainty as average entropy from list of predictions
+
+    Parameters
+    ----------
+    preds: torch.Tensor | list[torch.Tensor] | tuple[torch.Tensor],
+        Prediction, either a tensor of shape (N, C, ...) or a sequence of
+        (C, ...) tensors.
+    average : Literal["micro", "macro", "weighted", "none"]
+        Averaging method for the class channels.
+        - "micro": Calculate metrics globally across all classes.
+        - "macro": Calculate metrics for each class and average them.
+        - "none": Return the metrics for each class separately.
+ 
+    Returns
+    -------
+    torch.Tensor
+        Tensor of mean variance of shape (,) if average is not "none", else
+        a tensor of shape (C,)
+     """
+    ent_map = entropy_map(preds, smooth)
+    return ent_map.mean() if average != "none" else torch.cat([ent_map[i].mean().unsqueeze(0) for i in range(ent_map.shape[0])])
+
+
+def pairwise_dice(
+    predictions: torch.Tensor,
+    average: Literal["micro", "macro", "weighted", "none"] = "macro",
+    aggregate: bool = True,
+):
     """
-    return entropy_map(preds, smooth).mean()
+    Compute the average pairwise dice similarity between all pairs of predictions.
+
+    Parameters
+    ----------
+    predictions : torch.Tensor
+        The predicted tensor of shape `(N, C, ...)`.
+    average : Literal["micro", "macro", "weighted", "none"]
+        Averaging method for the class channels.
+        - "micro": Calculate dice globally across all classes.
+        - "macro": Calculate dice for each class and average them.
+        - "weighted": Weighted averaging of dice scores.
+        - "none": Return the dice for each class separately.
+    aggregate : bool
+        Whether to average the dice scores into a single tensor or
+        to return the dice scores for each class separately. Have
+        no effect if `average != "none"`.
+
+    Returns
+    -------
+    torch.Tensor
+        The average pairwise dice similarity score of shape (1,) of
+        mean dice score across all pairs of predictions across all
+        classes if `aggregate=True` or (C,) if `aggregate=False` for
+        each of the C classes.
+    """
+    return tz.pipe(
+        predictions,
+        lambda preds: combinations_with_replacement(preds, 2),
+        curried.filter(lambda x: not x[0].equal(x[1])),
+        curried.map(lambda x: dice(x[0], x[1], average=average)),
+        list,
+        torch.stack,
+        lambda preds: torch.mean(preds, dim=0 if aggregate else None),
+    )

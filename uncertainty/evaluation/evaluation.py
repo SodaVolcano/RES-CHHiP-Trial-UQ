@@ -11,8 +11,7 @@ from .inference import (
     mc_dropout_inference,
 )
 from .metrics import get_metric_func
-from tqdm import tqdm
-from .uncertainties import probability_map
+from .uncertainties import probability_map, mean_entropy, mean_variance, pairwise_dice
 
 
 @torch.no_grad()
@@ -72,12 +71,14 @@ def evaluate_predictions(
     label: torch.Tensor,
     metric_names: list[str],
     average: Literal["micro", "macro", "none"] = "macro",
-    aggregate: bool = True,
 ) -> torch.Tensor:
     """
     Evaluate a list of `predictions` against a `label` tensor using a list of metrics
 
     Mean of each prediction is produced as the final prediction metric.
+
+    **WARNING**: "mean_variance", "mean_entropy" and "pairwise_dice", if specified,
+    will always appear at the end of the output tensor!!
 
     Parameters
     ----------
@@ -97,38 +98,46 @@ def evaluate_predictions(
         - "sen": Sensitivity
         - "precision": Precision
         - "ppv": Positive predictive value
+        - "mean_variance": Mean of the variance between all N predictions
+        - "mean_entropy": Mean of the entropy between all N predictions
+        - "pairwise_dice": Mean pairwise Dice between all N predictions
 
     average : Literal["micro", "macro", "none"]
         Averaging mode for the channel-wise metrics per prediction
         - "micro": Calculate metrics globally across all channels
         - "macro": Calculate metrics for each channel, and calculate their mean
         - "none": Return the metrics for each channel
-    aggregate: bool
-        If True, all predictions are aggregated into a single map before evaluation
 
     Returns
     -------
     torch.Tensor
-        If `summarise` is True, a tensor of shape `(num_metrics,)` with the
-        average metrics across all predictions, or a tensor of shape
-        `(N, num_metrics)` if `summarise` is False
+        A tensor of shape `(num_metrics,)` with the average metrics across all predictions
     """
-    if aggregate:
-        return tz.pipe(
-            predictions,
-            probability_map,
-            evaluate_prediction(
-                label=label, metric_names=metric_names, average=average
-            ),
-        )  # type: ignore
+    if not isinstance(predictions, torch.Tensor):
+        predictions = torch.stack(predictions)
+    uncertainties = {
+            "mean_variance": lambda preds, average: mean_variance(preds, average),
+            "mean_entropy": lambda preds, average: mean_entropy(preds, average),
+            "pairwise_dice": lambda preds, average: pairwise_dice(preds > 0.5, average=average)
+    }
+    spatial_metrics = list(filter(lambda x: x not in uncertainties.keys(), metric_names))
+    uncertainty_metrics = list(filter(lambda x: x in uncertainties.keys(), metric_names))
 
+    uncertainty_scores = tz.pipe(
+        uncertainty_metrics,
+        curried.map(lambda name: uncertainties[name](predictions, average=average)),
+        # some tensors have no shape, add a shape to it
+        curried.map(lambda score: score.unsqueeze(0) if score.shape == () else score),
+        list
+    )
+ 
     return tz.pipe(
         predictions,
-        curried.map(
-            evaluate_prediction(label=label, metric_names=metric_names, average=average)
+        probability_map,
+        evaluate_prediction(
+            label=label, metric_names=spatial_metrics, average=average
         ),
-        list,
-        torch.stack,
+        lambda results: torch.cat([results] + uncertainty_scores)
     )  # type: ignore
 
 

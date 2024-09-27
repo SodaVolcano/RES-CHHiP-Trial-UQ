@@ -178,7 +178,7 @@ def _preprocess_volume(
 @logger_wraps()
 @curry
 def _preprocess_mask(
-    name_mask_pairs: tuple[str, np.ndarray], dicom_path: str
+    name_mask_pairs: list[tuple[str, np.ndarray]], dicom_path: str
 ) -> Optional[tuple[str, np.ndarray]]:
     _make_mask_isotropic = unpack_args(
         lambda name, mask, spacings: (

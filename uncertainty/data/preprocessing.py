@@ -186,6 +186,33 @@ def find_organ_roi(organ: str, roi_lst: list[str]) -> Optional[str]:
     )  # type: ignore
 
 
+
+def bounding_box3d(img: np.ndarray):
+    """
+    Compute bounding box of a 3d binary array
+    """
+    r = np.any(img, axis=(1, 2))
+    c = np.any(img, axis=(0, 2))
+    z = np.any(img, axis=(0, 1))
+
+    rmin, rmax = np.where(r)[0][[0, -1]]
+    cmin, cmax = np.where(c)[0][[0, -1]]
+    zmin, zmax = np.where(z)[0][[0, -1]] 
+
+    return rmin, rmax, cmin, cmax, zmin, zmax
+
+
+def crop_to_body(x: np.ndarray, y: np.ndarray, precrop_px: int = 3, thresh: float = c.BODY_THRESH):
+    """
+    Crop both (x, y) to bounding box of the body
+    """
+    # crop borders to avoid high pixel values along
+    x, y = tuple(arr[:, precrop_px:-precrop_px, precrop_px:-precrop_px, precrop_px:-precrop_px] for arr in [x, y]) 
+    mask = x > thresh
+    rmin, rmax, cmin, cmax, zmin, zmax = bounding_box3d(mask[0])
+    return tuple(arr[:, rmin:rmax, cmin:cmax, zmin:zmax] for arr in [x, y])
+
+
 @logger_wraps(level="INFO")
 @curry
 def preprocess_data(

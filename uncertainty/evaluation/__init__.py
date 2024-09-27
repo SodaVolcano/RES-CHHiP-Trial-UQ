@@ -12,6 +12,7 @@ from .uncertainties import (
     entropy_map,
     mean_entropy,
     mean_variance,
+    pairwise_dice
 )
 from .evaluation import evaluate_prediction, evaluate_predictions
 from .metrics import (
@@ -24,7 +25,6 @@ from .metrics import (
     surface_dice,
     hausdorff_distance_95,
     general_energy_distance,
-    pairwise_dice,
     aurc,
     eaurc,
     rc_curve_stats,

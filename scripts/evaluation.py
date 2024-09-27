@@ -24,6 +24,7 @@ from uncertainty.data.h5 import save_pred_to_h5, load_pred_from_h5, load_xy_from
 from loguru import logger
 from tqdm import tqdm
 from uncertainty.utils.wrappers import curry
+from uncertainty.data.preprocessing import crop_to_body
 
 
 def parameterised_inference(mode: str, n_outputs: int, model, config: dict):
@@ -59,7 +60,7 @@ def parameterised_inference(mode: str, n_outputs: int, model, config: dict):
     )
 
 @curry
-def dump_aggregated_maps(i_preds_y, map_folder_path):
+def dump_aggregated_maps(i_preds_y, map_folder_path, class_names: list[str]):
     idx, preds_y = i_preds_y
     preds, y = list(preds_y[0]), preds_y[1]
 
@@ -67,17 +68,26 @@ def dump_aggregated_maps(i_preds_y, map_folder_path):
     maps_folder = os.path.join(map_folder_path, unique_folder_name)
     os.makedirs(maps_folder, exist_ok=True)
 
-    # Create filenames for the maps
-    prob_map_filename = os.path.join(maps_folder, "probability_map.pt")
-    entropy_map_filename = os.path.join(maps_folder, "entropy_map.pt")
-    variance_map_filename = os.path.join(maps_folder, "variance_map.pt")
+    preds_filename = "/tmp/preds"
+    prob_map_filename = os.path.join(maps_folder, "probability_map")
+    entropy_map_filename = os.path.join(maps_folder, "entropy_map")
+    variance_map_filename = os.path.join(maps_folder, "variance_map")
 
-    torch.save(probability_map(preds), prob_map_filename)
-    torch.save(entropy_map(preds), entropy_map_filename)
-    torch.save(variance_map(preds), variance_map_filename)
+    torch.save(y, os.path.join(maps_folder, "label.pt"))
+
+    # Save predictions for each class to calculate maps per-class later (avoid overflowing RAM)
+    for class_idx in range(preds[0].shape[0]):
+        torch.save([pred[class_idx] for pred in preds], f"{preds_filename}_{class_names[class_idx]}.pt")
+
+    for pred_fname, class_name in [(f"{preds_filename}_{name}.pt", name) for name in class_names]:
+        # Load the saved preds with memory mapping
+        class_preds = torch.load(pred_fname, mmap=True, weights_only=True)
+
+        torch.save(probability_map(class_preds), f"{prob_map_filename}_{class_name}.pt")
+        torch.save(entropy_map(class_preds), f"{entropy_map_filename}_{class_name}.pt")
+        torch.save(variance_map(class_preds), f"{variance_map_filename}_{class_name}.pt")
 
     return preds, y
-
 
 
 def perform_inference(
@@ -137,6 +147,7 @@ def perform_inference(
     from itertools import islice
     tz.pipe(
         islice(load_xy_from_h5(dataset_path), 1),
+        curried.map(lambda xy: crop_to_body(xy[0], xy[1])),  # reduce storage space of array
         # to torch tensor if numpy
         curried.map(
             lambda xy: (
@@ -147,9 +158,8 @@ def perform_inference(
         ),
         curried.map(lambda xy: (inference(xy[0]), xy[1])),
         enumerate,
-        curried.map(dump_aggregated_maps(map_folder_path=map_path) if mode != "single" else curried.get(1)),
+        curried.map(dump_aggregated_maps(map_folder_path=map_path, class_names=class_names) if mode != "single" else curried.get(1)),
         curried.map(lambda y_pred: evaluation(y_pred[0], y_pred[1], metric_names)),
-        tqdm,
         curried.map(lambda tensor: tensor.tolist()),
         lambda it: pl.LazyFrame(it, schema=col_names),
         lambda it: it.select(pl.col(col_names_sorted)),  # reorder columns
@@ -168,18 +178,19 @@ def main(
     n_outputs: int,
     dataset_path: str
 ):
+
     for mode in inference_modes:
         checkpoint_dir = ensemble_dir if mode == "ensemble" else single_model_dir
         perform_inference(
             checkpoint_dir,
-            metric_names,
+            list(filter(lambda name: name not in ["mean_variance", "mean_entropy", "pairwise_dice"] if mode == "single" else True, metric_names)),
             mode,
             average,
             class_names,
             f"{mode}_{out_path}",
             n_outputs,
             dataset_path,
-            map_path=f"{mode}_prediction_maps"
+            map_path=f"prediction_maps/{mode}"
         )
 
 
@@ -203,15 +214,14 @@ if __name__ == "__main__":
     parser.add_argument(
         "--metrics",
         type=str,
-        help="List of metric names separated by comma, can be any of 'dice', 'hd', 'hd95', 'asd', 'assd', 'recall', 'sen', 'precision', 'ppv' or 'surface_dice_[float]' where [float] is the threshold to use for surface Dice.",
-        default="dice,surface_dice_1.5,hd95,assd,sen,ppv",
+        help="List of metric names separated by comma, can be any of 'dice', 'hd', 'hd95', 'asd', 'assd', 'recall', 'sen', 'precision', 'ppv', 'surface_dice', 'mean_variance', 'mean_entropy', or 'surface_dice_[float]' where [float] is the threshold to use for surface Dice.",
+        default="dice,surface_dice_1.5,hd95,assd,sen,ppv,pairwise_dice",
     )
     parser.add_argument(
         "--modes",
         type=str,
         help="List of comma-separated inference modes, any of 'single', 'mcdo', 'tta', or 'ensemble'.",
-        default="single",
-        #default="single,mcdo,tta,ensemble",
+        default="single,mcdo,tta,ensemble",
     )
     parser.add_argument(
         "--average",
@@ -232,7 +242,7 @@ if __name__ == "__main__":
         "--n-outputs",
         type=int,
         help="Number of outputs to predict for a single instance; ignored if mode is 'single' or 'ensemble'.",
-        default=2,
+        default=50,
     )
     parser.add_argument(
         "--dataset_path",
