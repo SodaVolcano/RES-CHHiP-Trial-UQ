@@ -68,7 +68,7 @@ def dump_aggregated_maps(i_preds_y, map_folder_path, class_names: list[str]):
     maps_folder = os.path.join(map_folder_path, unique_folder_name)
     os.makedirs(maps_folder, exist_ok=True)
 
-    preds_filename = "/tmp/preds"
+    preds_filename = "./preds"
     prob_map_filename = os.path.join(maps_folder, "probability_map")
     entropy_map_filename = os.path.join(maps_folder, "entropy_map")
     variance_map_filename = os.path.join(maps_folder, "variance_map")
@@ -144,9 +144,8 @@ def perform_inference(
         else [f"{name}_{metric}" for name in class_names for metric in metric_names]
     )
 
-    from itertools import islice
     tz.pipe(
-        islice(load_xy_from_h5(dataset_path), 1),
+        load_xy_from_h5(dataset_path),
         curried.map(lambda xy: crop_to_body(xy[0], xy[1])),  # reduce storage space of array
         # to torch tensor if numpy
         curried.map(
@@ -215,13 +214,13 @@ if __name__ == "__main__":
         "--metrics",
         type=str,
         help="List of metric names separated by comma, can be any of 'dice', 'hd', 'hd95', 'asd', 'assd', 'recall', 'sen', 'precision', 'ppv', 'surface_dice', 'mean_variance', 'mean_entropy', or 'surface_dice_[float]' where [float] is the threshold to use for surface Dice.",
-        default="dice,surface_dice_1.5,hd95,assd,sen,ppv,pairwise_dice",
+        default="dice,surface_dice_1.0,surface_dice_1.5,surface_dice_2.0,surface_dice_2.5,surface_dice_3.0,surface_dice_5.099,surface_dice_13.928,hd95,assd,sen,ppv,pairwise_dice",
     )
     parser.add_argument(
         "--modes",
         type=str,
         help="List of comma-separated inference modes, any of 'single', 'mcdo', 'tta', or 'ensemble'.",
-        default="single,mcdo,tta,ensemble",
+        default="mcdo,tta,ensemble",
     )
     parser.add_argument(
         "--average",
