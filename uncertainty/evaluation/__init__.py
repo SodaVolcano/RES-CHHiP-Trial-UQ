@@ -3,7 +3,7 @@ from .inference import (
     mc_dropout_inference,
     tta_inference,
     ensemble_inference,
-    get_inference_mode
+    get_inference_mode,
 )
 from .visualisation import display_slices_grid, display_uncertainty_maps
 from .uncertainties import (
@@ -12,7 +12,8 @@ from .uncertainties import (
     entropy_map,
     mean_entropy,
     mean_variance,
-    pairwise_dice
+    pairwise_dice,
+    pairwise_surface_dice,
 )
 from .evaluation import evaluate_prediction, evaluate_predictions
 from .metrics import (
@@ -57,5 +58,6 @@ __all__ = [
     "aurc",
     "eaurc",
     "rc_curve_stats",
-    "get_inference_mode"
+    "get_inference_mode",
+    "pairwise_surface_dice",
 ]

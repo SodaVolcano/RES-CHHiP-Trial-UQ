@@ -1,3 +1,4 @@
+from typing import Callable
 import torch
 import toolz as tz
 from toolz import curried
@@ -11,14 +12,18 @@ sys.path.append(".")
 from kornia.augmentation import RandomAffine3D
 from scripts.__helpful_parser import HelpfulParser
 import torch
-from uncertainty.training import load_checkpoint, checkpoint_dir_type, torchio_augmentation
+from uncertainty.training import (
+    load_checkpoint,
+    checkpoint_dir_type,
+    torchio_augmentation,
+)
 from uncertainty.evaluation import (
     get_inference_mode,
     evaluate_prediction,
     evaluate_predictions,
     probability_map,
     entropy_map,
-    variance_map
+    variance_map,
 )
 from uncertainty.data.h5 import save_pred_to_h5, load_pred_from_h5, load_xy_from_h5
 from loguru import logger
@@ -27,7 +32,9 @@ from uncertainty.utils.wrappers import curry
 from uncertainty.data.preprocessing import crop_to_body
 
 
-def parameterised_inference(mode: str, n_outputs: int, model, config: dict):
+def parameterised_inference(
+    mode: str, n_outputs: int, model, config: dict
+) -> Callable[[torch.Tensor], torch.Tensor]:
     """
     Get unary inference function f(x) -> y_pred with parameters filled in
     """
@@ -47,17 +54,22 @@ def parameterised_inference(mode: str, n_outputs: int, model, config: dict):
         lambda inference: (
             inference(aug=aug, batch_affine=aug_batch) if mode == "tta" else inference
         ),
-        (lambda inference: inference(model=model)) if mode != "ensemble" else (lambda inference: inference(models=model)),
+        (
+            (lambda inference: inference(model=model))
+            if mode != "ensemble"
+            else (lambda inference: inference(models=model))
+        ),
         lambda inference: lambda x: inference(
             x=x,
             patch_size=config["patch_size"],
             subdivisions=2,
             batch_size=config["batch_size_eval"],
             output_channels=config["n_kernels_last"],
-            #prog_bar=mode != "single",
-            prog_bar=True
+            # prog_bar=mode != "single",
+            prog_bar=True,
         ),
-    )
+    )  # type: ignore
+
 
 @curry
 def dump_aggregated_maps(i_preds_y, map_folder_path, class_names: list[str]):
@@ -76,16 +88,23 @@ def dump_aggregated_maps(i_preds_y, map_folder_path, class_names: list[str]):
     torch.save(y, os.path.join(maps_folder, "label.pt"))
 
     # Save predictions for each class to calculate maps per-class later (avoid overflowing RAM)
-    for class_idx in range(preds[0].shape[0]):
-        torch.save([pred[class_idx] for pred in preds], f"{preds_filename}_{class_names[class_idx]}.pt")
+    for class_idx in range(len(class_names)):
+        torch.save(
+            [pred[class_idx] for pred in preds],
+            f"{preds_filename}_{class_names[class_idx]}.pt",
+        )
 
-    for pred_fname, class_name in [(f"{preds_filename}_{name}.pt", name) for name in class_names]:
+    for pred_fname, class_name in [
+        (f"{preds_filename}_{name}.pt", name) for name in class_names
+    ]:
         # Load the saved preds with memory mapping
         class_preds = torch.load(pred_fname, mmap=True, weights_only=True)
 
         torch.save(probability_map(class_preds), f"{prob_map_filename}_{class_name}.pt")
         torch.save(entropy_map(class_preds), f"{entropy_map_filename}_{class_name}.pt")
-        torch.save(variance_map(class_preds), f"{variance_map_filename}_{class_name}.pt")
+        torch.save(
+            variance_map(class_preds), f"{variance_map_filename}_{class_name}.pt"
+        )
 
     return preds, y
 
@@ -99,10 +118,12 @@ def perform_inference(
     out_path: str,
     n_outputs: int,
     dataset_path: str,
-    map_path: str
+    map_path: str,
 ):
     detected_dir_type = checkpoint_dir_type(checkpoint_dir)
-    if (detected_dir_type != "multiple" and mode in ["ensemble"]) or (detected_dir_type != "single" and mode in ["tta", "mcdo", "single"]):
+    if (detected_dir_type != "multiple" and mode in ["ensemble"]) or (
+        detected_dir_type != "single" and mode in ["tta", "mcdo", "single"]
+    ):
         logger.critical("Invalid checkpoint path for the given inference mode.")
         exit(1)
 
@@ -113,10 +134,11 @@ def perform_inference(
         model = []
         config = None
         for ckpt in os.listdir(checkpoint_dir):
-            one_model, config, _, _, _ = load_checkpoint(os.path.join(checkpoint_dir, ckpt))
+            one_model, config, _, _, _ = load_checkpoint(
+                os.path.join(checkpoint_dir, ckpt)
+            )
             one_model.eval()
             model.append(one_model)
-
 
     torch.set_grad_enabled(False)
 
@@ -125,7 +147,7 @@ def perform_inference(
         if mode == "single"
         else evaluate_predictions(average=average)
     )
-    inference = parameterised_inference(mode, n_outputs, model, config)
+    inference = parameterised_inference(mode, n_outputs, model, config)  # type: ignore
 
     if average == "none":
         assert (
@@ -146,7 +168,9 @@ def perform_inference(
 
     tz.pipe(
         load_xy_from_h5(dataset_path),
-        curried.map(lambda xy: crop_to_body(xy[0], xy[1])),  # reduce storage space of array
+        curried.map(
+            lambda xy: crop_to_body(xy[0], xy[1])
+        ),  # reduce storage space of array
         # to torch tensor if numpy
         curried.map(
             lambda xy: (
@@ -157,7 +181,11 @@ def perform_inference(
         ),
         curried.map(lambda xy: (inference(xy[0]), xy[1])),
         enumerate,
-        curried.map(dump_aggregated_maps(map_folder_path=map_path, class_names=class_names) if mode != "single" else curried.get(1)),
+        curried.map(
+            dump_aggregated_maps(map_folder_path=map_path, class_names=class_names)
+            if mode != "single"
+            else curried.get(1)
+        ),
         curried.map(lambda y_pred: evaluation(y_pred[0], y_pred[1], metric_names)),
         curried.map(lambda tensor: tensor.tolist()),
         lambda it: pl.LazyFrame(it, schema=col_names),
@@ -167,31 +195,39 @@ def perform_inference(
 
 
 def main(
-    single_model_dir: str | None,
-    ensemble_dir: str | None,
+    single_model_dir: str,
+    ensemble_dir: str,
     inference_modes: list[str],
     metric_names: list[str],
     average: str,
     class_names: list[str] | None,
     out_path: str,
     n_outputs: int,
-    dataset_path: str
+    dataset_path: str,
 ):
 
     for mode in inference_modes:
         checkpoint_dir = ensemble_dir if mode == "ensemble" else single_model_dir
         perform_inference(
             checkpoint_dir,
-            list(filter(lambda name: name not in ["mean_variance", "mean_entropy", "pairwise_dice"] if mode == "single" else True, metric_names)),
+            list(
+                filter(
+                    lambda name: (
+                        name not in ["mean_variance", "mean_entropy", "pairwise_dice"]
+                        if mode == "single"
+                        else True
+                    ),
+                    metric_names,
+                )
+            ),
             mode,
             average,
             class_names,
             f"{mode}_{out_path}",
             n_outputs,
             dataset_path,
-            map_path=f"prediction_maps/{mode}"
+            map_path=f"prediction_maps/{mode}",
         )
-
 
 
 if __name__ == "__main__":
@@ -202,19 +238,19 @@ if __name__ == "__main__":
         "--ensemble_dir",
         type=str,
         help='Path to a directory containing checkpoint directories each containing "latest.ckpt", "indices.pt", and "config.pkl". Not required if --modes does not contain "ensemble".',
-        default="./checkpoints/"
+        default="./checkpoints/",
     )
     parser.add_argument(
         "--single_model_dir",
         type=str,
         help='Path to the checkpoint directory containing "latest.ckpt", "indices.pt", and "config.pkl" for a single model. Not required if --modes does not contain "single", "mcdo", and "tta".',
-        default="./unet_single/"
+        default="./unet_single/",
     )
     parser.add_argument(
         "--metrics",
         type=str,
         help="List of metric names separated by comma, can be any of 'dice', 'hd', 'hd95', 'asd', 'assd', 'recall', 'sen', 'precision', 'ppv', 'surface_dice', 'mean_variance', 'mean_entropy', or 'surface_dice_[float]' where [float] is the threshold to use for surface Dice.",
-        default="dice,surface_dice_1.0,surface_dice_1.5,surface_dice_2.0,surface_dice_2.5,surface_dice_3.0,surface_dice_5.099,surface_dice_13.928,hd95,assd,sen,ppv,pairwise_dice",
+        default="dice,surface_dice_1.0,surface_dice_1.5,surface_dice_2.0,surface_dice_2.5,surface_dice_3.0,surface_dice_5.099,surface_dice_13.928,hd95,assd,sen,ppv,pairwise_dice,pairwise_surface_dice_0.5,pairwise_surface_dice_1.0,pairwise_surface_dice_2.0,pairwise_surface_dice_2.5,pairwise_surface_dice_3.0,pairwise_surface_dice_5.099,pairwise_surface_dice_13.928",
     )
     parser.add_argument(
         "--modes",
@@ -232,10 +268,13 @@ if __name__ == "__main__":
         "--class_names",
         type=str,
         help="List of names separated by comma for each class to predict, only used if --average=none and is ignored if otherwise.",
-        default='prostate,bladder,rectum',
+        default="prostate,bladder,rectum",
     )
     parser.add_argument(
-        "--metric-out", type=str, help="Base name of the output CSV file", default="eval.csv"
+        "--metric-out",
+        type=str,
+        help="Base name of the output CSV file",
+        default="eval.csv",
     )
     parser.add_argument(
         "--n-outputs",
@@ -247,7 +286,7 @@ if __name__ == "__main__":
         "--dataset_path",
         type=str,
         help="Path to the h5 dataset to perform inference on.",
-        default="./test.h5"
+        default="./test.h5",
     )
 
     args = parser.parse_args()
@@ -265,5 +304,5 @@ if __name__ == "__main__":
         ),
         args.metric_out,
         args.n_outputs,
-        args.dataset_path
+        args.dataset_path,
     )

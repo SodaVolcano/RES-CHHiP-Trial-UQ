@@ -11,7 +11,13 @@ from .inference import (
     mc_dropout_inference,
 )
 from .metrics import get_metric_func
-from .uncertainties import probability_map, mean_entropy, mean_variance, pairwise_dice
+from .uncertainties import (
+    pairwise_surface_dice,
+    probability_map,
+    mean_entropy,
+    mean_variance,
+    pairwise_dice,
+)
 
 
 @torch.no_grad()
@@ -101,6 +107,7 @@ def evaluate_predictions(
         - "mean_variance": Mean of the variance between all N predictions
         - "mean_entropy": Mean of the entropy between all N predictions
         - "pairwise_dice": Mean pairwise Dice between all N predictions
+        - "pairwise_dice_<float>": Mean pairwise Dice at tolerance <float> between all N predictions
 
     average : Literal["micro", "macro", "none"]
         Averaging mode for the channel-wise metrics per prediction
@@ -115,29 +122,50 @@ def evaluate_predictions(
     """
     if not isinstance(predictions, torch.Tensor):
         predictions = torch.stack(predictions)
-    uncertainties = {
+
+    def get_uncertainty_metric(name: str):
+        if "pairwise_surface_dice" in name:
+            return lambda preds, average: pairwise_surface_dice(
+                preds > 0.5, average=average, tolerance=float(name.split("_")[-1])
+            )
+        return {
             "mean_variance": lambda preds, average: mean_variance(preds, average),
             "mean_entropy": lambda preds, average: mean_entropy(preds, average),
-            "pairwise_dice": lambda preds, average: pairwise_dice(preds > 0.5, average=average)
-    }
-    spatial_metrics = list(filter(lambda x: x not in uncertainties.keys(), metric_names))
-    uncertainty_metrics = list(filter(lambda x: x in uncertainties.keys(), metric_names))
+            "pairwise_dice": lambda preds, average: pairwise_dice(
+                preds > 0.5, average=average
+            ),
+        }[name]
+
+    uncertainty_names = ["mean_variance", "mean_entropy", "pairwise_dice"]
+    spatial_metrics = list(
+        filter(
+            lambda x: x not in uncertainty_names
+            and not x.startswith("pairwise_surface_dice"),
+            metric_names,
+        )
+    )
+    uncertainty_metrics = list(
+        filter(
+            lambda x: x in uncertainty_names or x.startswith("pairwise_surface_dice"),
+            metric_names,
+        )
+    )
 
     uncertainty_scores = tz.pipe(
         uncertainty_metrics,
-        curried.map(lambda name: uncertainties[name](predictions, average=average)),
+        curried.map(
+            lambda name: get_uncertainty_metric(name)(predictions, average=average)
+        ),
         # some tensors have no shape, add a shape to it
         curried.map(lambda score: score.unsqueeze(0) if score.shape == () else score),
-        list
+        list,
     )
- 
+
     return tz.pipe(
         predictions,
         probability_map,
-        evaluate_prediction(
-            label=label, metric_names=spatial_metrics, average=average
-        ),
-        lambda results: torch.cat([results] + uncertainty_scores)
+        evaluate_prediction(label=label, metric_names=spatial_metrics, average=average),
+        lambda results: torch.cat([results] + uncertainty_scores),
     )  # type: ignore
 
 
