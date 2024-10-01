@@ -9,6 +9,7 @@ import sys
 
 sys.path.append("..")
 sys.path.append(".")
+import h5py
 from kornia.augmentation import RandomAffine3D
 from scripts.__helpful_parser import HelpfulParser
 import torch
@@ -86,6 +87,9 @@ def dump_aggregated_maps(i_preds_y, map_folder_path, class_names: list[str]):
     variance_map_filename = os.path.join(maps_folder, "variance_map")
 
     torch.save(y, os.path.join(maps_folder, "label.pt"))
+    with h5py.File(os.path.join(maps_folder, "preds.h5"), "w") as hf:
+        for i, pred in enumerate(preds):
+            hf.create_dataset(str(i), data=pred, compression="gzip")
 
     # Save predictions for each class to calculate maps per-class later (avoid overflowing RAM)
     for class_idx in range(len(class_names)):
@@ -250,7 +254,7 @@ if __name__ == "__main__":
         "--metrics",
         type=str,
         help="List of metric names separated by comma, can be any of 'dice', 'hd', 'hd95', 'asd', 'assd', 'recall', 'sen', 'precision', 'ppv', 'surface_dice', 'mean_variance', 'mean_entropy', or 'surface_dice_[float]' where [float] is the threshold to use for surface Dice.",
-        default="dice,surface_dice_1.0,surface_dice_1.5,surface_dice_2.0,surface_dice_2.5,surface_dice_3.0,surface_dice_5.099,surface_dice_13.928,hd95,assd,sen,ppv,pairwise_dice,pairwise_surface_dice_0.5,pairwise_surface_dice_1.0,pairwise_surface_dice_2.0,pairwise_surface_dice_2.5,pairwise_surface_dice_3.0,pairwise_surface_dice_5.099,pairwise_surface_dice_13.928",
+        default="dice,surface_dice_1.0,surface_dice_1.5,surface_dice_2.0,surface_dice_2.5,surface_dice_3.0,surface_dice_5.099,surface_dice_13.928,hd95,assd,sen,ppv,pairwise_dice",
     )
     parser.add_argument(
         "--modes",

@@ -1,28 +1,29 @@
-"""
-Overload for embarrassingly parallel tasks
-"""
-
-from multiprocessing.pool import IMapIterator
-from typing import Any, Generator, Literal, Optional
+from multiprocessing.pool import IMapIterator  # purely for typing
+from typing import Any, Callable, Generator, Literal, Optional
 
 from pathos.multiprocessing import ProcessingPool, ThreadingPool
 
-from .wrappers import curry
 
-
-@curry
 def pmap(
-    f,
-    iterable,
-    *iterables,
+    f: Callable[..., Any],
+    iterable: Any,
+    *iterables: Any,
     n_workers: Optional[int] = None,
     executor: Literal["process", "thread"] = "process",
 ) -> IMapIterator | Generator[Any, None, None] | Any:
     """
     Parallel map function using Process or Thread pool
 
-    If `executor` is `"process"`, `n_workers` specifies the number of processes to use.
-    If `executor` is `"thread"`, `n_workers` specifies the number of threads to use.
+    Parameters
+    ----------
+    f: Callable
+        Function to apply to each element of the iterable.
+    n_workers: Optional[int]
+        Number of workers to use. If None, the number of workers is set to the number of CPUs.
+    executor: Literal["process", "thread"]
+        Executor to use, process or thread workers.
     """
-    pool = ProcessingPool if executor == "process" else ThreadingPool
-    return pool(n_workers).imap(f, iterable, *iterables)
+    Pool = ProcessingPool if executor == "process" else ThreadingPool
+    with Pool(n_workers) as pool:
+        results = pool.imap(f, iterable, *iterables)
+    return results

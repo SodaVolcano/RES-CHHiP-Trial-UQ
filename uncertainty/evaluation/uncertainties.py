@@ -64,6 +64,23 @@ def entropy_map(
     return -torch.sum(preds * torch.log(preds + smooth), dim=0)
 
 
+def entropy_map_pixel_wise(
+    prob_map: torch.Tensor, smooth: float = 1e-10
+) -> torch.Tensor:
+    """
+    Compute pixel-wise entropy for a softmax map.
+
+    Parameters
+    ----------
+    softmax_map : torch.Tensor
+        Softmax map of shape (C, H, W, D) with C classes.
+    """
+    log_prob_map = torch.log(prob_map + smooth)
+    prob_map_bg = 1 - prob_map
+    log_prob_map_bg = torch.log(prob_map_bg + smooth)
+    return -(prob_map * log_prob_map + prob_map_bg * log_prob_map_bg)
+
+
 def variance_map(
     preds: torch.Tensor | list[torch.Tensor] | tuple[torch.Tensor],
 ) -> torch.Tensor:
