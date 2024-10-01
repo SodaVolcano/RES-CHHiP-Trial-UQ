@@ -27,7 +27,7 @@ from uncertainty.evaluation import (
     entropy_map,
     variance_map,
 )
-from uncertainty.data.h5 import load_xy_from_h5
+from uncertainty.data.h5 import save_pred_to_h5, load_pred_from_h5, load_xy_from_h5
 from loguru import logger
 from tqdm import tqdm
 from uncertainty.utils.wrappers import curry
@@ -72,7 +72,6 @@ def parameterised_inference(
         ),
     )  # type: ignore
 
-
 @curry
 def dump_pred(i_pred_y):
     idx, pred_y = i_pred_y
@@ -82,10 +81,10 @@ def dump_pred(i_pred_y):
     maps_folder = os.path.join("single_preds", unique_folder_name)
     os.makedirs(maps_folder, exist_ok=True)
 
+
     torch.save(y, os.path.join(maps_folder, "label.pt"))
     torch.save(pred, os.path.join(maps_folder, "pred.pt"))
     return pred, y
-
 
 @curry
 def dump_aggregated_maps(i_preds_y, map_folder_path, class_names: list[str]):
@@ -170,6 +169,7 @@ def perform_inference(
     )
     inference = parameterised_inference(mode, n_outputs, model, config)  # type: ignore
 
+
     if average == "none":
         assert (
             class_names is not None
@@ -187,8 +187,7 @@ def perform_inference(
         else [f"{name}_{metric}" for name in class_names for metric in metric_names]
     )
 
-    def collect_garbage(x):
-        # Memory aren't cleared after each iteration for some reason so we do it manually...
+    def bandaid_fix(x):
         gc.collect()
         return x
 
@@ -214,7 +213,7 @@ def perform_inference(
         ),
         curried.map(lambda y_pred: evaluation(y_pred[0], y_pred[1], metric_names)),
         curried.map(lambda tensor: tensor.tolist()),
-        curried.map(collect_garbage),
+        curried.map(bandaid_fix),
         lambda it: pl.LazyFrame(it, schema=col_names),
         lambda it: it.select(pl.col(col_names_sorted)),  # reorder columns
         lambda lf: lf.sink_csv(out_path),

@@ -91,8 +91,8 @@ def dice(
 def surface_dice(
     prediction: torch.Tensor,
     label: torch.Tensor,
-    tolerance: float,
     average: Literal["micro", "macro", "none"] = "macro",
+    tolerance: float = 1.0,
 ) -> torch.Tensor:
     """
     Compute the Surface Dice between two tensors of shape (C, ...) at specified tolerance.
@@ -137,7 +137,6 @@ def surface_dice(
             _distance_with_default(compute_surface_dice),
         ),
     )  # type: ignore
-
 
 
 def hausdorff_distance(

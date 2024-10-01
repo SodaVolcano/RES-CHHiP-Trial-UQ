@@ -68,7 +68,10 @@ def entropy_map_pixel_wise(
     prob_map: torch.Tensor, smooth: float = 1e-10
 ) -> torch.Tensor:
     """
-    Compute pixel-wise entropy for a softmax map.
+    Compute pixel-wise entropy for a softmax map
+
+    Entropy is defined as -(p * log(p) + (1 - p) * log(1 - p))
+    for binary classification.
 
     Parameters
     ----------
@@ -99,6 +102,20 @@ def variance_map(
         Variance map computed from the input tensors
     """
     return _stack_if_sequence(preds).var(dim=0)
+
+
+def variance_pixel_wise(prob_map: torch.Tensor) -> torch.Tensor:
+    """
+    Compute pixel-wise variance for a softmax map
+
+    Variance of a Bernoulli distribution is p * (1-p).
+
+    Parameters
+    ----------
+    softmax_map : torch.Tensor
+        Softmax map of shape (C, H, W, D) with C classes.
+    """
+    return prob_map * (1 - prob_map)
 
 
 def mean_variance(
@@ -254,9 +271,9 @@ def pairwise_dice(
 
 def pairwise_surface_dice(
     predictions: torch.Tensor,
-    tolerance: float,
     average: Literal["micro", "macro", "none"] = "macro",
     aggregate: bool = True,
+    tolerance: float = 1.0,
 ):
     """
     Compute the average pairwise surface dice similarity between all pairs of predictions.
