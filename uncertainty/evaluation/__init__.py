@@ -14,6 +14,10 @@ from .uncertainties import (
     mean_variance,
     pairwise_dice,
     pairwise_surface_dice,
+    entropy_map_pixel_wise,
+    variance_pixel_wise,
+    mean_entropy_pixel_wise,
+    mean_variance_pixel_wise,
 )
 from .evaluation import evaluate_prediction, evaluate_predictions
 from .metrics import (
@@ -25,7 +29,7 @@ from .metrics import (
     precision,
     surface_dice,
     hausdorff_distance_95,
-    general_energy_distance,
+    generalised_energy_distance,
     aurc,
     eaurc,
     rc_curve_stats,
@@ -53,11 +57,15 @@ __all__ = [
     "hausdorff_distance_95",
     "mean_entropy",
     "mean_variance",
-    "general_energy_distance",
+    "generalised_energy_distance",
     "pairwise_dice",
     "aurc",
     "eaurc",
     "rc_curve_stats",
     "get_inference_mode",
     "pairwise_surface_dice",
+    "entropy_map_pixel_wise",
+    "variance_pixel_wise",
+    "mean_entropy_pixel_wise",
+    "mean_variance_pixel_wise",
 ]

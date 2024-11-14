@@ -9,7 +9,6 @@ References:
 from torch import nn
 import torch
 from .unet_modules import Encoder, Decoder
-from ..config import Configuration
 
 
 class UNet(nn.Module):
@@ -26,7 +25,7 @@ class UNet(nn.Module):
 
     Parameters
     ----------
-    config : Configuration
+    config : dict
         Dictionary containing configuration parameters
     deep_supervision : bool
         If True, a list of outputs from each decoder level is returned.
@@ -35,7 +34,7 @@ class UNet(nn.Module):
         (bottleneck and last layer of decoder) is not returned.
     """
 
-    def __init__(self, config: Configuration, deep_supervision: bool = True):
+    def __init__(self, config: dict, deep_supervision: bool = True):
         super().__init__()
         self.config = config
         self.encoder = Encoder(config)

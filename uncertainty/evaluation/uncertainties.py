@@ -1,5 +1,6 @@
 from itertools import combinations_with_replacement
 from typing import Callable, Literal
+from numpy import var
 import torch
 
 from ..utils.wrappers import curry
@@ -44,7 +45,7 @@ def probability_map(
 
 def entropy_map(
     preds: torch.Tensor | list[torch.Tensor] | tuple[torch.Tensor],
-    smooth: float = 1e-10,
+    smooth: float = 1e-6,
 ) -> torch.Tensor:
     """
     Compute entropy map from a list of predictions
@@ -65,7 +66,7 @@ def entropy_map(
 
 
 def entropy_map_pixel_wise(
-    prob_map: torch.Tensor, smooth: float = 1e-10
+    prob_map: torch.Tensor, smooth: float = 1e-6
 ) -> torch.Tensor:
     """
     Compute pixel-wise entropy for a softmax map
@@ -152,10 +153,43 @@ def mean_variance(
     )
 
 
+def mean_variance_pixel_wise(
+    prob_map: torch.Tensor,
+    average: Literal["micro", "macro", "none"] = "macro",
+) -> torch.Tensor:
+    """
+    Compute pixel-wise variance from a softmax map
+
+    Parameters
+    ----------
+    prob_map : torch.Tensor
+        Softmax map of shape (C, H, W, D) with C classes.
+    average : Literal["micro", "macro", "weighted", "none"]
+        Averaging method for the class channels.
+        - "micro": Calculate metrics globally across all classes.
+        - "macro": Calculate metrics for each class and average
+        - "none": Return the metrics for each class separately.
+
+    Returns
+    -------
+    torch.Tensor
+        Tensor of mean variance of shape (,) if average is not "none", else
+        a tensor of shape (C,)
+    """
+    var_map = variance_pixel_wise(prob_map)
+    return (
+        var_map.mean()
+        if average != "none"
+        else torch.cat(
+            [var_map[i].mean().unsqueeze(0) for i in range(var_map.shape[0])]
+        )
+    )
+
+
 def mean_entropy(
     preds: torch.Tensor | list[torch.Tensor] | tuple[torch.Tensor],
     average: Literal["micro", "macro", "none"] = "macro",
-    smooth: float = 1e-10,
+    smooth: float = 1e-6,
 ) -> torch.Tensor:
     """
     Compute scalar uncertainty as average entropy from list of predictions
@@ -178,6 +212,40 @@ def mean_entropy(
         a tensor of shape (C,)
     """
     ent_map = entropy_map(preds, smooth)
+    return (
+        ent_map.mean()
+        if average != "none"
+        else torch.cat(
+            [ent_map[i].mean().unsqueeze(0) for i in range(ent_map.shape[0])]
+        )
+    )
+
+
+def mean_entropy_pixel_wise(
+    prob_map: torch.Tensor,
+    average: Literal["micro", "macro", "none"] = "macro",
+    smooth: float = 1e-7,
+) -> torch.Tensor:
+    """
+    Compute pixel-wise entropy from a softmax map
+
+    Parameters
+    ----------
+    prob_map : torch.Tensor
+        Softmax map of shape (C, H, W, D) with C classes.
+    average : Literal["micro", "macro", "weighted", "none"]
+        Averaging method for the class channels.
+        - "micro": Calculate metrics globally across all classes.
+        - "macro": Calculate metrics for each class and average
+        - "none": Return the metrics for each class separately.
+
+    Returns
+    -------
+    torch.Tensor
+        Tensor of mean variance of shape (,) if average is not "none", else
+        a tensor of shape (C,)
+    """
+    ent_map = entropy_map_pixel_wise(prob_map, smooth)
     return (
         ent_map.mean()
         if average != "none"

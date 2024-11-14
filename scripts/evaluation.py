@@ -178,13 +178,13 @@ def perform_inference(
         metric_names
         if average != "none"
         # [class1_metric1, class2_metric1, ..., class1_metric2, class2_metric2, ...]
-        else [f"{name}_{metric}" for metric in metric_names for name in class_names]
+        else [f"{name}_{metric}" for metric in metric_names for name in class_names]  # type: ignore
     )
     col_names_sorted = (
         metric_names
         if average != "none"
         # [class1_metric1, class1_metric2, ..., class2_metric1, class2_metric2, ...]
-        else [f"{name}_{metric}" for name in class_names for metric in metric_names]
+        else [f"{name}_{metric}" for name in class_names for metric in metric_names]  # type: ignore
     )
 
     def collect_garbage(x):

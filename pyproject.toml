@@ -41,6 +41,7 @@ kornia = "^0.7.3"
 medpy = "^0.5.2"
 polars = "^1.7.1"
 seaborn = "^0.13.2"
+pyperclip = "^1.9.0"
 
 [tool.isort]
 profile = "black"

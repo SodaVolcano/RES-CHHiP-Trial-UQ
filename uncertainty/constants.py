@@ -14,7 +14,7 @@ RT_PLAN: Final[str] = "1.2.840.10008.5.1.4.1.1.481.5"
 # regex pattern to match any valid python identifier names
 VALID_IDENTIFIER: Final[str] = "[a-zA-Z_][a-zA-Z0-9_]*"
 
-# Hounsfield Units (HU), intensity range for CT images
+# Hounsfield Units (HU), intensity range for CT images to clip to
 HU_RANGE: Final[tuple[int, int]] = (-1000, 3000)
 # Threshold value (HU) to binarise the scan to get mask of the body
 BODY_THRESH = -800
@@ -89,6 +89,7 @@ ROI_EXCLUSION_LIST: Final[list[str]] = [
 
 
 # list of ROI name variants in the patient scans for organs of interest
+# Variants are mapped to the standard name of the organ
 # Preprocessed masks will have same name order as this list
 ORGAN_MATCHES: Final[dict[str, list[str]]] = {
     "prostate": [

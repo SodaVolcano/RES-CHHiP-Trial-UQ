@@ -2,7 +2,7 @@ from typing import Callable
 from torch import nn
 import torch
 
-from uncertainty.config import Configuration, configuration
+from uncertainty.config import configuration
 import toolz as tz
 
 from .unet_modules import _concat_with_skip, _calc_n_kernels
@@ -61,7 +61,7 @@ class UNetConfidNet(nn.Module):
     def __init__(
         self,
         unet: UNet,
-        config: Configuration,
+        config: dict,
         hidden_conv_dims: list[int] = [128, 128, 64, 64],
         activation: Callable[[], nn.Module] = configuration()["activation"],
         last_activation: Callable[[], nn.Module] = nn.Sigmoid,

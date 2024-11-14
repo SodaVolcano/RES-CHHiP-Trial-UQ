@@ -311,7 +311,7 @@ def average_symmetric_surface_distance(
     )  # type: ignore
 
 
-def general_energy_distance(
+def generalised_energy_distance(
     a: torch.Tensor,
     b: torch.Tensor,
     distance: (
@@ -321,7 +321,7 @@ def general_energy_distance(
     average: Literal["micro", "macro", "none"] = "macro",
 ) -> torch.Tensor:
     """
-    Calculate the General Energy Distance (GED) between `a` and `b` using `distance`.
+    Calculate the Generalised Energy Distance (GED) between `a` and `b` using `distance`.
 
     Parameters
     ----------
@@ -444,7 +444,7 @@ def rc_curve_stats(
     tmp_weight = 0
     for i in range(0, len(idx_sorted) - 1):
         coverage = coverage - 1
-        error_sum = error_sum - risks[idx_sorted[i]]
+        error_sum -= risks[idx_sorted[i]]
         tmp_weight += 1
         if i == 0 or confids[idx_sorted[i]] != confids[idx_sorted[i - 1]]:
             coverages.append(coverage / n_samples)
@@ -461,7 +461,9 @@ def rc_curve_stats(
     return coverages, selective_risks, weights
 
 
-def aurc(risks: torch.Tensor, confids: torch.Tensor) -> torch.Tensor:
+def aurc(
+    risks: torch.Tensor, confids: torch.Tensor
+) -> tuple[torch.Tensor, list[float], list[torch.Tensor]]:
     """
     Compute the Area Under the Risk-Confidence curve (AURC).
 
@@ -478,8 +480,9 @@ def aurc(risks: torch.Tensor, confids: torch.Tensor) -> torch.Tensor:
 
     Returns
     -------
-    torch.Tensor
-        The computed Area Under the Risk-Confidence curve (AURC).
+    tuple[torch.Tensor, list[float], list[torch.Tensor]]
+        The computed Area Under the Risk-Confidence curve (AURC),
+        the coverages, and selective risks for the Risk-Confidence curve.
 
     References
     ----------
@@ -489,13 +492,17 @@ def aurc(risks: torch.Tensor, confids: torch.Tensor) -> torch.Tensor:
     """
 
     coverage, selective_risks, weights = rc_curve_stats(risks, confids)
-    return torch.sum(
-        torch.tensor(
-            [
-                (selective_risks[i] + selective_risks[i + 1]) * 0.5 * weights[i]
-                for i in range(len(weights))
-            ]
-        )
+    return (
+        torch.sum(
+            torch.tensor(
+                [
+                    (selective_risks[i] + selective_risks[i + 1]) * 0.5 * weights[i]
+                    for i in range(len(weights))
+                ]
+            )
+        ),
+        coverage,
+        selective_risks,
     )
 
 

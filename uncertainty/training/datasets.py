@@ -14,7 +14,7 @@ from toolz import curried
 import h5py as h5
 from skimage.util import view_as_windows
 
-from ..config import Configuration, configuration
+from ..config import configuration
 
 
 def get_unique_filename(base_path):
@@ -39,7 +39,7 @@ class SlidingPatchDataset(IterableDataset):
     def __init__(
         self,
         h5_file_path: str,
-        config: Configuration,
+        config: dict,
         patch_size: tuple[int, ...],
         patch_step: int,
         transform: Callable[
@@ -124,14 +124,14 @@ class RandomPatchDataset(IterableDataset):
     transform : Callable[[tuple[np.ndarray, np.ndarray]], tuple[np.ndarray, np.ndarray]]
         Function to apply to the (x, y) patch pair. Default is the identity function.
         Intended to be used for data augmentation.
-    config : Configuration
-        Configuration object
+    config : dict
+        Configuration dictionary
     """
 
     def __init__(
         self,
         h5_file_path: str,
-        config: Configuration,
+        config: dict,
         indices: list[int] | Subset,
         batch_size: int,
         patch_size: tuple[int, ...],
@@ -267,7 +267,7 @@ class H5Dataset(Dataset):
     ----------
     h5_file_path : str
         Path to the H5 file containing the dataset.
-    config: Configuration
+    config: dict
         Dictionary containing configurations.
     indices: list[int] | None
         Optinal list of indices. If specified, only elements
@@ -290,7 +290,7 @@ class H5Dataset(Dataset):
     def __init__(
         self,
         h5_file_path: str,
-        config: Configuration = configuration(),
+        config: dict = configuration(),
         indices: list[int] | None = None,
     ):
         self.h5_file_path = h5_file_path

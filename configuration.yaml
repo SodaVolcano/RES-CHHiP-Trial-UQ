@@ -1,0 +1,91 @@
+# Configuration file for the project
+
+# Data volumes are formatted as (height, width, depth, channel)
+data:
+  # Path to directory containing directories of DICOM slices
+  data_dir: "./"
+  # Name of preprocessed h5 files for training and testing data
+  staging_train_name: "./staging/train.h5"
+  staging_test_name: "./staging/test.h5"
+  # Channel of input volume, 1 for grayscale, 3 for RGB
+  input_channel: 1
+  # Patch size to sample from volume to form training data
+  # - try to keep each dimension divisible by (2 ** (n_level - 1))
+  # - because U-Net downsamples by 2 at each level
+  patch_size: [256, 256, 64]
+  # Step size for sliding window patch sampler (used for validation and testing)
+  patch_step: 32
+  # Percentage of patches in batch guaranteed to have foreground class
+  foreground_oversample_ratio: 0.333
+  # Percentage of total dataset split for testing, other is for training
+  test_split: 0.2
+  # Percentage of TRAINING dataset split for validation
+  val_split: 0.2
+
+unet:
+  # ------------------ Conolution Block ------------------
+  # Size of kernel for convolutional layers, a single integer
+  kernel_size: 3
+  # Number of convolutional layers in each block
+  n_convolutions_per_block: 2
+  # Activation function name from torch.nn for convolutional layers
+  activation: "LeakyReLU"
+  # Dropout rate applied after activation
+  dropout_rate: 0.5
+  # Whether to apply instance norm after convolution and before activation
+  # - Batch norm don't work well with small batch size
+  use_instance_norm: true
+  # AKA momentum, how much of new mean and variance are added to running mean and variance
+  instance_norm_decay: 0.9
+  # Small value added to variance to avoid division by zero
+  instance_norm_epsilon: 1e-5
+  # ------------------ Encoder-Decoder Settings ------------------
+  # Number of kernels in the output of the first level of encoder
+  # - This is doubled/halved at each level in the encoder/decoder
+  n_kernels_init: 32
+  # Maximum allowed number of kernels for a level
+  n_kernels_max: 512
+  # Number of resolutions/levels for the U-Net
+  n_levels: 5
+  # Output channels of the final layer, number of classes to predict
+  n_kernels_last: 3
+  # Activation function name from torch.nn for the final layer, usually
+  # "Sigmoid" for binary classification or "Softmax" for multi-class classification
+  final_layer_activation: "Sigmoid"
+
+training:
+  # Path to directory to save model checkpoints
+  model_checkpoint_path: "./checkpoints/unet_2"
+  # Whether to train using deep supervision loss
+  deep_supervision: true
+  # Number of epochs to train for
+  n_epochs: 750
+  # Number of batches for each epoch in training
+  n_batches_per_epoch: 250
+  # Number of batches for each epoch in validation
+  n_batches_val: 50
+  # Size of each batch in training
+  batch_size: 2
+  # Size of each batch in validation and testing
+  batch_size_eval: 4
+  # Weight initialiser for model from torch.nn.init
+  initialiser: "kaiming_normal_"
+  # Optimiser for training from torch.optim
+  optimiser: "SGD"
+  # Optional arguments for optimiser
+  optimiser_kwargs:
+    momentum: 0.99
+    nesterov: true
+  # Learning rate scheduler from torch.optim.lr_scheduler
+  lr_scheduler: "PolynomialLR"
+  # Optional arguments for learning rate scheduler
+  lr_scheduler_kwargs:
+    total_iters: 750
+    power: 0.9
+
+logger:
+  # loguru settings, see https://loguru.readthedocs.io/en/stable/api/logger.html
+  log_sink: "./logs/out_{time}.log"
+  log_format: "{time:YYYY-MM-DD at HH:mm:ss} {level} {message}"
+  log_level: "DEBUG"
+  log_retention: "7 days"

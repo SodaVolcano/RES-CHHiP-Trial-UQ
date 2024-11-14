@@ -13,7 +13,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from ..config import Configuration
 from ..utils.wrappers import curry
 from ..utils.sequence import growby_accum
 
@@ -112,7 +111,7 @@ class ConvBlock(nn.Module):
         in_channels: int,
         out_channels: int,
         n_convolutions: int,
-        config: Configuration,
+        config: dict,
     ):
         """
         Multiple convolution layers in a single level of the U-Net
@@ -128,7 +127,7 @@ class ConvBlock(nn.Module):
         n_convolutions : int
             Number of convolution layers. A convolution layer consists of
             Conv3D -> [InstanceNorm] -> Activation -> Dropout
-        config : Configuration
+        config : dict
             Dictionary containing configuration parameters
         """
         super().__init__()
@@ -163,7 +162,7 @@ class DownConvBlock(nn.Module):
         Level in the U-Net (0-indexed)
     """
 
-    def __init__(self, level: int, config: Configuration):
+    def __init__(self, level: int, config: dict):
         super().__init__()
         self.layer = nn.Sequential(
             nn.MaxPool3d(kernel_size=2, stride=(2, 2, 2)),
@@ -190,13 +189,13 @@ class Encoder(nn.Module):
 
     Parameters
     ----------
-    config: Configuration
+    config: dict
         Dictionary containing configuration parameters
     """
 
     def __init__(
         self,
-        config: Configuration,
+        config: dict,
     ):
         super().__init__()
 
@@ -234,7 +233,7 @@ class UpConvBlock(nn.Module):
     Upconvolution block, (input, skip_connections) -> upsample -> concat -> conv block
     """
 
-    def __init__(self, level: int, config: Configuration) -> None:
+    def __init__(self, level: int, config: dict) -> None:
         super().__init__()
         self.up = nn.ConvTranspose3d(
             in_channels=_calc_n_kernels(
@@ -270,14 +269,14 @@ class Decoder(nn.Module):
 
     Parameters
     ----------
-    config : Configuration
+    config : dict
         Dictionary containing configuration parameters
     deep_supervision : bool
         If True, a list of outputs from each level is returned. The outputs
         are from convolving the output of each level with a 1x1 convolution.
     """
 
-    def __init__(self, config: Configuration, deep_supervision: bool = True):
+    def __init__(self, config: dict, deep_supervision: bool = True):
         super().__init__()
         self.deep_supervision = deep_supervision
         self.levels = nn.ModuleList(

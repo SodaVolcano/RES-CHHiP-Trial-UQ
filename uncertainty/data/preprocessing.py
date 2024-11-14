@@ -17,8 +17,8 @@ from ..utils.common import call_method, conditional
 from ..utils.logging import logger_wraps
 from ..utils.wrappers import curry
 from .patient_scan import PatientScan
-from ..config import Configuration, configuration
-from ..constants import BODY_THRESH, HU_RANGE, ORGAN_MATCHES
+from ..config import configuration
+from ..constants import BODY_THRESH, ORGAN_MATCHES
 from .utils import to_torchio_subject, from_torchio_subject
 from .mask import get_organ_names, masks_as_array
 
@@ -186,7 +186,6 @@ def find_organ_roi(organ: str, roi_lst: list[str]) -> Optional[str]:
     )  # type: ignore
 
 
-
 def bounding_box3d(img: np.ndarray):
     """
     Compute bounding box of a 3d binary array
@@ -197,17 +196,22 @@ def bounding_box3d(img: np.ndarray):
 
     rmin, rmax = np.where(r)[0][[0, -1]]
     cmin, cmax = np.where(c)[0][[0, -1]]
-    zmin, zmax = np.where(z)[0][[0, -1]] 
+    zmin, zmax = np.where(z)[0][[0, -1]]
 
     return rmin, rmax, cmin, cmax, zmin, zmax
 
 
-def crop_to_body(x: np.ndarray, y: np.ndarray, precrop_px: int = 3, thresh: float = c.BODY_THRESH):
+def crop_to_body(
+    x: np.ndarray, y: np.ndarray, precrop_px: int = 3, thresh: float = c.BODY_THRESH
+):
     """
     Crop both (x, y) to bounding box of the body
     """
     # crop borders to avoid high pixel values along
-    x, y = tuple(arr[:, precrop_px:-precrop_px, precrop_px:-precrop_px, precrop_px:-precrop_px] for arr in [x, y]) 
+    x, y = tuple(
+        arr[:, precrop_px:-precrop_px, precrop_px:-precrop_px, precrop_px:-precrop_px]
+        for arr in [x, y]
+    )
     mask = x > thresh
     rmin, rmax, cmin, cmax, zmin, zmax = bounding_box3d(mask[0])
     return tuple(arr[:, rmin:rmax, cmin:cmax, zmin:zmax] for arr in [x, y])
@@ -265,7 +269,7 @@ def preprocess_data(
 @logger_wraps(level="INFO")
 @curry
 def preprocess_data_configurable(
-    volume_mask: tuple[np.ndarray, np.ndarray], config: Configuration = configuration()
+    volume_mask: tuple[np.ndarray, np.ndarray], config: dict = configuration()
 ):
     """
     Preprocess data according to the configuration

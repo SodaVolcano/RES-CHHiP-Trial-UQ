@@ -22,7 +22,6 @@ from uncertainty.training.datasets import (
 )
 
 from .loss import ConfidNetMSELoss, DeepSupervisionLoss, DiceBCELoss
-from ..config import Configuration
 from .augmentations import augmentations
 
 
@@ -51,7 +50,7 @@ class SegmentationData(lit.LightningDataModule):
 
     def __init__(
         self,
-        config: Configuration,
+        config: dict,
         checkpoint_path: str | None = None,
         train_val_indices: tuple[list[int], list[int]] | None = None,
     ):
@@ -158,8 +157,8 @@ class LitSegmentation(lit.LightningModule):
         PyTorch model to be trained. If training an ensemble, the ensemble
         members are created using the same model class and the same constructor
         arguments.
-    config : Configuration
-        Configuration object
+    config : dict
+        Configuration dictionary
     class_weights : Optional[list[float]]
         Weights for each class in the loss function. Default is None.
         Weights are typically calculated using the number of pixels as
@@ -169,7 +168,7 @@ class LitSegmentation(lit.LightningModule):
     def __init__(
         self,
         model: nn.Module,
-        config: Configuration,
+        config: dict,
         class_weights: Optional[torch.Tensor] = None,
         save_hyperparams: bool = True,
     ):
@@ -314,7 +313,7 @@ class LitConfidNet(lit.LightningModule):
     def __init__(
         self,
         model: nn.Module,
-        config: Configuration,
+        config: dict,
         class_weights: Optional[torch.Tensor] = None,
         save_hyperparams: bool = True,
     ):

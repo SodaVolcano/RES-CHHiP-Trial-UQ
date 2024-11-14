@@ -2,7 +2,6 @@ from torch import nn
 from .datasets import H5Dataset
 from .lightning import LitSegmentation, SegmentationData
 from ..models.unet import UNet
-from ..config import Configuration
 from typing import Any, Literal
 import torch
 import dill
@@ -17,7 +16,7 @@ def load_checkpoint(
     indices_path: str | None = None,
 ) -> tuple[
     nn.Module,
-    Configuration,
+    dict,
     dict[Literal["train_indices", "val_indices"], list[int]],
     H5Dataset,
     H5Dataset,
@@ -80,8 +79,10 @@ def load_checkpoint(
     return model, config, indices, train_dataset, val_dataset
 
 
-
-def checkpoint_dir_type(path, required_files: list[str] | set[str] = ["latest.ckpt", "indices.pt", "config.pkl"] ) -> Literal["single", "multiple", "invalid"]:
+def checkpoint_dir_type(
+    path,
+    required_files: list[str] | set[str] = ["latest.ckpt", "indices.pt", "config.pkl"],
+) -> Literal["single", "multiple", "invalid"]:
     """
     Return type of the checkpoint directory - "single", "multiple", or "invalid"
 
@@ -98,7 +99,7 @@ def checkpoint_dir_type(path, required_files: list[str] | set[str] = ["latest.ck
     Returns
     -------
     Literal["single", "multiple", "invalid"]
-        'single' if all required files are found in the main directory, 
+        'single' if all required files are found in the main directory,
         'multiple' if required files are found in subdirectories,
         and "invalid" if otherwise.
     """
@@ -109,12 +110,19 @@ def checkpoint_dir_type(path, required_files: list[str] | set[str] = ["latest.ck
         return "invalid"
 
     if required_files.issubset(os.listdir(path)):
-        return 'single'
+        return "single"
 
     subdir_paths = [os.path.join(path, entry) for entry in os.listdir(path)]
-    bad_dirs = list(filter(lambda x: not(os.path.isdir(x) and required_files.issubset(os.listdir(x))), subdir_paths))
+    bad_dirs = list(
+        filter(
+            lambda x: not (os.path.isdir(x) and required_files.issubset(os.listdir(x))),
+            subdir_paths,
+        )
+    )
     if not len(bad_dirs) == 0:
-        logger.critical(f"Folders of checkpoint detected but the following folder have bad structure: {bad_dirs}")
+        logger.critical(
+            f"Folders of checkpoint detected but the following folder have bad structure: {bad_dirs}"
+        )
         return "invalid"
 
-    return 'multiple'
+    return "multiple"
