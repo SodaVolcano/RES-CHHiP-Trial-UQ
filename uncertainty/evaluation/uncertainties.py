@@ -1,12 +1,12 @@
 from itertools import combinations_with_replacement
 from typing import Callable, Literal
-from numpy import var
-import torch
-
-from ..utils.wrappers import curry
 
 import toolz as tz
+import torch
+from numpy import var
 from toolz import curried
+
+from ..utils.wrappers import curry
 from .metrics import dice, surface_dice
 
 

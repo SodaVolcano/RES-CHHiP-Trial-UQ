@@ -13,8 +13,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from ..utils.wrappers import curry
 from ..utils.sequence import growby_accum
+from ..utils.wrappers import curry
 
 
 def _calc_n_kernels(n_init: int, level: int, bound: int):

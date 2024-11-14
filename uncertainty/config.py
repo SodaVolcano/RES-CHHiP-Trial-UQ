@@ -3,8 +3,9 @@ Reads configuration from a yaml file and returns a dictionary of configuration s
 """
 
 from functools import cache
-from torch import nn, optim
+
 import yaml
+from torch import nn, optim
 
 
 @cache

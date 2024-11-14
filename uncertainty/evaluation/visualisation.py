@@ -1,7 +1,8 @@
-from matplotlib.figure import Figure
-import torch
 import matplotlib.pyplot as plt
-from .uncertainties import probability_map, entropy_map, variance_map
+import torch
+from matplotlib.figure import Figure
+
+from .uncertainties import entropy_map, probability_map, variance_map
 
 
 def display_slices_grid(

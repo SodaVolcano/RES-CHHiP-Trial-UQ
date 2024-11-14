@@ -1,7 +1,8 @@
-from torch import nn
-import lightning as lit
 from typing import override
+
+import lightning as lit
 import torch
+from torch import nn
 
 
 class MCDropoutUNet(nn.Module):

@@ -7,29 +7,27 @@ which is based off of
     https://github.com/Vooban/Smoothly-Blend-Image-Patches
 """
 
-from tqdm import tqdm
 import random
+from functools import reduce
+from typing import Callable, Iterable
+
+import lightning as lit
 import numpy as np
+import toolz as tz
+import torch
+import torchio as tio
+from kornia.augmentation import RandomAffine3D
+from scipy.signal.windows import triang
+from skimage.util import view_as_windows
 from toolz import curried
 from torch import nn
-import lightning as lit
+from tqdm import tqdm
 
-from kornia.augmentation import RandomAffine3D
-import torchio as tio
-from typing import Callable, Iterable
-import toolz as tz
-from skimage.util import view_as_windows
-from functools import reduce
-from scipy.signal.windows import triang
-import torch
-import numpy as np
-
+from ..constants import BODY_THRESH
+from ..models import MCDropoutUNet
 from ..training.augmentations import inverse_affine_transform
 from ..utils.logging import logger_wraps
-from ..constants import BODY_THRESH
-
 from ..utils.wrappers import curry
-from ..models import MCDropoutUNet
 
 
 def _calc_pad_amount(

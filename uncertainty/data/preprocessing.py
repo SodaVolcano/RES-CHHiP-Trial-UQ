@@ -7,20 +7,20 @@ from typing import Iterable, Literal, Optional
 import numpy as np
 import SimpleITK as sitk
 import toolz as tz
-from toolz import curried
 import torchio as tio
+from toolz import curried
 
 from uncertainty.utils.parallel import pmap
 
 from .. import constants as c
+from ..config import configuration
+from ..constants import BODY_THRESH, ORGAN_MATCHES
 from ..utils.common import call_method, conditional
 from ..utils.logging import logger_wraps
 from ..utils.wrappers import curry
-from .patient_scan import PatientScan
-from ..config import configuration
-from ..constants import BODY_THRESH, ORGAN_MATCHES
-from .utils import to_torchio_subject, from_torchio_subject
 from .mask import get_organ_names, masks_as_array
+from .patient_scan import PatientScan
+from .utils import from_torchio_subject, to_torchio_subject
 
 
 @logger_wraps()

@@ -1,21 +1,21 @@
 import os
-import h5py as h5
-from loguru import logger
-import numpy as np
 from typing import Iterable, Optional
-import torch
 
-from tqdm import tqdm
+import h5py as h5
+import numpy as np
 import toolz as tz
+import torch
+from loguru import logger
 from toolz import curried
+from tqdm import tqdm
 
 from uncertainty.data.patient_scan import PatientScan
 from uncertainty.utils.parallel import pmap
 
-from .mask import Mask, get_organ_names
 from ..utils.logging import logger_wraps
 from ..utils.path import generate_full_paths
 from ..utils.wrappers import curry
+from .mask import Mask, get_organ_names
 
 
 @logger_wraps(level="INFO")

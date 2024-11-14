@@ -1,28 +1,20 @@
-import inspect
 import os
+import time
 from typing import Optional
 
-
 import dill
-from ..constants import ORGAN_MATCHES
-import torch.utils
-from pytorch_lightning import seed_everything
-import time
 import lightning as lit
 import torch
+from pytorch_lightning import seed_everything
 from torch import nn
 from torch.utils.data import DataLoader, random_split
 from torchmetrics.aggregation import RunningMean
-from torchmetrics.classification import MultilabelF1Score, BinaryF1Score
+from torchmetrics.classification import BinaryF1Score, MultilabelF1Score
 
-from uncertainty.training.datasets import (
-    H5Dataset,
-    RandomPatchDataset,
-    SlidingPatchDataset,
-)
-
-from .loss import ConfidNetMSELoss, DeepSupervisionLoss, DiceBCELoss
+from ..constants import ORGAN_MATCHES
+from ..training.datasets import H5Dataset, RandomPatchDataset, SlidingPatchDataset
 from .augmentations import augmentations
+from .loss import ConfidNetMSELoss, DeepSupervisionLoss, DiceBCELoss
 
 
 def _seed_with_time(id: int):

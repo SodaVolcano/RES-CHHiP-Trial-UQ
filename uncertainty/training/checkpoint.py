@@ -1,12 +1,14 @@
+import os
+from typing import Any, Literal
+
+import dill
+import torch
+from loguru import logger
 from torch import nn
+
+from ..models.unet import UNet
 from .datasets import H5Dataset
 from .lightning import LitSegmentation, SegmentationData
-from ..models.unet import UNet
-from typing import Any, Literal
-import torch
-import dill
-import os
-from loguru import logger
 
 
 def load_checkpoint(
