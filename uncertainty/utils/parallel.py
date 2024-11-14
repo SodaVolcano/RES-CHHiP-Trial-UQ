@@ -1,3 +1,6 @@
+"""
+Functions for parallel processing.
+"""
 from multiprocessing.pool import IMapIterator  # purely for typing
 from typing import Any, Callable, Generator, Literal, Optional
 

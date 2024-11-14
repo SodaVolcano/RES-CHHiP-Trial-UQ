@@ -2,16 +2,19 @@
 Reads configuration from a yaml file and returns a dictionary of configuration settings
 """
 
+from functools import cache
 from torch import nn, optim
 import yaml
 
 
+@cache
 def data_config(config_path: str = "configuration.yaml") -> dict:
     with open(config_path, "r") as file:
         config = yaml.safe_load(file)
     return config["data"]
 
 
+@cache
 def unet_config(config_path: str = "configuration.yaml") -> dict:
     with open(config_path, "r") as file:
         config = yaml.safe_load(file)
@@ -24,12 +27,14 @@ def unet_config(config_path: str = "configuration.yaml") -> dict:
     return config["unet"]
 
 
+@cache
 def logger_config(config_path: str = "configuration.yaml") -> dict:
     with open(config_path, "r") as file:
         config = yaml.safe_load(file)
     return config["logger"]
 
 
+@cache
 def training_config(config_path: str = "configuration.yaml") -> dict:
     with open(config_path, "r") as file:
         config = yaml.safe_load(file)

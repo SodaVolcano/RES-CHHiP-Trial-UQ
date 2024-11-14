@@ -3,11 +3,10 @@ Utility functions for generating sequences
 """
 
 from itertools import islice
-from typing import Callable, Generator
+from typing import Callable, Generator, Iterable
 
 import toolz as tz
 import toolz.curried as curried
-from tqdm import tqdm
 
 from .wrappers import curry
 
@@ -19,9 +18,7 @@ def growby[
     init: T,
     f: Callable[[T | R], R],
     length: int | None = None,
-) -> Generator[
-    T | R, None, None
-]:
+) -> Iterable[T | R]:
     """
     Grow a sequence by repeatedly applying f to last item in sequence
 

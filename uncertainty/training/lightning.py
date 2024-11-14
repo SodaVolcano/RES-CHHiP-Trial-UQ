@@ -198,9 +198,9 @@ class LitSegmentation(lit.LightningModule):
             hasattr(model, "deep_supervision") and model.deep_supervision
         )
         if self.deep_supervision:
-            self.loss = DeepSupervisionLoss(DiceBCELoss(class_weights, logits=True))
+            self.loss = DeepSupervisionLoss(DiceBCELoss(class_weights))
         else:
-            self.loss = DiceBCELoss(class_weights, logits=True)
+            self.loss = DiceBCELoss(class_weights)
 
     def forward(self, x, logits: bool = False):
         return self.model(x, logits)
@@ -208,7 +208,7 @@ class LitSegmentation(lit.LightningModule):
     def training_step(self, batch: torch.Tensor):
         x, y = batch
         y_pred = self.model(x, logits=True)
-        loss = self.loss(y_pred, y)
+        loss = self.loss(y_pred, y, logits=True)
         # _dump_tensors(self.config["model_checkpoint_path"], x, y, y_pred, 0, loss, self.val_counter)
         # self.val_counter += 1
 
@@ -237,7 +237,7 @@ class LitSegmentation(lit.LightningModule):
         x, y = batch
 
         y_pred = self.model(x, logits=True)
-        loss = self.loss(y_pred, y)
+        loss = self.loss(y_pred, y, logits=True)
         if self.deep_supervision:
             y_pred = y_pred[-1]
         dice = self.dice_eval(y_pred, y)
@@ -290,7 +290,7 @@ class LitSegmentation(lit.LightningModule):
     def test_step(self, batch: torch.Tensor):
         x, y = batch
         y_pred = self.model(x, logits=False)
-        loss = self.loss(y_pred, y)
+        loss = self.loss(y_pred, y, logits=False)
         if self.deep_supervision:
             y_pred = y_pred[-1]
         dice = self.dice_eval(y_pred, y)
@@ -341,7 +341,7 @@ class LitConfidNet(lit.LightningModule):
     def training_step(self, batch: torch.Tensor):
         x, y = batch
         y_pred = self.model(x, logits=True)
-        loss = self.loss(y_pred, y)
+        loss = self.loss(y_pred, y, logits=True)
 
         self.running_loss(loss.detach())
         self.log(
@@ -357,7 +357,7 @@ class LitConfidNet(lit.LightningModule):
         x, y = batch
 
         y_pred = self.model(x, logits=True)
-        loss = self.loss(y_pred, y)
+        loss = self.loss(y_pred, y, logits=True)
 
         if self.val_counter == 4:
             _dump_tensors(
@@ -387,7 +387,7 @@ class LitConfidNet(lit.LightningModule):
     def test_step(self, batch: torch.Tensor):
         x, y = batch
         y_pred = self.model(x, logits=False)
-        loss = self.loss(y_pred, y)
+        loss = self.loss(y_pred, y, logits=False)
         if self.deep_supervision:
             y_pred = y_pred[-1]
         dice = self.dice_eval(y_pred, y)
