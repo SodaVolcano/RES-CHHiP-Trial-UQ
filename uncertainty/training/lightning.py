@@ -18,26 +18,14 @@ from .loss import ConfidNetMSELoss, DeepSupervisionLoss, DiceBCELoss
 
 
 def _seed_with_time(id: int):
+    """Seed everything with current time and id"""
     seed_everything(int(time.time() + (id * 3)), verbose=False)
-
-
-def _dump_tensors(
-    path: str,
-    x: torch.Tensor,
-    y: torch.Tensor,
-    y_pred: torch.Tensor,
-    dice: torch.Tensor,
-    loss: torch.Tensor,
-    val_counter: int,
-):
-    name = os.path.join(path, f"batches/batch_{val_counter}_dice_{dice}.pt")
-    os.makedirs(os.path.dirname(name), exist_ok=True)
-    torch.save({"x": x, "y": y, "y_pred": y_pred, "dice": dice, "loss": loss}, name)
 
 
 class SegmentationData(lit.LightningDataModule):
     """
-    Wrapper class for PyTorch dataset to be used with PyTorch Lightning
+    Prepares the train, validation, and test DataLoader for the segmentation task.
+
     """
 
     def __init__(
@@ -201,8 +189,6 @@ class LitSegmentation(lit.LightningModule):
         x, y = batch
         y_pred = self.model(x, logits=True)
         loss = self.loss(y_pred, y, logits=True)
-        # _dump_tensors(self.config["model_checkpoint_path"], x, y, y_pred, 0, loss, self.val_counter)
-        # self.val_counter += 1
 
         if self.deep_supervision:
             y_pred = y_pred[-1]
