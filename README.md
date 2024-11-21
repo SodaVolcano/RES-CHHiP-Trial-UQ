@@ -6,28 +6,29 @@ The repository contains modules for loading DICOM and NIFTI files, preprocessing
 
 # Setup
 
-## Poetry
+You can **either** install directly via [uv](https://docs.astral.sh/uv/) or use [Nix](https://nixos.org/) to indirectly manage uv for extra reproducibility.
 
-Poetry is used to manage and configure Python dependencies. You can run the following command.
+Instructions below assumes you are at the top-level of the project directory (i.e. folder containing `pyproject.toml` etc).
+
+## uv
+[uv](https://docs.astral.sh/uv/) manages and configures Python dependencies. First install it following the [installation guide](https://docs.astral.sh/uv/getting-started/installation/). Then, any Python commands can be run by appending `uv run` in front of your command which will automatically download project dependencies, e.g.
 
 ```bash
-poetry shell   # Enter the poetry venv environment
-poetry install  # Install the dependencies
-
-exit # Exit the poetry shell
+uv run python ./scripts/dicom_to_h5.py   # equivalent to running `python /scripts/dicom_to_h5.py`
 ```
 
-## Devenv
 
-**Warning: CUDA not supported for this option (idk how to fix :'( )**
 
-[Devenv](https://devenv.sh/) is used to create isolated development shells where the dependencies are declared in `devenv.nix` file with input channels defined in `devenv.yaml` and are version-locked in `devenv.lock`. Dependencies and programs installed in the shell are only accessible in the shell. It is internally powered by Nix where the list of Nix packages can be found at [NixOS Packages](https://search.nixos.org/packages).
+## Nix
 
-First, install `devenv`. Then, from the top-most directory of the project, run the following command to let `devenv` install the required dependencies locally, install the requirements, and activate the virtual environment.
+**Warning: CUDA not supported for this option, idk how to fix :'(**
+
+[Nix](https://nixos.org/) is a purely functional programming language *and* package manager used to create isolated and reproducible development shells. A `flake.nix` file defines project dependencies and environment. First, install Nix following the [installation guide](https://nixos.org/download/). Then, start a development shell by running...
 
 ```bash
-devenv shell
-exit # Exit the devbox shell
+# Enable `nix flake`, an experimental feature, then run the `develop` command
+nix --extra-experimental-features nix-command --extra-experimental-features flakes develop
+# you can now run `uv run python ...` etc
 ```
 
 
