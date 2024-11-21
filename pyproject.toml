@@ -1,51 +1,48 @@
-[tool.poetry]
+[project]
 name = "CHHiP-UQ"
 version = "0.1.0"
 description = "Python packages for the Uncertainty Quantification Project"
-package-mode = false
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "pytest>=8.3.2",
+    "loguru>=0.7.2",
+    "black>=24.4.2",
+    "cytoolz>=0.12.3",
+    "ipykernel>=6.29.5",
+    "fastexcel>=0.11.5",
+    "jupyter-black>=0.3.4",
+    "isort>=5.13.2",
+    "pathos>=0.3.2",
+    "notebook>=7.2.1",
+    "jupyter>=1.0.0",
+    "rt-utils>=1.2.7",
+    "tqdm>=4.66.4",
+    "simpleitk>=2.3.1",
+    "nibabel>=5.2.1",
+    "pydicom>=2.4.4",
+    "h5py>=3.11.0",
+    "pytest-mock>=3.14.0",
+    "pydot>=3.0.1",
+    "graphviz>=0.20.3",
+    "torch>=2.4.0",
+    "torchvision>=0.19.0",
+    "torchviz>=0.0.2",
+    "torchio>=0.18.90",
+    "lightning>=2.4.0",
+    "tensorboardx>=2.6.2.2",
+    "matplotlib>=3.9.2",
+    "scikit-image>=0.24.0",
+    "deepspeed>=0.15.0",
+    "scikit-learn>=1.5.1",
+    "tensorboard>=2.17.1",
+    "kornia>=0.7.3",
+    "medpy>=0.5.2",
+    "polars>=1.7.1",
+    "seaborn>=0.13.2",
+    "pyperclip>=1.9.0",
+]
 
-[tool.poetry.dependencies]
-python = "^3.12"
-pytest = "^8.3.2"
-loguru = "^0.7.2"
-black = "^24.4.2"
-cytoolz = "^0.12.3"
-ipykernel = "^6.29.5"
-fastexcel = "^0.11.5"
-jupyter-black = "^0.3.4"
-isort = "^5.13.2"
-pathos = "^0.3.2"
-notebook = "^7.2.1"
-jupyter = "^1.0.0"
-rt-utils = "^1.2.7"
-tqdm = "^4.66.4"
-simpleitk = "^2.3.1"
-nibabel = "^5.2.1"
-pydicom = "^2.4.4"
-h5py = "^3.11.0"
-pytest-mock = "^3.14.0"
-pydot = "^3.0.1"
-graphviz = "^0.20.3"
-torch = "^2.4.0"
-torchvision = "^0.19.0"
-torchviz = "^0.0.2"
-torchio = { version = "^0.18.90", python = ">=3.12,<3.13" }
-lightning = "^2.4.0"
-tensorboardx = "^2.6.2.2"
-matplotlib = "^3.9.2"
-scikit-image = "^0.24.0"
-deepspeed = "^0.15.0"
-scikit-learn = "^1.5.1"
-tensorboard = "^2.17.1"
-kornia = "^0.7.3"
-medpy = "^0.5.2"
-polars = "^1.7.1"
-seaborn = "^0.13.2"
-pyperclip = "^1.9.0"
 
 [tool.isort]
 profile = "black"
-
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"

@@ -7,7 +7,22 @@
 pkgs.mkShell {
   # nativeBuildInputs is usually what you want -- tools you need to run
   propagatedBuildInputs = with pkgs; [
-    stdenv.cc.cc.lib
+    zlib
+    zstd
+    stdenv.cc.cc
+    curl
+    openssl
+    attr
+    libssh
+    bzip2
+    libxml2
+    acl
+    libsodium
+    util-linux
+    xz
+    systemd
+    glib.out
+    libGL
   ];
   postShellHook = ''
     unset LD_LIBRARY_PATH
