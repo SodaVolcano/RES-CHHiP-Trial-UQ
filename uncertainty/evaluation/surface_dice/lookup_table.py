@@ -20,6 +20,7 @@ limitations under the License.
 """
 
 import math
+
 import numpy as np
 
 ENCODE_NEIGHBOURHOOD_3D_KERNEL = np.array([[[128, 64], [32, 16]], [[8, 4], [2, 1]]])

@@ -1,5 +1,5 @@
 """
-Set of methods to load and save DICOM files
+Set of methods to load, preprocess and save DICOM files
 """
 
 import itertools
@@ -14,7 +14,7 @@ import toolz.curried as curried
 from loguru import logger
 
 from .. import constants as c
-from ..utils.common import apply_if_truthy, conditional, unpack_args
+from ..utils.common import unpack_args
 from ..utils.logging import logger_wraps
 from ..utils.path import generate_full_paths, list_files
 from ..utils.wrappers import curry
@@ -55,7 +55,7 @@ def _get_uniform_spacing(
     dicom_files: Iterable[dicom.Dataset],
 ) -> Optional[tuple[float, float, float]]:
     """
-    Return spacings from dicom files if they are uniform, else None
+    Return spacings from dicom files if they are the same across all DICOM files, else None
     """
     is_uniform = lambda spacings: all(
         [
@@ -80,14 +80,14 @@ def _get_uniform_spacing(
 @tz.memoize
 def _get_dicom_slices(dicom_path: str) -> Iterable[dicom.Dataset]:
     """
-    Return all DICOM files in dicom_path in slice order, filter by type and thickness
+    Return all DICOM files in dicom_path in slice order that are scans of the body
     """
     return tz.pipe(
         dicom_path,
         list_files,
         curried.map(lambda x: dicom.dcmread(x, force=True)),
         curried.filter(_dicom_type_is(c.CT_IMAGE)),
-        # Some slice are not part of the volume (have thickness = "0")
+        # Some slice are not part of the volume (have thickness = 0)
         curried.filter(lambda dicom_file: float(dicom_file.SliceThickness) > 0),
         # Depth is from bottom up, reverse to be top down
         curried.sorted(key=_dicom_slice_order, reverse=True),
@@ -99,11 +99,9 @@ def _get_dicom_slices(dicom_path: str) -> Iterable[dicom.Dataset]:
 def _load_roi_mask(
     rt_struct: rt_utils.RTStruct,
     name: str,
-) -> Optional[tuple[str, Generator[np.ndarray, None, None]]]:
+) -> Optional[tuple[str, np.ndarray]]:
     """
-    Return name and generator of ROI mask for name in rt_struct
-
-    Wrapper to get_roi_mask_by_name, delay execution and return None if exception is raised
+    Return name and ROI mask given `name` in `rt_struct`, else None if exception occurs
     """
     try:
         return tz.pipe(
@@ -140,13 +138,13 @@ def _load_rt_struct(dicom_path: str) -> Optional[rt_utils.RTStruct]:
             )
         ),
         list,
-        apply_if_truthy(
-            lambda rt_struct_paths: (
-                rt_utils.RTStructBuilder.create_from(
-                    dicom_series_path=dicom_path,
-                    rt_struct_path=rt_struct_paths[0],
-                )
+        lambda rt_struct_paths: (
+            rt_utils.RTStructBuilder.create_from(
+                dicom_series_path=dicom_path,
+                rt_struct_path=rt_struct_paths[0],
             )
+            if rt_struct_paths
+            else None
         ),
     )  # type: ignore
 
@@ -191,16 +189,15 @@ def _preprocess_mask(
     return tz.pipe(
         dicom_path,
         _get_dicom_slices,
-        _get_uniform_spacing,
-        # (name, mask, spacings)
-        lambda spacings: conditional(
-            spacings is not None,
-            [(name, mask, spacings) for name, mask in name_mask_pairs],
+        _get_uniform_spacing,  # (name, mask, spacings)
+        lambda spacings: (
+            [(name, mask, spacings) for name, mask in name_mask_pairs]
+            if spacings
+            else None
         ),
-        # If spacings is None, return None
         lambda name_mask_spacing_lst: (
             map(_make_mask_isotropic, name_mask_spacing_lst)
-            if name_mask_spacing_lst and name_mask_spacing_lst[0][2] is not None
+            if name_mask_spacing_lst
             else None
         ),
     )  # type: ignore
@@ -237,7 +234,7 @@ def load_patient_scan(
         Whether to preprocess the volume and mask, by default True. WARNING: will
         take significantly longer to load if set to True
     """
-    empty_lst_if_none = lambda val: conditional(val == [None], [], val)
+    empty_lst_if_none = lambda val: [] if val == [None] else val
 
     return tz.pipe(
         dicom_path,
@@ -245,14 +242,14 @@ def load_patient_scan(
         curried.map(lambda x: dicom.dcmread(x, force=True)),
         # Get one dicom file to extract PatientID
         lambda dicom_files: next(dicom_files, None),
-        apply_if_truthy(
-            lambda dicom_file: (
-                PatientScan(
-                    dicom_file.PatientID,
-                    load_volume(dicom_path, method, preprocess),
-                    empty_lst_if_none([load_mask(dicom_path, preprocess)]),
-                )
+        lambda dicom_file: (
+            PatientScan(
+                dicom_file.PatientID,
+                load_volume(dicom_path, method, preprocess),
+                empty_lst_if_none([load_mask(dicom_path, preprocess)]),
             )
+            if dicom_file
+            else None
         ),
         # Only return PatientScan if organ masks are present
         lambda x: (
@@ -331,9 +328,7 @@ def load_volume(
             curried.map(lambda slice_: np.flip(slice_, axis=1)),
             list,
             # Put depth on last axis
-            apply_if_truthy(
-                lambda slices: np.stack(slices, axis=-1),
-            ),
+            lambda slices: np.stack(slices, axis=-1) if slices else None,
         )
 
     return tz.pipe(
@@ -404,7 +399,7 @@ def load_all_volumes(
 @curry
 def load_mask(dicom_path: str, preprocess: bool = True) -> Optional[Mask]:
     """
-    Load Mask wiht shape (H, W, D) from one observer from a folder of DICOM files in dicom_path
+    Load Mask with shape (H, W, D) from one observer from a folder of DICOM files in dicom_path
 
     On a 2D slice, width increases from left to right and height increases from top to bottom.
     Depth increases from top to bottom (head to feet).
@@ -430,8 +425,7 @@ def load_mask(dicom_path: str, preprocess: bool = True) -> Optional[Mask]:
 
     return tz.pipe(
         rt_struct.get_roi_names(),
-        curried.map(_load_roi_mask(rt_struct)),
-        # (roi_name, mask_generator) pairs, only successful masks are kept
+        curried.map(_load_roi_mask(rt_struct)),  # (roi_name, mask) pairs
         curried.filter(lambda x: x is not None),
         curried.map(
             unpack_args(lambda name, mask: (_standardise_roi_name(name), mask))

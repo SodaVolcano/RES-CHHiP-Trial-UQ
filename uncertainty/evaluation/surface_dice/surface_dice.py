@@ -23,11 +23,12 @@ limitations under the License.
 
 import numpy as np
 from scipy import ndimage
+
 from .lookup_table import (
-    create_table_neighbour_code_to_contour_length,
-    create_table_neighbour_code_to_surface_area,
     ENCODE_NEIGHBOURHOOD_2D_KERNEL,
     ENCODE_NEIGHBOURHOOD_3D_KERNEL,
+    create_table_neighbour_code_to_contour_length,
+    create_table_neighbour_code_to_surface_area,
 )
 
 

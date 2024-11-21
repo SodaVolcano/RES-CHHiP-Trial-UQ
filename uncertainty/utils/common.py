@@ -42,24 +42,6 @@ def unpack_args[T](func: Callable[..., T]) -> Callable[..., T]:
 
 
 @curry
-def conditional[T, R](cond: bool, val1: T, val2: Optional[R] = None) -> Optional[T | R]:
-    """
-    Return val1 if cond is True, otherwise return val2 (default None)
-    """
-    return val1 if cond else val2
-
-
-@curry
-def apply_if_truthy[
-    T, R, Q
-](func: Callable[[T], R], arg: T, val2: Optional[Q] = None) -> Optional[R | Q]:
-    """
-    Apply unary func to arg if arg is truthy (e.g. not None, [], ...), otherwise return val2
-    """
-    return func(arg) if arg else val2
-
-
-@curry
 def iterate_while[
     T, R
 ](func: Callable[[T], R], pred: Callable[[T | R], bool], initial: T) -> R | T:

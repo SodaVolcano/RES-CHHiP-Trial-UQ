@@ -4,22 +4,22 @@ Data augmentation preset
 
 from typing import Callable, Literal
 
-from ..data.utils import to_torchio_subject, from_torchio_subject
-from ..utils.logging import logger_wraps
-
-import torch
-import torchio as tio
 import numpy as np
 import toolz as tz
+import torch
+import torchio as tio
+from kornia.geometry.transform import get_affine_matrix3d, warp_affine3d
 from torchio.transforms import (
     Compose,
-    RandomFlip,
-    RandomElasticDeformation,
-    RandomBlur,
-    RandomGamma,
     RandomAnisotropy,
+    RandomBlur,
+    RandomElasticDeformation,
+    RandomFlip,
+    RandomGamma,
 )
-from kornia.geometry.transform import get_affine_matrix3d, warp_affine3d
+
+from ..data.utils import from_torchio_subject, to_torchio_subject
+from ..utils.logging import logger_wraps
 
 
 def inverse_affine_transform(

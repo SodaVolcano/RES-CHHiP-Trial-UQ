@@ -27,7 +27,7 @@ def list_files(path: str, list_hidden: bool = False) -> list[str]:
     """
     return [
         os.path.join(root, file)
-        for root, dirs, files in os.walk(path)
+        for root, _, files in os.walk(path)
         for file in files
         if list_hidden or not file.startswith(".")
     ]

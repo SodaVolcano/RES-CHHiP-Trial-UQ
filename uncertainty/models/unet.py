@@ -6,9 +6,10 @@ References:
     https://github.com/milesial/Pytorch-UNet/tree/master
 """
 
-from torch import nn
 import torch
-from .unet_modules import Encoder, Decoder
+from torch import nn
+
+from .unet_modules import Decoder, Encoder
 
 
 class UNet(nn.Module):

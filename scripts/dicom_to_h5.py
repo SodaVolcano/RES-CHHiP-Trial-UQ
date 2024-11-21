@@ -3,7 +3,10 @@ Load and save folders of DICOM files to h5 file(s).
 """
 
 from loguru import logger
-from context import uncertainty as un
+import sys
+
+sys.path.append("..")
+sys.path.append(".")
 from __helpful_parser import HelpfulParser
 
 

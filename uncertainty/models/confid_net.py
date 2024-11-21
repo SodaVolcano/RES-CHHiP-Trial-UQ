@@ -1,12 +1,13 @@
 from typing import Callable
-from torch import nn
+
+import toolz as tz
 import torch
+from torch import nn
 
 from uncertainty.config import configuration
-import toolz as tz
 
-from .unet_modules import _concat_with_skip, _calc_n_kernels
 from .unet import UNet
+from .unet_modules import _calc_n_kernels, _concat_with_skip
 
 
 class UNetConfidNetEncoder(nn.Module):

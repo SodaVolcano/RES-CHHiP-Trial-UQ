@@ -4,11 +4,14 @@ from lightning import Trainer
 import os
 import torch
 
+sys.path.append("..")
+sys.path.append(".")
 import dill
 from scripts.__helpful_parser import HelpfulParser
 from uncertainty.config import Configuration
 import torch
 from lightning.pytorch.loggers import TensorBoardLogger
+
 
 def main(
     config: Configuration,

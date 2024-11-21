@@ -1,22 +1,23 @@
 from typing import Literal
-import torch
+
 import toolz as tz
+import torch
 from toolz import curried
 
 from ..utils.wrappers import curry
 from .inference import (
-    sliding_inference,
-    tta_inference,
     ensemble_inference,
     mc_dropout_inference,
+    sliding_inference,
+    tta_inference,
 )
 from .metrics import get_metric_func
 from .uncertainties import (
-    pairwise_surface_dice,
-    probability_map,
     mean_entropy,
     mean_variance,
     pairwise_dice,
+    pairwise_surface_dice,
+    probability_map,
 )
 
 

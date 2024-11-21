@@ -1,18 +1,17 @@
-from itertools import islice
 import os
-from typing import Callable
 import random
+from itertools import islice
+from typing import Callable
 
-
-import torch.utils
-from kornia.augmentation import RandomAffine3D
+import h5py as h5
 import numpy as np
 import toolz as tz
 import torch
-from torch.utils.data import Dataset, IterableDataset, Subset
-from toolz import curried
-import h5py as h5
+import torch.utils
+from kornia.augmentation import RandomAffine3D
 from skimage.util import view_as_windows
+from toolz import curried
+from torch.utils.data import Dataset, IterableDataset, Subset
 
 from ..config import configuration
 

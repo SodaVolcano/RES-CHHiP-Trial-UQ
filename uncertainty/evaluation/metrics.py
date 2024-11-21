@@ -1,16 +1,17 @@
 from itertools import combinations_with_replacement, product
 from typing import Callable, Literal
+
+import numpy as np
+import toolz as tz
 import torch
+from medpy.metric import asd, assd, hd, hd95
+from toolz import curried
+from torch.nn.functional import sigmoid
 from torchmetrics.classification import (
     MultilabelF1Score,
-    MultilabelRecall,
     MultilabelPrecision,
+    MultilabelRecall,
 )
-from medpy.metric import hd, hd95, asd, assd
-from torch.nn.functional import sigmoid
-import toolz as tz
-from toolz import curried
-import numpy as np
 
 from ..utils.wrappers import curry
 from .surface_dice import compute_surface_dice_at_tolerance, compute_surface_distances

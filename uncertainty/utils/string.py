@@ -122,4 +122,4 @@ def placeholder_matches(
         curried.filter(lambda match: match is not None),
         curried.map(lambda re_match: re_match.groups()),
         list,
-    )
+    )  # type: ignore

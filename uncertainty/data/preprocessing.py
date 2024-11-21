@@ -7,20 +7,20 @@ from typing import Iterable, Literal, Optional
 import numpy as np
 import SimpleITK as sitk
 import toolz as tz
-from toolz import curried
 import torchio as tio
+from toolz import curried
 
 from uncertainty.utils.parallel import pmap
 
 from .. import constants as c
-from ..utils.common import call_method, conditional
-from ..utils.logging import logger_wraps
-from ..utils.wrappers import curry
-from .patient_scan import PatientScan
 from ..config import configuration
 from ..constants import BODY_THRESH, ORGAN_MATCHES
-from .utils import to_torchio_subject, from_torchio_subject
+from ..utils.common import call_method
+from ..utils.logging import logger_wraps
+from ..utils.wrappers import curry
 from .mask import get_organ_names, masks_as_array
+from .patient_scan import PatientScan
+from .utils import from_torchio_subject, to_torchio_subject
 
 
 @logger_wraps()
@@ -95,9 +95,9 @@ def make_isotropic(
         lambda arr: arr.astype(np.float32),
         # sitk moves (H, W, D) to (D, W, H) >:( move axis here so img is (H, W, D)
         lambda arr: np.moveaxis(arr, 1, 0),  # width to first axis
-        lambda arr: conditional(
-            len(arr.shape) == 3, np.moveaxis(arr, -1, 0), arr  # depth to first axis
-        ),
+        lambda arr: (
+            np.moveaxis(arr, -1, 0) if len(arr.shape) == 3 else arr
+        ),  # depth to first axis
         lambda arr: sitk.GetImageFromArray(arr),
         call_method("SetOrigin", (0, 0, 0)),
         call_method("SetSpacing", spacings),
@@ -114,9 +114,9 @@ def make_isotropic(
         ),
         lambda img: sitk.GetArrayFromImage(img),
         # arr is (D, W, H) move back to (H, W, D)
-        lambda arr: conditional(
-            len(arr.shape) == 3, np.moveaxis(arr, 0, -1), arr  # depth to last axis
-        ),
+        lambda arr: (
+            np.moveaxis(arr, 0, -1) if len(arr.shape) == 3 else arr
+        ),  # move depth to last axis
         lambda arr: np.moveaxis(arr, 1, 0),  # height to first axis
     )
 
