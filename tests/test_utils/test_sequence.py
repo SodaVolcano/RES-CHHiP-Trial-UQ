@@ -1,7 +1,7 @@
-from tests.context import uncertainty
+from ..context import utils
 
-growby = uncertainty.utils.sequence.growby
-growby_accum = uncertainty.utils.sequence.growby_accum
+growby = utils.growby
+growby_accum = utils.growby_accum
 
 
 class TestGrowby:

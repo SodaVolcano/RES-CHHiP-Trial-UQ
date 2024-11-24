@@ -1,10 +1,9 @@
 import torch
 from torch import nn
 
-from uncertainty.models.ensemble import DeepEnsemble
-from .context import uncertainty
+from ..context import models
 
-DeepEnsemble = uncertainty.models.ensemble.DeepEnsemble
+DeepEnsemble = models.DeepEnsemble
 
 
 class TestDeepEnsemble:

@@ -1,16 +1,16 @@
 from torch import nn
 
-from .context import uncertainty
+from ..context import models
 import torch
 
-ConvLayer = uncertainty.models.unet_modules.ConvLayer
-ConvBlock = uncertainty.models.unet_modules.ConvBlock
-DownConvBlock = uncertainty.models.unet_modules.DownConvBlock
-Encoder = uncertainty.models.unet.Encoder
-Decoder = uncertainty.models.unet.Decoder
-UpConvBlock = uncertainty.models.unet_modules.UpConvBlock
-UNet = uncertainty.models.unet.UNet
-MCDropoutUNet = uncertainty.models.MCDropoutUNet
+ConvLayer = models.unet_modules.ConvLayer
+ConvBlock = models.unet_modules.ConvBlock
+DownConvBlock = models.unet_modules.DownConvBlock
+Encoder = models.unet.Encoder
+Decoder = models.unet.Decoder
+UpConvBlock = models.unet_modules.UpConvBlock
+UNet = models.UNet
+MCDropoutUNet = models.MCDropoutUNet
 
 
 class TestConvLayer:

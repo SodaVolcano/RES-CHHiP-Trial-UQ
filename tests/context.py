@@ -12,16 +12,16 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 import uncertainty
 
 # Import aliases
-Mask = uncertainty.data.mask.Mask
-PatientScan = uncertainty.data.patient_scan.PatientScan
-c = uncertainty.constants
+MaskDict = uncertainty.data.MaskDict
+PatientScan = uncertainty.data.PatientScan
+constants = uncertainty.constants
 
-# utils
-list_files = uncertainty.utils.path.list_files
-generate_full_paths = uncertainty.utils.path.generate_full_paths
-capture_placeholders = uncertainty.utils.string.capture_placeholders
-placeholder_matches = uncertainty.utils.string.placeholder_matches
-resolve_path_placeholders = uncertainty.utils.path.resolve_path_placeholders
+utils = uncertainty.utils
+training = uncertainty.training
+models = uncertainty.models
+evaluation = uncertainty.evaluation
+data = uncertainty.data
+config = uncertainty
 
 # Patch paths
 PATCH_OS_WALK = "os.walk"

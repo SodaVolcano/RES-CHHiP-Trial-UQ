@@ -1,9 +1,10 @@
 """
-Collection of functions to preprocess numpy arrays
+Collection of functions to preprocess numpy arrays and patient scans
 """
 
 from typing import Iterable, Literal, Optional
 
+from loguru import logger
 import numpy as np
 import SimpleITK as sitk
 import toolz as tz
@@ -13,14 +14,59 @@ from toolz import curried
 from uncertainty.utils.parallel import pmap
 
 from .. import constants as c
-from ..config import configuration
-from ..constants import BODY_THRESH, ORGAN_MATCHES
-from ..utils.common import call_method
-from ..utils.logging import logger_wraps
-from ..utils.wrappers import curry
-from .mask import get_organ_names, masks_as_array
-from .patient_scan import PatientScan
-from .utils import from_torchio_subject, to_torchio_subject
+from ..utils import call_method, logger_wraps, curry
+from .datatypes import PatientScan, MaskDict, PatientScanPreprocessed
+
+
+def to_torchio_subject(volume_mask: tuple[np.ndarray, np.ndarray]) -> tio.Subject:
+    """
+    Transform a (volume, mask) pair into a torchio Subject object
+
+    Parameters
+    ----------
+    volume_mask : tuple[np.ndarray, np.ndarray]
+        Tuple containing the volume and mask arrays, must have shape
+        (channel, height, width, depth)
+    """
+    return tio.Subject(
+        volume=tio.ScalarImage(tensor=volume_mask[0]),
+        mask=tio.LabelMap(
+            # ignore channel dimension from volume_mask[0]
+            tensor=tio.CropOrPad(volume_mask[0].shape[1:], padding_mode="minimum")(  # type: ignore
+                volume_mask[1]
+            ),
+        ),
+    )
+
+
+def from_torchio_subject(subject: tio.Subject) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Transform a torchio Subject object into a (volume, mask) pair
+    """
+    return subject["volume"].data, subject["mask"].data  # type: ignore
+
+
+@logger_wraps()
+@curry
+def ensure_min_size(
+    vol_mask: tuple[np.ndarray, np.ndarray], min_size: tuple[int, int, int]
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Ensure volume and mask (C, H, W, D) are at least size min_size (H, W, D)
+    """
+    target_shape = [
+        max(dim, min_dim) for dim, min_dim in zip(vol_mask[0].shape[1:], min_size)
+    ]
+    return tz.pipe(
+        vol_mask,
+        to_torchio_subject,
+        tio.CropOrPad(
+            target_shape,  # type: ignore
+            padding_mode=np.min(vol_mask[0]),
+            mask_name="mask",
+        ),
+        from_torchio_subject,
+    )
 
 
 @logger_wraps()
@@ -55,8 +101,8 @@ def z_score_scale(array: np.ndarray) -> np.ndarray:
 @logger_wraps()
 @curry
 def make_isotropic(
-    spacings: Iterable[np.number],
     array: np.ndarray,
+    spacings: Iterable[np.number],
     method: Literal["nearest", "linear", "b_spline", "gaussian"] = "linear",
 ) -> np.ndarray:
     """
@@ -88,7 +134,7 @@ def make_isotropic(
         int(round(old_size * old_spacing))
         for old_size, old_spacing, in zip(array.shape, spacings)
     ]
-
+    old_datatype = array.dtype
     return tz.pipe(
         array,
         # sitk don't work with bool datatypes in mask array
@@ -118,12 +164,13 @@ def make_isotropic(
             np.moveaxis(arr, 0, -1) if len(arr.shape) == 3 else arr
         ),  # move depth to last axis
         lambda arr: np.moveaxis(arr, 1, 0),  # height to first axis
+        lambda arr: arr.astype(old_datatype),
     )
 
 
 @logger_wraps()
 @curry
-def filter_roi(
+def filter_roi_names(
     roi_names: list[str],
     keep_list: list[str] = c.ROI_KEEP_LIST,
     exclusion_list: list[str] = c.ROI_EXCLUSION_LIST,
@@ -186,7 +233,8 @@ def find_organ_roi(organ: str, roi_lst: list[str]) -> Optional[str]:
     )  # type: ignore
 
 
-def bounding_box3d(img: np.ndarray):
+@logger_wraps()
+def _bounding_box3d(img: np.ndarray):
     """
     Compute bounding box of a 3d binary array
     """
@@ -201,11 +249,13 @@ def bounding_box3d(img: np.ndarray):
     return rmin, rmax, cmin, cmax, zmin, zmax
 
 
+@logger_wraps()
+@curry
 def crop_to_body(
     x: np.ndarray, y: np.ndarray, precrop_px: int = 3, thresh: float = c.BODY_THRESH
 ):
     """
-    Crop both (x, y) to bounding box of the body
+    Crop both (x, y) to bounding box of the body using threshold thresh
     """
     # crop borders to avoid high pixel values along
     x, y = tuple(
@@ -213,15 +263,64 @@ def crop_to_body(
         for arr in [x, y]
     )
     mask = x > thresh
-    rmin, rmax, cmin, cmax, zmin, zmax = bounding_box3d(mask[0])
+    rmin, rmax, cmin, cmax, zmin, zmax = _bounding_box3d(mask[0])
     return tuple(arr[:, rmin:rmax, cmin:cmax, zmin:zmax] for arr in [x, y])
 
 
+@logger_wraps()
+@curry
+def preprocess_volume(
+    volume: np.ndarray,
+    spacings: tuple[float, float, float],
+    interpolation: str,
+) -> np.ndarray:
+    """Return preprocessed volume of shape (1, H, W, D)"""
+    return tz.pipe(
+        volume,
+        make_isotropic(spacings, method=interpolation),
+        curry(np.expand_dims)(axis=0),  # Add channel dimension, now (C, H, W, D)
+        z_score_scale,
+    )
+
+
+def preprocess_mask(
+    mask: MaskDict, spacings: tuple[float, float, float], organ_ordering: list[str]
+) -> Optional[np.ndarray]:
+    """
+    Return preprocesed mask of shape (C, H, W, D) where C is the number of organs
+    """
+    # List of organ names to keep
+    names = tz.pipe(
+        mask.keys(),
+        filter_roi_names,
+        lambda mask_names: [
+            find_organ_roi(organ, mask_names) for organ in organ_ordering
+        ],
+        curried.filter(lambda m: m is not None),
+        list,
+    )
+    # If not all organs are present, return None
+    if len(names) != len(c.ORGAN_MATCHES):
+        return None
+
+    return tz.pipe(
+        mask,
+        curried.keyfilter(lambda name: name in names),
+        curried.valmap(make_isotropic(spacings=spacings, method="nearest")),
+        lambda mask: np.stack(
+            list(mask.values()), axis=0
+        ),  # (organ, height, width, depth)
+    )  # type: ignore
+
+
+@logger.catch()
 @logger_wraps(level="INFO")
 @curry
-def preprocess_data(
+def preprocess_patient_scan(
     scan: PatientScan,
-) -> tuple[np.ndarray, Optional[np.ndarray]]:
+    min_size: tuple[int, int, int],
+    organ_ordering: list[str] = list(c.ORGAN_MATCHES.keys()),
+) -> Optional[PatientScanPreprocessed]:
     """
     Preprocess a PatientScan object into (volume, masks) pairs of shape (C, H, W, D)
 
@@ -229,85 +328,27 @@ def preprocess_data(
     (organ, height, width, depth). Mask is `None` if not all organs are present.
     """
 
-    def preprocess_volume(scan: PatientScan) -> np.ndarray:
-        return tz.pipe(
-            scan.volume,
-            lambda vol: np.expand_dims(  # to (channel, height, width, depth)
-                vol, axis=0
-            ),
-            lambda vol: np.astype(vol, np.float32),  # sitk can't work with float16
-        )  # type: ignore
-
-    def preprocess_mask(scan: PatientScan) -> Optional[np.ndarray]:
-        """
-        Returns a mask with all organs present, or None if not all organs are present
-        """
-        names = tz.pipe(
-            get_organ_names(scan.masks[""]),
-            filter_roi,
-            lambda mask_names: [
-                find_organ_roi(organ, mask_names) for organ in ORGAN_MATCHES
-            ],
-            curried.filter(lambda m: m is not None),
-            list,
-        )
-
-        # If not all organs are present, return None
-        if len(names) != len(ORGAN_MATCHES):
-            return None
-
-        return tz.pipe(
-            scan.masks[""],
-            masks_as_array(organ_ordering=names),
-            lambda arr: np.moveaxis(arr, -1, 0),  # to (organ, height, width, depth)
-            lambda mask: np.astype(mask, np.float32),  # sitk can't work with float16
-        )  # type: ignore
-
-    return tz.juxt(preprocess_volume, preprocess_mask)(scan)
-
-
-@logger_wraps(level="INFO")
-@curry
-def preprocess_data_configurable(
-    volume_mask: tuple[np.ndarray, np.ndarray], config: dict = configuration()
-):
-    """
-    Preprocess data according to the configuration
-    """
-    BODY_MASK = volume_mask[0] > BODY_THRESH
-    shape = volume_mask[0].shape[1:]
-
-    def torchio_crop_or_pad(arr: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        """crop/pad array centered using the target mask to at least patch_size"""
-        return tz.pipe(
-            (arr, BODY_MASK),
-            to_torchio_subject,
-            tio.CropOrPad(
-                (
-                    max(dim, patch_dim)
-                    for dim, patch_dim in zip(shape, config["patch_size"])
-                ),  # type: ignore
-                padding_mode=np.min(arr),
-                mask_name="mask",
-            ),
-            from_torchio_subject,
-            lambda x: x[0].numpy(),
-        )
-
-    return tz.pipe(
-        volume_mask,
-        curried.map(torchio_crop_or_pad),
-        tuple,
-        lambda vol_mask: (z_score_scale(vol_mask[0]), vol_mask[1]),
+    scan = tz.pipe(
+        scan,
+        curried.update_in(keys=["volume"], func=preprocess_volume),
+        curried.update_in(keys=["mask"], func=preprocess_mask),
+        curried.update_in(keys=["organ_ordering"], func=lambda _: organ_ordering),
     )
+    if scan["mask"] is None:
+        raise ValueError(f"Missing organs in {scan["patient_id"]} with organs {organ_ordering}")
+        
+    scan["volume"], scan["mask"] = tz.pipe(
+        (scan["volume"], scan["mask"]), crop_to_body, ensure_min_size(min_size=min_size)
+    )
+    return scan  # type: ignore
 
 
 @logger_wraps(level="INFO")
 @curry
 def preprocess_dataset(
-    dataset: Iterable[PatientScan | None],
+    dataset: Iterable[PatientScan],
     n_workers: int = 1,
-) -> Iterable[tuple[np.ndarray, np.ndarray]]:
+) -> Iterable[PatientScanPreprocessed]:
     """
     Preprocess a dataset of PatientScan objects into (volume, masks) pairs
 
@@ -325,7 +366,6 @@ def preprocess_dataset(
     mapper = pmap(n_workers=n_workers) if n_workers > 1 else curried.map
     return tz.pipe(
         dataset,
-        curried.filter(lambda x: x is not None),
-        mapper(preprocess_data),
-        curried.filter(lambda x: x[1] is not None),
+        mapper(preprocess_patient_scan),
+        curried.filter(lambda scan: scan is not None),
     )  # type: ignore

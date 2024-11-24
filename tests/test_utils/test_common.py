@@ -1,6 +1,6 @@
-from tests.context import uncertainty
+from ..context import utils
 
-iterate_while = uncertainty.utils.common.iterate_while
+iterate_while = utils.iterate_while
 
 
 class TestIterateWhile:

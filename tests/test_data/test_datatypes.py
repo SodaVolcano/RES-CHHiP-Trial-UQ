@@ -1,7 +1,10 @@
 import numpy as np
 import pytest
 
-from .context import Mask
+from ..context import data
+
+
+MaskDict = data.MaskDict
 
 
 class TestMask:
@@ -10,12 +13,10 @@ class TestMask:
     def test_retrieve_mask_for_valid_organ(self):
 
         # Initialize a Mask object with organ-mask pairs
-        mask = Mask(
-            {
-                "organ_1": np.array([[1, 1], [0, 1]]),
-                "organ_2": np.array([[0, 1], [1, 0]]),
-            }
-        )
+        mask = {
+            "organ_1": np.array([[1, 1], [0, 1]]),
+            "organ_2": np.array([[0, 1], [1, 0]]),
+        }
 
         # Retrieve the mask for "organ_1"
         organ_1_mask = mask["organ_1"]

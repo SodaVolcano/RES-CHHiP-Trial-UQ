@@ -3,7 +3,7 @@ Collection of common utility functions
 """
 
 from copy import deepcopy
-from typing import Callable, Optional
+from typing import Callable
 
 import toolz as tz
 

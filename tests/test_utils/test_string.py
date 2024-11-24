@@ -1,4 +1,8 @@
-from tests.context import capture_placeholders, placeholder_matches
+from ..context import utils
+
+
+capture_placeholders = utils.capture_placeholders
+placeholder_matches = utils.placeholder_matches
 
 
 class TestCapturePlaceholders:

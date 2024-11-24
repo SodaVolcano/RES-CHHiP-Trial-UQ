@@ -1,5 +1,5 @@
 """
-Functions for performing inference on a model.
+Functions for performing inference on input data using a model.
 
 Based off of the following code:
     https://github.com/bnsreenu/python_for_microscopists/blob/master/229_smooth_predictions_by_blending_patches/smooth_tiled_predictions.py
@@ -23,9 +23,8 @@ from toolz import curried
 from torch import nn
 from tqdm import tqdm
 
-from ..constants import BODY_THRESH
 from ..models import MCDropoutUNet
-from ..training.augmentations import inverse_affine_transform
+from ..data import inverse_affine_transform
 from ..utils.logging import logger_wraps
 from ..utils.wrappers import curry
 
@@ -353,7 +352,7 @@ def ensemble_inference(
             )
         ),
         curried.map(lambda inference: inference(x)),
-        (lambda it: tqdm(it, total=len(models))) if prog_bar else tz.identity
+        (lambda it: tqdm(it, total=len(models))) if prog_bar else tz.identity,
     )  # type: ignore
 
 
@@ -455,9 +454,8 @@ def tta_inference(
         lambda y_preds: zip(x_subjs_aug, y_preds),
         curried.map(lambda subj_pred: assign_mask_to_subject(*subj_pred)),
         curried.map(lambda subj: subj.apply_inverse_transform(warn=False)["mask"].data),
-        (lambda it: tqdm(it, total=n_outputs)) if prog_bar else tz.identity
+        (lambda it: tqdm(it, total=n_outputs)) if prog_bar else tz.identity,
     )  # type: ignore
-
 
 
 def get_inference_mode(mode: str):

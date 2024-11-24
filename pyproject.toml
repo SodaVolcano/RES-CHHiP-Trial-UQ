@@ -41,6 +41,7 @@ dependencies = [
     "polars>=1.7.1",
     "seaborn>=0.13.2",
     "pyperclip>=1.9.0",
+    "opencv-python-headless>=4.10.0.84",
 ]
 
 

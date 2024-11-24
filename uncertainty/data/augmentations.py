@@ -1,5 +1,5 @@
 """
-Data augmentation preset
+Preset data transformations for augmenting 3D volumes and masks
 """
 
 from typing import Callable, Literal
@@ -13,12 +13,11 @@ from torchio.transforms import (
     Compose,
     RandomAnisotropy,
     RandomBlur,
-    RandomElasticDeformation,
     RandomFlip,
     RandomGamma,
 )
 
-from ..data.utils import from_torchio_subject, to_torchio_subject
+from .processing import from_torchio_subject, to_torchio_subject
 from ..utils.logging import logger_wraps
 
 
@@ -59,15 +58,15 @@ def inverse_affine_transform(
     # expects (B, 3, 4) affine matrix so cut off last row
     return lambda x: warp_affine3d(
         x.double(),
-        affine_inv[:, :3].double(),
-        x.shape[2:],
+        affine_inv[:, :3].double(),  # cut off last row
+        x.shape[2:],  # type: ignore
         flags=flags,
         align_corners=align_corners,
     )
 
 
 @logger_wraps(level="DEBUG")
-def torchio_augmentation(
+def torchio_augmentations(
     p: float = 1.0, ps: list[float] = [0.15, 0.2, 0.2, 0.2]
 ) -> tio.Compose:
     """
@@ -108,5 +107,5 @@ def augmentations(
         Probability of applying the augmentor, default is 1.0
     """
     return lambda arr: tz.pipe(
-        arr, to_torchio_subject, torchio_augmentation(p=p), from_torchio_subject
+        arr, to_torchio_subject, torchio_augmentations(p=p), from_torchio_subject
     )

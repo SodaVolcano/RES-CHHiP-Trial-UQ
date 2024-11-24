@@ -4,13 +4,12 @@ from .path import *
 from .sequence import *
 from .string import *
 from .wrappers import *
+from .parallel import *
 
 __all__ = [
     "call_method",
     "call_method_impure",
-    "conditional",
     "unpack_args",
-    "apply_if_truthy",
     "iterate_while",
     "config_logger",
     "logger_wraps",
@@ -22,4 +21,5 @@ __all__ = [
     "capture_placeholders",
     "placeholder_matches",
     "curry",
+    "pmap",
 ]

@@ -1,9 +1,9 @@
 import torch
 from torch import nn
-from .context import uncertainty
+from ..context import training
 
-H5Dataset = uncertainty.training.datasets.H5Dataset
-LitSegmentation = uncertainty.training.LitSegmentation
+H5Dataset = training.datasets.H5Dataset
+LitSegmentation = training.LitSegmentation
 PREPROCESS_DATA_CONFIGURABLE_PATCH = (
     "uncertainty.training.classes._preprocess_data_configurable"
 )

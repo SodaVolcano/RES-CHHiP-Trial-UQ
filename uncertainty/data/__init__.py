@@ -1,3 +1,60 @@
-from . import dicom, h5, mask, patient_scan, preprocessing
+from .dicom import (
+    load_volume,
+    load_mask,
+    load_all_masks,
+    load_all_volumes,
+    load_patient_scan,
+    load_patient_scans,
+)
+from .datatypes import PatientScan, PatientScanPreprocessed, MaskDict
+from .h5 import save_scans_to_h5, load_scans_from_h5
+from .processing import (
+    to_torchio_subject,
+    from_torchio_subject,
+    ensure_min_size,
+    map_interval,
+    z_score_scale,
+    make_isotropic,
+    filter_roi_names,
+    find_organ_roi,
+    crop_to_body,
+    preprocess_dataset,
+    preprocess_mask,
+    preprocess_patient_scan,
+    preprocess_volume,
+)
+from .augmentations import (
+    augmentations,
+    torchio_augmentations,
+    inverse_affine_transform,
+)
 
-__all__ = ["dicom", "preprocessing", "mask", "patient_scan", "h5"]
+__all__ = [
+    "load_volume",
+    "load_mask",
+    "load_all_masks",
+    "load_all_volumes",
+    "load_patient_scan",
+    "load_patient_scans",
+    "PatientScan",
+    "PatientScanPreprocessed",
+    "MaskDict",
+    "save_scans_to_h5",
+    "load_scans_from_h5",
+    "to_torchio_subject",
+    "from_torchio_subject",
+    "ensure_min_size",
+    "map_interval",
+    "z_score_scale",
+    "make_isotropic",
+    "filter_roi_names",
+    "find_organ_roi",
+    "crop_to_body",
+    "preprocess_dataset",
+    "preprocess_mask",
+    "preprocess_patient_scan",
+    "preprocess_volume",
+    "augmentations",
+    "torchio_augmentations",
+    "inverse_affine_transform",
+]

@@ -1,3 +1,7 @@
+"""
+Evaluate prediction(s) against ground truth label(s) using a list of metrics.
+"""
+
 from typing import Literal
 
 import toolz as tz

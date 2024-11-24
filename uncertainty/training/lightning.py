@@ -13,7 +13,7 @@ from torchmetrics.classification import BinaryF1Score, MultilabelF1Score
 
 from ..constants import ORGAN_MATCHES
 from ..training.datasets import H5Dataset, RandomPatchDataset, SlidingPatchDataset
-from .augmentations import augmentations
+from ..data import augmentations
 from .loss import ConfidNetMSELoss, DeepSupervisionLoss, DiceBCELoss
 
 

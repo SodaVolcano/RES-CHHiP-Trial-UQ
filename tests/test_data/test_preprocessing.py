@@ -1,13 +1,10 @@
-import cv2
 import numpy as np
 
-from .context import uncertainty
+from ..context import data
 
 # Import aliases
-Mask = uncertainty.data.mask.Mask
-PatientScan = uncertainty.data.patient_scan.PatientScan
-map_interval = uncertainty.data.preprocessing.map_interval
-make_isotropic = uncertainty.data.preprocessing.make_isotropic
+map_interval = data.map_interval
+make_isotropic = data.make_isotropic
 
 
 class TestMapInterval:
@@ -88,7 +85,7 @@ class TestMakeIsotropic:
         import numpy as np
 
         # Define input array and spacings
-        array = np.array([[1, 2], [3, 4]])
+        array = np.array([[1.0, 2.0], [3.0, 4.0]])
         spacings = [2, 2]
 
         # Expected output after interpolation
@@ -103,7 +100,34 @@ class TestMakeIsotropic:
         )
 
         # Call the function
-        result = make_isotropic(spacings, array)
+        result = make_isotropic(array, spacings)
 
         # Assert the result is as expected
         np.testing.assert_array_almost_equal(result, expected_output)
+        assert result.dtype == array.dtype
+
+    def test_interpolates_integer_array(self, mocker):
+        import numpy as np
+
+        # Define input array and spacings
+        array = np.array([[1, 2], [3, 4]])
+        spacings = [2, 2]
+
+        # Expected output after interpolation
+
+        expected_output = np.array(
+            [
+                [1, 1, 2, 0.0],
+                [2, 2, 3, 0.0],
+                [3, 3, 4, 0.0],
+                [0, 0, 0, 0],
+            ]
+        )
+
+        # Call the function
+        result = make_isotropic(array, spacings)
+
+        # Assert the result is as expected
+        np.testing.assert_array_almost_equal(result, expected_output)
+
+        assert result.dtype == array.dtype

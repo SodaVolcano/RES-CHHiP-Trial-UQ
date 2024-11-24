@@ -1,12 +1,16 @@
 """
 Functions for parallel processing.
 """
+
 from multiprocessing.pool import IMapIterator  # purely for typing
 from typing import Any, Callable, Generator, Literal, Optional
 
 from pathos.multiprocessing import ProcessingPool, ThreadingPool
 
+from .wrappers import curry
 
+
+@curry
 def pmap(
     f: Callable[..., Any],
     iterable: Any,

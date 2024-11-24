@@ -1,12 +1,10 @@
 from typing import Generator
 
-from tests.context import (
-    PATCH_LIST_FILES,
-    PATCH_OS_WALK,
-    generate_full_paths,
-    list_files,
-    resolve_path_placeholders,
-)
+from ..context import utils, PATCH_LIST_FILES, PATCH_OS_WALK
+
+generate_full_paths = utils.generate_full_paths
+list_files = utils.list_files
+resolve_path_placeholders = utils.resolve_path_placeholders
 
 
 class TestListFiles:

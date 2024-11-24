@@ -31,7 +31,7 @@ from uncertainty.data.h5 import load_xy_from_h5
 from loguru import logger
 from tqdm import tqdm
 from uncertainty.utils.wrappers import curry
-from uncertainty.data.preprocessing import crop_to_body
+from uncertainty.data.processing import crop_to_body
 
 
 def parameterised_inference(

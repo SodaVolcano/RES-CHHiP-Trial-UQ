@@ -15,6 +15,6 @@ def curry(func: Callable) -> Callable:
 
     @wraps(func)
     def curried(*args, **kwargs) -> Callable:
-        return _curry(func)(*args, **kwargs)
+        return _curry(func)(*args, **kwargs)  # type: ignore
 
     return curried
