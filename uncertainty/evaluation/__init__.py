@@ -22,16 +22,16 @@ from .metrics import (
 )
 from .uncertainties import (
     entropy_map,
-    entropy_map_pixel_wise,
+    entropy_map_pixelwise,
     mean_entropy,
-    mean_entropy_pixel_wise,
+    mean_entropy_pixelwise,
     mean_variance,
-    mean_variance_pixel_wise,
+    mean_variance_pixelwise,
     pairwise_dice,
     pairwise_surface_dice,
     probability_map,
     variance_map,
-    variance_pixel_wise,
+    variance_pixelwise,
 )
 from .visualisation import display_slices_grid, display_uncertainty_maps
 
@@ -64,8 +64,8 @@ __all__ = [
     "rc_curve_stats",
     "get_inference_mode",
     "pairwise_surface_dice",
-    "entropy_map_pixel_wise",
-    "variance_pixel_wise",
-    "mean_entropy_pixel_wise",
-    "mean_variance_pixel_wise",
+    "entropy_map_pixelwise",
+    "variance_pixelwise",
+    "mean_entropy_pixelwise",
+    "mean_variance_pixelwise",
 ]

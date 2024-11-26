@@ -64,9 +64,7 @@ def entropy_map(
     return -torch.sum(preds * torch.log(preds + smooth), dim=0)
 
 
-def entropy_map_pixel_wise(
-    prob_map: torch.Tensor, smooth: float = 1e-6
-) -> torch.Tensor:
+def entropy_map_pixelwise(prob_map: torch.Tensor, smooth: float = 1e-6) -> torch.Tensor:
     """
     Compute pixel-wise entropy for a softmax map
 
@@ -104,7 +102,7 @@ def variance_map(
     return _stack_if_sequence(preds).var(dim=0)
 
 
-def variance_pixel_wise(prob_map: torch.Tensor) -> torch.Tensor:
+def variance_pixelwise(prob_map: torch.Tensor) -> torch.Tensor:
     """
     Compute pixel-wise variance for a softmax map
 
@@ -116,6 +114,25 @@ def variance_pixel_wise(prob_map: torch.Tensor) -> torch.Tensor:
         Softmax map of shape (C, H, W, D) with C classes.
     """
     return prob_map * (1 - prob_map)
+
+
+def _aggregate_map_metric(
+    map_metric: torch.Tensor,
+    average: Literal["micro", "macro", "none"] = "macro",
+) -> torch.Tensor:
+    """
+    Aggregate metrics in `map_metric` using methods `average`, `macro` or `none`
+    """
+    if average not in ["micro", "macro", "none"]:
+        raise ValueError(f"Invalid average mode")
+    if average == "micro":
+        return map_metric.mean()
+    results = torch.cat(
+        [map_metric[i].mean().unsqueeze(0) for i in range(map_metric.shape[0])]
+    )
+    if average == "macro":
+        return results.mean()
+    return results
 
 
 def mean_variance(
@@ -143,21 +160,15 @@ def mean_variance(
         a tensor of shape (C,)
     """
     var_map = variance_map(preds)
-    return (
-        var_map.mean()
-        if average != "none"
-        else torch.cat(
-            [var_map[i].mean().unsqueeze(0) for i in range(var_map.shape[0])]
-        )
-    )
+    return _aggregate_map_metric(var_map, average)
 
 
-def mean_variance_pixel_wise(
+def mean_variance_pixelwise(
     prob_map: torch.Tensor,
     average: Literal["micro", "macro", "none"] = "macro",
 ) -> torch.Tensor:
     """
-    Compute pixel-wise variance from a softmax map
+    Compute pixelwise variance from a softmax map
 
     Parameters
     ----------
@@ -175,14 +186,8 @@ def mean_variance_pixel_wise(
         Tensor of mean variance of shape (,) if average is not "none", else
         a tensor of shape (C,)
     """
-    var_map = variance_pixel_wise(prob_map)
-    return (
-        var_map.mean()
-        if average != "none"
-        else torch.cat(
-            [var_map[i].mean().unsqueeze(0) for i in range(var_map.shape[0])]
-        )
-    )
+    var_map = variance_pixelwise(prob_map)
+    return _aggregate_map_metric(var_map, average)
 
 
 def mean_entropy(
@@ -211,16 +216,10 @@ def mean_entropy(
         a tensor of shape (C,)
     """
     ent_map = entropy_map(preds, smooth)
-    return (
-        ent_map.mean()
-        if average != "none"
-        else torch.cat(
-            [ent_map[i].mean().unsqueeze(0) for i in range(ent_map.shape[0])]
-        )
-    )
+    return _aggregate_map_metric(ent_map, average)
 
 
-def mean_entropy_pixel_wise(
+def mean_entropy_pixelwise(
     prob_map: torch.Tensor,
     average: Literal["micro", "macro", "none"] = "macro",
     smooth: float = 1e-7,
@@ -244,24 +243,17 @@ def mean_entropy_pixel_wise(
         Tensor of mean variance of shape (,) if average is not "none", else
         a tensor of shape (C,)
     """
-    ent_map = entropy_map_pixel_wise(prob_map, smooth)
-    return (
-        ent_map.mean()
-        if average != "none"
-        else torch.cat(
-            [ent_map[i].mean().unsqueeze(0) for i in range(ent_map.shape[0])]
-        )
-    )
+    ent_map = entropy_map_pixelwise(prob_map, smooth)
+    return _aggregate_map_metric(ent_map, average)
 
 
 def _pairwise_metric(
     metric: Callable[
-        [torch.Tensor, torch.Tensor, Literal["micro", "macro", "weighted", "none"]],
+        [torch.Tensor, torch.Tensor, Literal["micro", "macro", "none"]],
         torch.Tensor,
     ],
     predictions: torch.Tensor,
-    average: Literal["micro", "macro", "weighted", "none"] = "macro",
-    aggregate: bool = True,
+    average: Literal["micro", "macro", "none"] = "macro",
 ):
     """
     Compute the average pairwise metric between all pairs of predictions.
@@ -274,38 +266,31 @@ def _pairwise_metric(
         The predicted tensor of shape `(N, C, ...)`.
     average : Literal["micro", "macro", "weighted", "none"]
         Averaging method for the class channels.
-        - "micro": Calculate dice globally across all classes.
-        - "macro": Calculate dice for each class and average
-        - "weighted": Weighted averaging of dice scores.
-        - "none": Return the dice for each class separately.
-    aggregate : bool
-        Whether to average the dice scores into a single tensor or
-        to return the dice scores for each class separately. Have
-        no effect if `average != "none"`.
+        - "micro": Calculate metric globally across all classes.
+        - "macro": Calculate metric for each class and average
+        - "none": Return the metric for each class separately.
 
     Returns
     -------
     torch.Tensor
-        The average pairwise dice similarity score of shape (1,) of
-        mean dice score across all pairs of predictions across all
-        classes if `aggregate=True` or (C,) if `aggregate=False` for
-        each of the C classes.
+        The average score of shape (1,) across all pairs of
+        predictions across all classes if `aggregate=True` or
+        (C,) if `aggregate=False` for each of the C classes.
     """
     return tz.pipe(
         predictions,
         lambda preds: combinations_with_replacement(preds, 2),
-        curried.filter(lambda x: not x[0].equal(x[1])),
+        curried.filter(lambda x: not x[0].equal(x[1])),  # remove self-comparisons
         curried.map(lambda x: metric(x[0], x[1], average)),
         list,
         torch.stack,
-        lambda preds: torch.mean(preds, dim=0 if aggregate else None),
+        lambda preds: torch.mean(preds, dim=0),
     )
 
 
 def pairwise_dice(
     predictions: torch.Tensor,
-    average: Literal["micro", "macro", "weighted", "none"] = "macro",
-    aggregate: bool = True,
+    average: Literal["micro", "macro", "none"] = "macro",
 ):
     """
     Compute the average pairwise dice similarity between all pairs of predictions.
@@ -318,12 +303,7 @@ def pairwise_dice(
         Averaging method for the class channels.
         - "micro": Calculate dice globally across all classes.
         - "macro": Calculate dice for each class and average them.
-        - "weighted": Weighted averaging of dice scores.
         - "none": Return the dice for each class separately.
-    aggregate : bool
-        Whether to average the dice scores into a single tensor or
-        to return the dice scores for each class separately. Have
-        no effect if `average != "none"`.
 
     Returns
     -------
@@ -333,13 +313,12 @@ def pairwise_dice(
         classes if `aggregate=True` or (C,) if `aggregate=False` for
         each of the C classes.
     """
-    return _pairwise_metric(dice, predictions, average, aggregate)
+    return _pairwise_metric(dice, predictions > 0.5, average)
 
 
 def pairwise_surface_dice(
     predictions: torch.Tensor,
     average: Literal["micro", "macro", "none"] = "macro",
-    aggregate: bool = True,
     tolerance: float = 1.0,
 ):
     """
@@ -358,10 +337,6 @@ def pairwise_surface_dice(
         - "micro": Calculate dice globally across all classes.
         - "macro": Calculate dice for each class and average
         - "none": Return the dice for each class separately.
-    aggregate : bool
-        Whether to average the dice scores into a single tensor or
-        to return the dice scores for each class separately. Have
-        no effect if `average != "none`.
 
     Returns
     -------
@@ -372,5 +347,5 @@ def pairwise_surface_dice(
         each of the C classes.
     """
     return _pairwise_metric(
-        surface_dice(tolerance=tolerance), predictions, average, aggregate
+        surface_dice(tolerance=tolerance), predictions > 0.5, average
     )
