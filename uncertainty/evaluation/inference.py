@@ -7,6 +7,7 @@ which is based off of
     https://github.com/Vooban/Smoothly-Blend-Image-Patches
 """
 
+from copy import deepcopy
 import random
 from functools import reduce
 from typing import Callable, Iterable
@@ -49,10 +50,7 @@ def _pad_image(
     subdivisions: tuple[int, int, int],
 ) -> np.ndarray:
     """
-    Parameters
-    ----------
-    image : np.ndarray
-        Image to pad of shape (C, D, H, W)
+    Pad image of shape (C, D, H, W) with reflect mode using _calc_pad_amount
     """
     return np.pad(
         image,
@@ -96,10 +94,7 @@ def _unpad_image(
     subdivisions: tuple[int, int, int],
 ) -> np.ndarray:
     """
-    Parameters
-    ----------
-    image : np.ndarray
-        Image to unpad of shape (C, D, H, W)
+    Remove padding from image of shape (C, D, H, W) padded using _calc_pad_amount
     """
     pad_amounts = _calc_pad_amount(patch_sizes, subdivisions)
     return image[
@@ -116,10 +111,15 @@ def _reconstruct_image(
     window: np.ndarray,
     stride: tuple[int, int, int],
 ) -> np.ndarray:
+    """
+    Reconstruct the image from the patches smoothed using the window
+    """
     reconstructed_arr = np.zeros(img_size)
     for idx, patch in idx_patches:
         x_pos, y_pos, z_pos = np.multiply(idx[1:], stride)
-        patch *= window
+        # patch is a view of the array, operating on it WILL change original!
+        # deep copy to prevent side effects
+        patch = deepcopy(patch) * window
         reconstructed_arr[
             :,
             x_pos : x_pos + patch.shape[1],
@@ -133,10 +133,12 @@ def _reconstruct_image(
 def _get_stride(
     patch_size: tuple[int, int, int], subdivisions: tuple[int, int, int]
 ) -> tuple[int, int, int]:
+    """
+    Calculate the stride from the patch size and subdivisions
+    """
     return tuple(p_size // subdiv for p_size, subdiv in zip(patch_size, subdivisions))  # type: ignore
 
 
-# @torch.amp.custom_fwd(device_type='cuda')
 @torch.no_grad()
 @logger_wraps()
 @curry
@@ -409,13 +411,13 @@ def tta_inference(
         Iterator of `n_outputs` predictions of the full image.
     """
 
-    def aug_forward_unaug(x: torch.Tensor):
+    def augment_infer_then_unaugment(x: torch.Tensor):
         """
         Apply batch affine transform to `x`, run inference, then apply the inverse
         """
         x_aug = tz.pipe(
             x,  # shape (C, D, H, W)
-            lambda x: x.unsqueeze(0),  # shape (1, C, D, H, W)
+            lambda x: x.unsqueeze(0),  # shape (1, C, D, H, W), added batch dim
             lambda x: batch_affine(x, return_transform=True),
             lambda x: x[0],  # shape (C, D, H, W)
         )
@@ -439,20 +441,21 @@ def tta_inference(
         )
 
     def assign_mask_to_subject(subj: tio.Subject, mask: torch.Tensor):
-        subj["mask"] = tio.LabelMap(tensor=mask)
-        return subj
+        return tz.assoc(subj, "mask", tio.LabelMap(tensor=mask))
 
-    x_subjs_aug = [
+    # Perform n_outputs augmentations on x
+    augmented_x_subjs = [
         aug(tio.Subject(volume=tio.ScalarImage(tensor=x))) for _ in range(n_outputs)
     ]
 
     return tz.pipe(
-        x_subjs_aug,
+        augmented_x_subjs,
         curried.map(lambda subj: subj["volume"].data),
-        curried.map(aug_forward_unaug),
-        lambda y_preds: zip(x_subjs_aug, y_preds),
+        curried.map(augment_infer_then_unaugment),
+        lambda y_preds: zip(augmented_x_subjs, y_preds),
         curried.map(lambda subj_pred: assign_mask_to_subject(*subj_pred)),
-        curried.map(lambda subj: subj.apply_inverse_transform(warn=False)["mask"].data),
+        curried.map(lambda subj: subj.apply_inverse_transform(warn=False)),
+        curried.map(lambda subj: subj["mask"].data),
         (lambda it: tqdm(it, total=n_outputs)) if prog_bar else tz.identity,
     )  # type: ignore
 
