@@ -3,10 +3,9 @@ from typing import Callable, Literal
 
 import toolz as tz
 import torch
-from numpy import var
 from toolz import curried
 
-from ..utils.wrappers import curry
+from ..utils import curry
 from .metrics import dice, surface_dice
 
 

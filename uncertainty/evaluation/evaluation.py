@@ -8,7 +8,7 @@ import toolz as tz
 import torch
 from toolz import curried
 
-from ..utils.wrappers import curry
+from ..utils import curry
 from .inference import (
     ensemble_inference,
     mc_dropout_inference,

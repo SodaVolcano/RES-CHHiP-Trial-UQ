@@ -25,8 +25,7 @@ from tqdm import tqdm
 
 from ..models import MCDropoutUNet
 from ..data import inverse_affine_transform
-from ..utils.logging import logger_wraps
-from ..utils.wrappers import curry
+from ..utils import logger_wraps, curry
 
 
 def _calc_pad_amount(

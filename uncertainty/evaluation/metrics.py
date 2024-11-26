@@ -3,9 +3,9 @@ from typing import Callable, Literal
 
 import numpy as np
 import toolz as tz
+from toolz import curried
 import torch
 from medpy.metric import asd, assd, hd, hd95
-from toolz import curried
 from torch.nn.functional import sigmoid
 from torchmetrics.classification import (
     MultilabelF1Score,
@@ -13,22 +13,24 @@ from torchmetrics.classification import (
     MultilabelRecall,
 )
 
-from ..utils.wrappers import curry
+from ..utils import curry
 from .surface_dice import compute_surface_dice_at_tolerance, compute_surface_distances
 
 
 @curry
 def _distance_with_default(
-    distance: Callable[[np.ndarray, np.ndarray], float], pred: np.ndarray, y: np.ndarray
-) -> float:
+    distance: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
+    pred: torch.Tensor,
+    y: torch.Tensor,
+) -> torch.Tensor:
     """
     Return default distance 0 if either `pred` or `y` are empty
     """
-    return distance(pred, y) if pred.sum() > 0 and y.sum() > 0 else 0
+    return distance(pred, y) if pred.sum() > 0 and y.sum() > 0 else torch.tensor(0)
 
 
 def _average_methods(average: Literal["micro", "macro", "none"]) -> Callable[
-    [np.ndarray, np.ndarray, Callable[[np.ndarray, np.ndarray], float]],
+    [torch.Tensor, torch.Tensor, Callable[[torch.Tensor, torch.Tensor], torch.Tensor]],
     torch.Tensor,
 ]:
     """
@@ -36,7 +38,7 @@ def _average_methods(average: Literal["micro", "macro", "none"]) -> Callable[
     the metric between them and averages them according to `average`
     """
     return {
-        "micro": lambda pred, label, metric: torch.tensor(metric(pred, label)),
+        "micro": lambda pred, label, metric: metric(pred, label),
         "macro": lambda preds, label, metric: torch.mean(
             torch.tensor([metric(pred, y) for pred, y in zip(preds, label)]), dim=0
         ),
@@ -50,13 +52,13 @@ def _prepare_tensors(
     prediction: torch.Tensor, label: torch.Tensor
 ) -> tuple[np.ndarray, np.ndarray]:
     """
-    Apply sigmoid if `prediction` not in [0, 1], threshold, and convert to numpy arrays
+    Apply sigmoid if `prediction` not in [0, 1], threshold, and convert to numpy array
     """
     return tz.pipe(
         prediction,
         lambda x: sigmoid(x) if x.min() < 0 or x.max() > 1 else x,
         lambda pred: (pred > 0.5, label),
-        curried.map(lambda tensor: tensor.detach().numpy()),
+        curried.map(lambda x: x.detach().numpy()),
         tuple,
     )  # type: ignore
 
@@ -92,7 +94,7 @@ def dice(
 def surface_dice(
     prediction: torch.Tensor,
     label: torch.Tensor,
-    average: Literal["micro", "macro", "none"] = "macro",
+    average: Literal["macro", "none"] = "macro",
     tolerance: float = 1.0,
 ) -> torch.Tensor:
     """
@@ -114,15 +116,13 @@ def surface_dice(
         The ground truth tensor of shape (C, ...).
     tolerance : float
         Tolerance in mm.
-    average : Literal["micro", "macro", "weighted", "none"]
+    average : Literal["macro", "none"]
         Averaging method for the class channels.
-        - "micro": Calculate metrics globally across all classes.
         - "macro": Calculate metrics for each class and average them.
-        - "weighted": Weighted averaging of metrics.
         - "none": Return the metrics for each class separately.
     """
 
-    def compute_surface_dice(pred: np.ndarray, y: np.ndarray) -> float:
+    def compute_surface_dice(pred: torch.Tensor, y: torch.Tensor) -> float:
         """
         Expects pred and y to be 3D binary masks with uniform 1 mm spacing
         """
@@ -131,7 +131,7 @@ def surface_dice(
 
     return tz.pipe(
         _prepare_tensors(prediction, label),
-        lambda pred_label: (pred_label[0] > 0.5, pred_label[1].astype(bool)),
+        lambda pred_label: (pred_label[0], pred_label[1].astype(bool)),
         lambda pred_label: _average_methods(average)(
             pred_label[0],
             pred_label[1],
@@ -165,9 +165,10 @@ def hausdorff_distance(
     """
     return tz.pipe(
         _prepare_tensors(prediction, label),
-        lambda np_arrays: _average_methods(average)(
-            np_arrays[0], np_arrays[1], _distance_with_default(hd)
+        lambda tensors: _average_methods(average)(
+            tensors[0], tensors[1], _distance_with_default(hd)
         ),
+        torch.tensor,
     )  # type: ignore
 
 
@@ -196,7 +197,10 @@ def hausdorff_distance_95(
     """
     return tz.pipe(
         _prepare_tensors(prediction, label),
-        lambda np_arrays: _average_methods(average)(np_arrays[0], np_arrays[1], _distance_with_default(hd95)),  # type: ignore
+        lambda tensors: _average_methods(average)(
+            tensors[0], tensors[1], _distance_with_default(hd95)
+        ),
+        torch.tensor,
     )  # type: ignore
 
 
@@ -278,9 +282,10 @@ def average_surface_distance(
     """
     return tz.pipe(
         _prepare_tensors(prediction, label),
-        lambda np_arrays: _average_methods(average)(
-            np_arrays[0], np_arrays[1], _distance_with_default(asd)
+        lambda tensors: _average_methods(average)(
+            tensors[0], tensors[1], _distance_with_default(asd)
         ),
+        torch.tensor,
     )  # type: ignore
 
 
@@ -306,9 +311,10 @@ def average_symmetric_surface_distance(
     """
     return tz.pipe(
         _prepare_tensors(prediction, label),
-        lambda np_arrays: _average_methods(average)(
-            np_arrays[0], np_arrays[1], _distance_with_default(assd)
+        lambda tensors: _average_methods(average)(
+            tensors[0], tensors[1], _distance_with_default(assd)
         ),
+        torch.tensor,
     )  # type: ignore
 
 
@@ -362,29 +368,26 @@ def generalised_energy_distance(
     """
     assert a.shape == b.shape, "Input arrays must have the same shape"
 
-    calc_distance_ = (
+    dist_func_ = (
         (lambda x, y: (get_metric_func(distance)(x > 0.5, y > 0.5, average=average)))
         if isinstance(distance, str)
         else distance
     )
-    calc_distance = (
-        (lambda x1, y1: 1 - calc_distance_(x1, y1))
-        if distance == "dice"
-        else calc_distance_
+    dist_func = (
+        (lambda x1, y1: 1 - dist_func_(x1, y1)) if distance == "dice" else dist_func_
     )
 
-    E_d_ab = np.mean([calc_distance(x1, x2) for x1, x2 in product(a, b)], axis=0)
-    E_d_aa = np.mean(
-        [calc_distance(x1, x2) for x1, x2 in combinations_with_replacement(a, 2)],
-        axis=0,
+    get_distances = tz.compose_left(
+        lambda pairs: [dist_func(x1, x2) for x1, x2 in pairs],
+        torch.tensor if average != "none" else torch.stack,
     )
-    E_d_bb = np.mean(
-        [calc_distance(x1, x2) for x1, x2 in combinations_with_replacement(b, 2)],
-        axis=0,
-    )
+
+    E_d_ab = torch.mean(get_distances(product(a, b)), dim=0)  # type: ignore
+    E_d_aa = torch.mean(get_distances(combinations_with_replacement(a, 2)), dim=0)  # type: ignore
+    E_d_bb = torch.mean(get_distances(combinations_with_replacement(b, 2)), dim=0)  # type: ignore
 
     ged_squared = 2 * E_d_ab - E_d_aa - E_d_bb
-    return torch.tensor(np.clip(np.sqrt(ged_squared), 0, None))
+    return torch.clip(torch.sqrt(ged_squared), 0, None)
 
 
 def rc_curve_stats(
@@ -408,9 +411,9 @@ def rc_curve_stats(
 
     Parameters
     ----------
-    risks : np.ndarray
+    risks : torch.Tensor
         Array of shape `(N,)` containing the risk scores for N test samples.
-    confids : np.ndarray
+    confids : torch.Tensor
         Array of shape `(N,)` containing the confidence scores for N test samples.
 
     Returns
@@ -507,13 +510,16 @@ def aurc(
     )
 
 
-def eaurc(risks: torch.Tensor, confids: torch.Tensor) -> torch.Tensor:
+def eaurc(
+    risks: torch.Tensor, confids: torch.Tensor
+) -> tuple[torch.Tensor, list[float], list[torch.Tensor]]:
     """Compute normalized AURC, i.e. subtract AURC of optimal CSF (given fixed risks)."""
     n = len(risks)
     # optimal confidence sorts risk. Asencding here because we start from coverage 1/n
     selective_risks = np.sort(risks).cumsum() / np.arange(1, n + 1)
     aurc_opt = selective_risks.sum() / n
-    return aurc(risks, confids) - aurc_opt
+    aurc_score, coverage, selective_risks = aurc(risks, confids)
+    return aurc_score - aurc_opt, coverage, selective_risks
 
 
 def get_metric_func(name: str):
