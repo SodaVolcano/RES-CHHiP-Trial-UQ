@@ -1,6 +1,7 @@
 from itertools import combinations_with_replacement, product
 from typing import Callable, Literal
 
+from loguru import logger
 import numpy as np
 import toolz as tz
 from toolz import curried
@@ -121,6 +122,11 @@ def surface_dice(
         - "macro": Calculate metrics for each class and average them.
         - "none": Return the metrics for each class separately.
     """
+    if average == "micro":
+        logger.error(
+            "Micro averaging is not supported for surface dice, nan tensor returned"
+        )
+        return torch.tensor(torch.nan)
 
     def compute_surface_dice(pred: torch.Tensor, y: torch.Tensor) -> float:
         """
@@ -168,7 +174,7 @@ def hausdorff_distance(
         lambda tensors: _average_methods(average)(
             tensors[0], tensors[1], _distance_with_default(hd)
         ),
-        torch.tensor,
+        lambda arr: torch.tensor(arr) if not isinstance(arr, torch.Tensor) else arr,
     )  # type: ignore
 
 
@@ -200,7 +206,7 @@ def hausdorff_distance_95(
         lambda tensors: _average_methods(average)(
             tensors[0], tensors[1], _distance_with_default(hd95)
         ),
-        torch.tensor,
+        lambda arr: torch.tensor(arr) if not isinstance(arr, torch.Tensor) else arr,
     )  # type: ignore
 
 
@@ -285,7 +291,7 @@ def average_surface_distance(
         lambda tensors: _average_methods(average)(
             tensors[0], tensors[1], _distance_with_default(asd)
         ),
-        torch.tensor,
+        lambda arr: torch.tensor(arr) if not isinstance(arr, torch.Tensor) else arr,
     )  # type: ignore
 
 
@@ -314,7 +320,7 @@ def average_symmetric_surface_distance(
         lambda tensors: _average_methods(average)(
             tensors[0], tensors[1], _distance_with_default(assd)
         ),
-        torch.tensor,
+        lambda arr: torch.tensor(arr) if not isinstance(arr, torch.Tensor) else arr,
     )  # type: ignore
 
 

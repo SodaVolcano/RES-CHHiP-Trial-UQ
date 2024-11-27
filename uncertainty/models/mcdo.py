@@ -5,39 +5,34 @@ import torch
 from torch import nn
 
 
-class MCDropoutUNet(nn.Module):
+class MCDropout(nn.Module):
     """
-    Wrapper around U-Net to apply dropout during evaluation
+    Enable dropout during inference for any model with dropout layer(s).
 
-    Note: this class only sets `nn.Dropout` layers to training mode during
-    evaluation. It only passes the input through the model once so to
-    get multiple predictions, use `uncertainty.training.inference.mc_dropout_inference`.
+    See also `uncertainty.evaluation.mc_dropout_inference` which uses
+    this class to perform Monte Carlo dropout inference.
 
     Parameters
     ----------
     model : nn.Module | lit.LightningModule
-        U-Net model
+        Any model with dropout layers.
     """
 
     @override
     def __init__(self, model: nn.Module | lit.LightningModule):
-        """
-        Wrap an existing U-Net or create a new one using the provided configuration
-        """
         super().__init__()
         self.model = model
 
     @override
     def forward(self, x: torch.Tensor, logits: bool = False) -> torch.Tensor:
-        """
-        Single forward pass for an input of shape (B, C, D, H, W)
-        """
         return self.model(x, logits=logits)
 
     @override
     def eval(self):
         def activate_dropout(module):
-            if isinstance(module, nn.Dropout):
+            if isinstance(
+                module, nn.Dropout | nn.Dropout2d | nn.Dropout3d | nn.Dropout1d
+            ):
                 module.train(True)
 
         # Apply dropout during evaluation

@@ -1,6 +1,5 @@
 import torch
 from ..context import evaluation
-from torchmetrics.classification import MultilabelF1Score
 
 
 _aggregate_map_metric = evaluation.uncertainties._aggregate_map_metric

@@ -9,12 +9,6 @@ import torch
 from toolz import curried
 
 from ..utils import curry
-from .inference import (
-    ensemble_inference,
-    mc_dropout_inference,
-    sliding_inference,
-    tta_inference,
-)
 from .metrics import get_metric_func
 from .uncertainties import (
     mean_entropy,
@@ -64,7 +58,7 @@ def evaluate_prediction(
     Returns
     -------
     torch.Tensor
-        Concatenated metrics for the prediction.
+        1D concatenated metrics for the prediction in the order of the metric names.
     """
     return tz.pipe(
         metric_names,
@@ -112,7 +106,8 @@ def evaluate_predictions(
         - "mean_variance": Mean of the variance between all N predictions
         - "mean_entropy": Mean of the entropy between all N predictions
         - "pairwise_dice": Mean pairwise Dice between all N predictions
-        - "pairwise_dice_<float>": Mean pairwise Dice at tolerance <float> between all N predictions
+        - "pairwise_surface_dice_<float>": Mean pairwise surface Dice at tolerance <float>
+          between all N predictions
 
     average : Literal["micro", "macro", "none"]
         Averaging mode for the channel-wise metrics per prediction
@@ -172,12 +167,3 @@ def evaluate_predictions(
         evaluate_prediction(label=label, metric_names=spatial_metrics, average=average),
         lambda results: torch.cat([results] + uncertainty_scores),
     )  # type: ignore
-
-
-def get_inference_mode(mode: str):
-    return {
-        "single": sliding_inference,
-        "tta": tta_inference,
-        "ensemble": ensemble_inference,
-        "mcdo": mc_dropout_inference,
-    }[mode]

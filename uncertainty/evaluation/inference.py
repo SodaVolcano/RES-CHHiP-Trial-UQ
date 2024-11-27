@@ -24,7 +24,7 @@ from toolz import curried
 from torch import nn
 from tqdm import tqdm
 
-from ..models import MCDropoutUNet
+from ..models import MCDropout
 from ..data import inverse_affine_transform
 from ..utils import logger_wraps, curry
 
@@ -231,7 +231,7 @@ def mc_dropout_inference(
     prog_bar: bool = True,
 ) -> Iterable[torch.Tensor]:
     """
-    Perform `n_outputs` MC Dropout inference on the full image
+    Perform `n_outputs` MC Dropout inferences on the full image
 
     `model` is run `n_outputs` times with dropout enabled to get
     multiple predictions of the image. Patch-based inference is used
@@ -244,7 +244,7 @@ def mc_dropout_inference(
     ----------
     model : nn.Module | lit.LightningModule
         Base model to perform inference with, produces deterministic predictions. Must
-        have `nn.Dropout` layers and be trained with dropout enabled. Should take in a
+        have dropout layers and be trained with dropout enabled. Should take in a
         tensor of shape `(batch_size, *x.shape)` and output a tensor of shape
         `(batch_size, out_channels, *patch_size)`.
     x : torch.Tensor
@@ -267,7 +267,7 @@ def mc_dropout_inference(
     Iterable[torch.Tensor]
         Iterator of `n_outputs` predictions of the full image.
     """
-    mcdo_model = MCDropoutUNet(model)
+    mcdo_model = MCDropout(model)
     mcdo_model.eval()
 
     @curry
