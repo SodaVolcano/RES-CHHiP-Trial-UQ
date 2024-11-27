@@ -64,7 +64,7 @@ def evaluate_prediction(
     def _get_metric(name: str):
         return get_metric_func(name) or (
             # change uncertainty function signature to take in pred and label (not used)
-            lambda pred, _, average: get_uncertainty_metric(name)(pred, average=average)  # type: ignore
+            lambda pred, _, average: get_uncertainty_metric(f"{name}_pixelwise")(pred, average=average)  # type: ignore
         )
 
     return tz.pipe(

@@ -361,5 +361,7 @@ def get_uncertainty_metric(name: str) -> Optional[Callable]:
     return {
         "mean_variance": mean_variance,
         "mean_entropy": mean_entropy,
+        "mean_variance_pixelwise": mean_variance_pixelwise,
+        "mean_entropy_pixelwise": mean_entropy_pixelwise,
         "pairwise_dice": pairwise_dice,
     }.get(name, None)
