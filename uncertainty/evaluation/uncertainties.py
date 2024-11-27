@@ -316,6 +316,7 @@ def pairwise_dice(
     return _pairwise_metric(dice, predictions > 0.5, average)
 
 
+@curry
 def pairwise_surface_dice(
     predictions: torch.Tensor,
     average: Literal["micro", "macro", "none"] = "macro",
@@ -349,3 +350,13 @@ def pairwise_surface_dice(
     return _pairwise_metric(
         surface_dice(tolerance=tolerance), predictions > 0.5, average
     )
+
+
+def get_uncertainty_metric(name: str):
+    if "pairwise_surface_dice" in name:
+        return pairwise_surface_dice(tolerance=float(name.split("_")[-1]))
+    return {
+        "mean_variance": mean_variance,
+        "mean_entropy": mean_entropy,
+        "pairwise_dice": pairwise_dice,
+    }[name]

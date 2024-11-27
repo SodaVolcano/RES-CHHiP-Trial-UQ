@@ -19,6 +19,7 @@ from .metrics import (
     rc_curve_stats,
     recall,
     surface_dice,
+    get_metric_func,
 )
 from .uncertainties import (
     entropy_map,
@@ -32,6 +33,7 @@ from .uncertainties import (
     probability_map,
     variance_map,
     variance_pixelwise,
+    get_uncertainty_metric,
 )
 from .visualisation import display_slices_grid, display_uncertainty_maps
 
@@ -68,4 +70,6 @@ __all__ = [
     "variance_pixelwise",
     "mean_entropy_pixelwise",
     "mean_variance_pixelwise",
+    "get_metric_func",
+    "get_uncertainty_metric",
 ]

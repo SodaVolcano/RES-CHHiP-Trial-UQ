@@ -2,6 +2,7 @@ from itertools import combinations_with_replacement, product
 from typing import Callable, Literal
 
 from loguru import logger
+import medpy
 import numpy as np
 import toolz as tz
 from toolz import curried
@@ -13,6 +14,8 @@ from torchmetrics.classification import (
     MultilabelPrecision,
     MultilabelRecall,
 )
+
+from uncertainty.utils.common import unpack_args
 
 from ..utils import curry
 from .surface_dice import compute_surface_dice_at_tolerance, compute_surface_distances
@@ -137,12 +140,33 @@ def surface_dice(
 
     return tz.pipe(
         _prepare_tensors(prediction, label),
-        lambda pred_label: (pred_label[0], pred_label[1].astype(bool)),
-        lambda pred_label: _average_methods(average)(
-            pred_label[0],
-            pred_label[1],
-            _distance_with_default(compute_surface_dice),
+        unpack_args(lambda pred, label: (pred, label.astype(bool))),
+        unpack_args(
+            lambda pred, label: _average_methods(average)(
+                pred,
+                label,
+                _distance_with_default(compute_surface_dice),
+            )
         ),
+    )  # type: ignore
+
+
+def medpy_wrapper(
+    metric: Callable[..., torch.Tensor]
+) -> Callable[
+    [torch.Tensor, torch.Tensor, Literal["micro", "macro", "none"]], torch.Tensor
+]:
+    """
+    Wrapper around medpy hd, hd95 etc: prepare tensor, apply metric, and return tensor
+    """
+    return lambda prediction, label, average: tz.pipe(
+        _prepare_tensors(prediction, label),
+        unpack_args(
+            lambda pred, label: _average_methods(average)(
+                pred, label, _distance_with_default(metric)
+            )
+        ),
+        lambda arr: torch.tensor(arr) if not isinstance(arr, torch.Tensor) else arr,
     )  # type: ignore
 
 
@@ -169,13 +193,7 @@ def hausdorff_distance(
         - "macro": Calculate metrics for each class and average them.
         - "none": Return the metrics for each class separately.
     """
-    return tz.pipe(
-        _prepare_tensors(prediction, label),
-        lambda tensors: _average_methods(average)(
-            tensors[0], tensors[1], _distance_with_default(hd)
-        ),
-        lambda arr: torch.tensor(arr) if not isinstance(arr, torch.Tensor) else arr,
-    )  # type: ignore
+    return medpy_wrapper(hd)(prediction, label, average)
 
 
 def hausdorff_distance_95(
@@ -201,13 +219,7 @@ def hausdorff_distance_95(
         - "macro": Calculate metrics for each class and average them.
         - "none": Return the metrics for each class separately.
     """
-    return tz.pipe(
-        _prepare_tensors(prediction, label),
-        lambda tensors: _average_methods(average)(
-            tensors[0], tensors[1], _distance_with_default(hd95)
-        ),
-        lambda arr: torch.tensor(arr) if not isinstance(arr, torch.Tensor) else arr,
-    )  # type: ignore
+    return medpy_wrapper(hd95)(prediction, label, average)  # type: ignore
 
 
 def recall(
@@ -286,13 +298,7 @@ def average_surface_distance(
         - "macro": Calculate metrics for each class and average them.
         - "none": Return the metrics for each class separately.
     """
-    return tz.pipe(
-        _prepare_tensors(prediction, label),
-        lambda tensors: _average_methods(average)(
-            tensors[0], tensors[1], _distance_with_default(asd)
-        ),
-        lambda arr: torch.tensor(arr) if not isinstance(arr, torch.Tensor) else arr,
-    )  # type: ignore
+    return medpy_wrapper(asd)(prediction, label, average)
 
 
 def average_symmetric_surface_distance(
@@ -315,13 +321,7 @@ def average_symmetric_surface_distance(
         - "macro": Calculate metrics for each class and average them.
         - "none": Return the metrics for each class separately.
     """
-    return tz.pipe(
-        _prepare_tensors(prediction, label),
-        lambda tensors: _average_methods(average)(
-            tensors[0], tensors[1], _distance_with_default(assd)
-        ),
-        lambda arr: torch.tensor(arr) if not isinstance(arr, torch.Tensor) else arr,
-    )  # type: ignore
+    return medpy_wrapper(assd)(prediction, label, average)
 
 
 def generalised_energy_distance(

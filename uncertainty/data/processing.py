@@ -28,12 +28,14 @@ def to_torchio_subject(volume_mask: tuple[np.ndarray, np.ndarray]) -> tio.Subjec
         Tuple containing the volume and mask arrays, must have shape
         (channel, height, width, depth)
     """
+    volume = volume_mask[0]
+    mask = volume_mask[1]
     return tio.Subject(
-        volume=tio.ScalarImage(tensor=volume_mask[0]),
+        volume=tio.ScalarImage(tensor=volume),
         mask=tio.LabelMap(
             # ignore channel dimension from volume_mask[0]
-            tensor=tio.CropOrPad(volume_mask[0].shape[1:], padding_mode="minimum")(  # type: ignore
-                volume_mask[1]
+            tensor=tio.CropOrPad(volume.shape[1:], padding_mode="minimum")(  # type: ignore
+                mask
             ),
         ),
     )
@@ -54,15 +56,16 @@ def ensure_min_size(
     """
     Ensure volume and mask (C, H, W, D) are at least size min_size (H, W, D)
     """
+    volume = vol_mask[0]
     target_shape = [
-        max(dim, min_dim) for dim, min_dim in zip(vol_mask[0].shape[1:], min_size)
+        max(dim, min_dim) for dim, min_dim in zip(volume.shape[1:], min_size)
     ]
     return tz.pipe(
         vol_mask,
         to_torchio_subject,
         tio.CropOrPad(
             target_shape,  # type: ignore
-            padding_mode=np.min(vol_mask[0]),
+            padding_mode=np.min(volume),
             mask_name="mask",
         ),
         from_torchio_subject,
