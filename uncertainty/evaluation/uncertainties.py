@@ -1,5 +1,5 @@
 from itertools import combinations_with_replacement
-from typing import Callable, Literal
+from typing import Callable, Literal, Optional
 
 import toolz as tz
 import torch
@@ -352,11 +352,14 @@ def pairwise_surface_dice(
     )
 
 
-def get_uncertainty_metric(name: str):
+def get_uncertainty_metric(name: str) -> Optional[Callable]:
+    """
+    Return the uncertainty metric function for the given name or None if not found
+    """
     if "pairwise_surface_dice" in name:
         return pairwise_surface_dice(tolerance=float(name.split("_")[-1]))
     return {
         "mean_variance": mean_variance,
         "mean_entropy": mean_entropy,
         "pairwise_dice": pairwise_dice,
-    }[name]
+    }.get(name, None)

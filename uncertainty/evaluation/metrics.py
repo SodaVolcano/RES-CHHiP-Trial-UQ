@@ -1,5 +1,5 @@
 from itertools import combinations_with_replacement, product
-from typing import Callable, Literal
+from typing import Callable, Literal, Optional
 
 from loguru import logger
 import medpy
@@ -151,7 +151,7 @@ def surface_dice(
     )  # type: ignore
 
 
-def medpy_wrapper(
+def _medpy_wrapper(
     metric: Callable[..., torch.Tensor]
 ) -> Callable[
     [torch.Tensor, torch.Tensor, Literal["micro", "macro", "none"]], torch.Tensor
@@ -193,7 +193,7 @@ def hausdorff_distance(
         - "macro": Calculate metrics for each class and average them.
         - "none": Return the metrics for each class separately.
     """
-    return medpy_wrapper(hd)(prediction, label, average)
+    return _medpy_wrapper(hd)(prediction, label, average)
 
 
 def hausdorff_distance_95(
@@ -219,7 +219,7 @@ def hausdorff_distance_95(
         - "macro": Calculate metrics for each class and average them.
         - "none": Return the metrics for each class separately.
     """
-    return medpy_wrapper(hd95)(prediction, label, average)  # type: ignore
+    return _medpy_wrapper(hd95)(prediction, label, average)  # type: ignore
 
 
 def recall(
@@ -298,7 +298,7 @@ def average_surface_distance(
         - "macro": Calculate metrics for each class and average them.
         - "none": Return the metrics for each class separately.
     """
-    return medpy_wrapper(asd)(prediction, label, average)
+    return _medpy_wrapper(asd)(prediction, label, average)
 
 
 def average_symmetric_surface_distance(
@@ -321,7 +321,7 @@ def average_symmetric_surface_distance(
         - "macro": Calculate metrics for each class and average them.
         - "none": Return the metrics for each class separately.
     """
-    return medpy_wrapper(assd)(prediction, label, average)
+    return _medpy_wrapper(assd)(prediction, label, average)
 
 
 def generalised_energy_distance(
@@ -375,7 +375,7 @@ def generalised_energy_distance(
     assert a.shape == b.shape, "Input arrays must have the same shape"
 
     dist_func_ = (
-        (lambda x, y: (get_metric_func(distance)(x > 0.5, y > 0.5, average=average)))
+        (lambda x, y: (get_metric_func(distance)(x > 0.5, y > 0.5, average=average)))  # type: ignore
         if isinstance(distance, str)
         else distance
     )
@@ -528,9 +528,12 @@ def eaurc(
     return aurc_score - aurc_opt, coverage, selective_risks
 
 
-def get_metric_func(name: str):
-
-    tolerance = float(name.split("_")[-1]) if "surface_dice" in name else 0
+def get_metric_func(name: str) -> Optional[Callable]:
+    """
+    Return the metric function given the name, or None if not found.
+    """
+    if "surface_dice" in name:
+        return surface_dice(tolerance=float(name.split("_")[-1]))
 
     return {
         "hd": hausdorff_distance,
@@ -538,9 +541,8 @@ def get_metric_func(name: str):
         "asd": average_surface_distance,
         "assd": average_symmetric_surface_distance,
         "dice": dice,
-        f"surface_dice_{tolerance}": surface_dice(tolerance=tolerance),
         "recall": recall,
         "sen": recall,
         "precision": precision,
         "ppv": precision,
-    }[name]
+    }.get(name, None)

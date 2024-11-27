@@ -24,6 +24,10 @@ def evaluate_prediction(
     """
     Evaluate a `prediction` against a `label` tensor using a list of metrics.
 
+    Note that for uncertainty metrics, the `label` is not used. Uncertainty
+    such as variance and entropy are calculated pixelwise by interpreting the
+    prediction as a probability map.
+
     Parameters
     ----------
     prediction : torch.Tensor
@@ -42,6 +46,8 @@ def evaluate_prediction(
         - "sen": Sensitivity (AKA recall)
         - "precision": Precision
         - "ppv": Positive predictive value (AKA precision)
+        - "mean_variance": Mean pixelwise variance of the prediction (label not used)
+        - "mean_entropy": Mean pixelwise entropy of the prediction (label not used)
 
     average : Literal["micro", "macro", "none"]
         Averaging method for the metrics.
@@ -54,9 +60,16 @@ def evaluate_prediction(
     torch.Tensor
         1D concatenated metrics for the prediction in the order of the metric names.
     """
+
+    def _get_metric(name: str):
+        return get_metric_func(name) or (
+            # change uncertainty function signature to take in pred and label (not used)
+            lambda pred, _, average: get_uncertainty_metric(name)(pred, average=average)  # type: ignore
+        )
+
     return tz.pipe(
         metric_names,
-        curried.map(get_metric_func),
+        curried.map(_get_metric),
         curried.map(lambda metric: metric(prediction, label, average=average)),
         list,
         torch.tensor if average != "none" else torch.cat,
@@ -66,16 +79,20 @@ def evaluate_prediction(
 @torch.no_grad()
 @curry
 def evaluate_predictions(
-    predictions: torch.Tensor,
+    predictions: torch.Tensor | list[torch.Tensor] | tuple[torch.Tensor],
     label: torch.Tensor,
     metric_names: list[str],
     average: Literal["micro", "macro", "none"] = "macro",
     aggregate_before_eval: bool = True,
 ) -> torch.Tensor:
     """
-    Evaluate a list of `predictions` against a `label` tensor using a list of metrics
+    Evaluate a list of `predictions` using a list of metrics against a single `label`
 
-    Mean of each prediction is produced as the final prediction metric.
+    If `aggregate_before_eval` is True, the predictions are aggregated into a single
+    prediction before evaluating the metrics. If False, the metrics are evaluated
+    for each prediction separately and then averaged.
+
+    Note that for uncertainty metrics, the `label` is not used.
 
     Parameters
     ----------
@@ -95,6 +112,11 @@ def evaluate_predictions(
         - "sen": Sensitivity
         - "precision": Precision
         - "ppv": Positive predictive value
+        - "mean_variance": Mean variance between all N predictions (label not used)
+        - "mean_entropy": Mean entropy between all N predictions (label not used)
+        - "pairwise_dice": Mean pairwise Dice between all N predictions (label not used)
+        - "pairwise_surface_dice_<float>": Mean pairwise surface Dice at tolerance <float>
+          between all N predictions (label not used)
     average : Literal["micro", "macro", "none"]
         Averaging mode for the channel-wise metrics per prediction
         - "micro": Calculate metrics globally across all channels
@@ -110,6 +132,9 @@ def evaluate_predictions(
     torch.Tensor
         A tensor of shape `(num_metrics,)` with the average metrics across all predictions
     """
+    if not isinstance(predictions, torch.Tensor):
+        predictions = torch.stack(predictions)
+
     if aggregate_before_eval:
         return tz.pipe(
             predictions,
@@ -118,23 +143,20 @@ def evaluate_predictions(
                 label=label, metric_names=metric_names, average=average
             ),
         )
+    # Evaluate each prediction separately and then average the metrics
     return tz.pipe(
         predictions,
         curried.map(
             evaluate_prediction(label=label, metric_names=metric_names, average=average)
         ),
+        list,
+        torch.vstack,
+        curry(torch.mean)(dim=0),
     )
 
 
 def compute_uncertainty():
-    """
-    - "mean_variance": Mean of the variance between all N predictions
-    - "mean_entropy": Mean of the entropy between all N predictions
-    - "pairwise_dice": Mean pairwise Dice between all N predictions
-    - "pairwise_surface_dice_<float>": Mean pairwise surface Dice at tolerance <float>
-      between all N predictions
-
-    """
+    """ """
     pass
     # uncertainty_names = ["mean_variance", "mean_entropy", "pairwise_dice"]
     # spatial_metrics = list(

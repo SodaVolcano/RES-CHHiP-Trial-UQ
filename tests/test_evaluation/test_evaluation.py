@@ -146,6 +146,8 @@ METRIC_NAMES = [
     "surface_dice_0.5",
     "recall",
     "precision",
+    "mean_variance",
+    "mean_entropy",
 ]
 
 
@@ -169,7 +171,18 @@ class TestEvaluatePrediction:
         result = evaluate_prediction(prediction, label, METRIC_NAMES, average="micro")
 
         expected_result = torch.tensor(
-            [1.4142, 1.0000, 0.4800, 0.5265, 0.4793, torch.nan, 0.4444, 0.5200],
+            [
+                1.4142,
+                1.0000,
+                0.4800,
+                0.5265,
+                0.4793,
+                torch.nan,  # surface dice don't work with micro averaging
+                0.4444,
+                0.5200,
+                0.0779,
+                0.7527,
+            ],
             dtype=torch.float64,
         )
 
@@ -187,7 +200,18 @@ class TestEvaluatePrediction:
         prediction, label = get_3d_predictions()
         # Expected result for macro averaging
         expected_result = torch.tensor(
-            [1.6095, 1.0000, 0.4760, 0.5367, 0.4779, 0.9308, 0.4471, 0.5240],
+            [
+                1.6095,
+                1.0000,
+                0.4760,
+                0.5367,
+                0.4779,
+                0.9308,
+                0.4471,
+                0.5240,
+                0.0779,
+                0.7527,
+            ],
             dtype=torch.float64,
         )
 
@@ -228,6 +252,14 @@ class TestEvaluatePrediction:
                 0.4878,
                 0.5484,
                 0.5357,
+                0.0952,
+                0.0888,
+                0.0647,
+                0.0630,
+                0.6624,
+                0.7650,
+                0.8046,
+                0.7786,
             ],
             dtype=torch.float64,
         )
