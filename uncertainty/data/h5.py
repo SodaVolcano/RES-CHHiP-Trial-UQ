@@ -3,12 +3,13 @@ Utility functions for loading and saving data to HDF5 files
 """
 import os
 from typing import Generator, Iterable
+
 import h5py as h5
 import numpy as np
 import torch
 from tqdm import tqdm
 
-from ..utils import logger_wraps, curry
+from ..utils import curry, logger_wraps
 from .datatypes import PatientScan, PatientScanPreprocessed
 
 

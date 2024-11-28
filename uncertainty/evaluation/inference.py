@@ -7,8 +7,8 @@ which is based off of
     https://github.com/Vooban/Smoothly-Blend-Image-Patches
 """
 
-from copy import deepcopy
 import random
+from copy import deepcopy
 from functools import reduce
 from typing import Callable, Iterable
 
@@ -24,9 +24,9 @@ from toolz import curried
 from torch import nn
 from tqdm import tqdm
 
-from ..models import MCDropout
 from ..data import inverse_affine_transform
-from ..utils import logger_wraps, curry
+from ..models import MCDropout
+from ..utils import curry, logger_wraps
 
 
 def _calc_pad_amount(

@@ -1,3 +1,7 @@
+"""
+Auxiliary network that predicts true class probability of a U-Net segmentation model.
+"""
+
 from typing import Callable
 
 import toolz as tz

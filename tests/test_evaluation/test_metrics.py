@@ -1,9 +1,11 @@
-from uncertainty.evaluation.metrics import rc_curve_stats
-from ..context import evaluation
+import numpy as np
 import torch
 from torch.nn.functional import sigmoid
-import numpy as np
 from torchmetrics.classification import MultilabelF1Score
+
+from uncertainty.evaluation.metrics import rc_curve_stats
+
+from ..context import evaluation
 
 _average_methods = evaluation.metrics._average_methods
 _prepare_tensors = evaluation.metrics._prepare_tensors

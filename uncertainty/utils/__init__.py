@@ -1,10 +1,10 @@
 from .common import *
 from .logging import *
+from .parallel import *
 from .path import *
 from .sequence import *
 from .string import *
 from .wrappers import *
-from .parallel import *
 
 __all__ = [
     "call_method",

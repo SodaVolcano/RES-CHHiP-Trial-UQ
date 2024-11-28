@@ -1,37 +1,39 @@
-from typing import Callable
-import torch
-import toolz as tz
-from toolz import curried
-import polars as pl
-import numpy as np
+import gc
 import os
 import sys
-import gc
+from typing import Callable
+
+import numpy as np
+import polars as pl
+import toolz as tz
+import torch
+from toolz import curried
 
 sys.path.append("..")
 sys.path.append(".")
 import h5py
-from kornia.augmentation import RandomAffine3D
-from scripts.__helpful_parser import HelpfulParser
 import torch
-from uncertainty.training import (
-    load_checkpoint,
-    checkpoint_dir_type,
-    torchio_augmentation,
-)
-from uncertainty.evaluation import (
-    get_inference_mode,
-    evaluate_prediction,
-    evaluate_predictions,
-    probability_map,
-    entropy_map,
-    variance_map,
-)
-from uncertainty.data.h5 import load_xy_from_h5
+from kornia.augmentation import RandomAffine3D
 from loguru import logger
 from tqdm import tqdm
-from uncertainty.utils.wrappers import curry
+
+from scripts.__helpful_parser import HelpfulParser
+from uncertainty.data.h5 import load_xy_from_h5
 from uncertainty.data.processing import crop_to_body
+from uncertainty.evaluation import (
+    entropy_map,
+    evaluate_prediction,
+    evaluate_predictions,
+    get_inference_mode,
+    probability_map,
+    variance_map,
+)
+from uncertainty.training import (
+    checkpoint_dir_type,
+    load_checkpoint,
+    torchio_augmentation,
+)
+from uncertainty.utils.wrappers import curry
 
 
 def parameterised_inference(

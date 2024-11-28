@@ -1,7 +1,7 @@
+import torch
 from torch import nn
 
 from ..context import models
-import torch
 
 ConvLayer = models.unet_modules.ConvLayer
 ConvBlock = models.unet_modules.ConvBlock

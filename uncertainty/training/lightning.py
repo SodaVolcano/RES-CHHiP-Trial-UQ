@@ -12,8 +12,8 @@ from torchmetrics.aggregation import RunningMean
 from torchmetrics.classification import BinaryF1Score, MultilabelF1Score
 
 from ..constants import ORGAN_MATCHES
-from ..training.datasets import H5Dataset, RandomPatchDataset, SlidingPatchDataset
 from ..data import augmentations
+from ..training.datasets import H5Dataset, RandomPatchDataset, SlidingPatchDataset
 from .loss import ConfidNetMSELoss, DeepSupervisionLoss, DiceBCELoss
 
 

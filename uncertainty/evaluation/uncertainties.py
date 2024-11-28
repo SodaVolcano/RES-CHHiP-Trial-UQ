@@ -1,3 +1,7 @@
+"""
+Uncertainty measures for segmentation prediction(s).
+"""
+
 from itertools import combinations_with_replacement
 from typing import Callable, Literal, Optional
 

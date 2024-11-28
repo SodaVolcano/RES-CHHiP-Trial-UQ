@@ -2,8 +2,9 @@
 Load and save folders of DICOM files to h5 file(s).
 """
 
-from loguru import logger
 import sys
+
+from loguru import logger
 
 sys.path.append("..")
 sys.path.append(".")

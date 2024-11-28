@@ -1,5 +1,5 @@
 """
-Define a U-Net model
+U-Net modules used to build the U-Net architecture.
 
 References: 
     https://github.com/christianversloot/machine-learning-articles/blob/main/how-to-build-a-u-net-for-image-segmentation-with-tensorflow-and-keras.md

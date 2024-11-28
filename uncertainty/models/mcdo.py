@@ -1,3 +1,7 @@
+"""
+Class to enable dropout in any arbitrary model.
+"""
+
 from typing import override
 
 import lightning as lit

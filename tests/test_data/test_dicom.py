@@ -1,9 +1,9 @@
 from unittest import mock
+
 import numpy as np
 import pydicom
-import numpy as np
 
-from ..context import gen_path, data, constants
+from ..context import constants, data, gen_path
 
 load_volume = data.load_volume
 c = constants

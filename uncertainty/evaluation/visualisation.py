@@ -1,3 +1,7 @@
+"""
+Functions for visualising CT scans, ground truth, predictions etc.
+"""
+
 import matplotlib.pyplot as plt
 import torch
 from matplotlib.figure import Figure

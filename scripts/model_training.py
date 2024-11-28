@@ -1,16 +1,18 @@
-from context import uncertainty as un
-from lightning.pytorch.callbacks import ModelCheckpoint
-from lightning import Trainer
 import os
+
 import torch
+from context import uncertainty as un
+from lightning import Trainer
+from lightning.pytorch.callbacks import ModelCheckpoint
 
 sys.path.append("..")
 sys.path.append(".")
 import dill
-from scripts.__helpful_parser import HelpfulParser
-from uncertainty.config import Configuration
 import torch
 from lightning.pytorch.loggers import TensorBoardLogger
+
+from scripts.__helpful_parser import HelpfulParser
+from uncertainty.config import Configuration
 
 
 def main(

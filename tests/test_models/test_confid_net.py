@@ -6,9 +6,10 @@ Reference:
     Addressing Failure Prediction by Learning Model Confidence, Corbiere et al.
 """
 
-from ..context import models
 import torch
 from torch import nn
+
+from ..context import models
 
 UNet = models.UNet
 UNetConfidNetEncoder = models.confid_net.UNetConfidNetEncoder

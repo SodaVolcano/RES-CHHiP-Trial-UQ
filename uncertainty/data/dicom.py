@@ -2,8 +2,8 @@
 Set of methods to load and save DICOM files
 """
 
-from datetime import date
 import os
+from datetime import date
 from typing import Iterable, Optional
 
 import numpy as np
@@ -14,7 +14,7 @@ import toolz.curried as curried
 from loguru import logger
 
 from .. import constants as c
-from ..utils import logger_wraps, generate_full_paths, list_files, curry
+from ..utils import curry, generate_full_paths, list_files, logger_wraps
 from .datatypes import MaskDict, PatientScan
 
 

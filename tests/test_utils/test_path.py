@@ -1,6 +1,6 @@
 from typing import Generator
 
-from ..context import utils, PATCH_LIST_FILES, PATCH_OS_WALK
+from ..context import PATCH_LIST_FILES, PATCH_OS_WALK, utils
 
 generate_full_paths = utils.generate_full_paths
 list_files = utils.list_files

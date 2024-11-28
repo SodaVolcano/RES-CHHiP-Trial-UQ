@@ -2,20 +2,21 @@
 slop
 """
 import sys
+
 sys.path.append(".")
 sys.path.append("..")
-import torch
 from itertools import combinations_with_replacement
-from uncertainty.evaluation import surface_dice
-from toolz import curried
-
-import numpy as np
-from scipy import optimize
-from uncertainty.utils.wrappers import curry
-import toolz as tz
 
 import h5py
 import numpy as np
+import toolz as tz
+import torch
+from scipy import optimize
+from toolz import curried
+
+from uncertainty.evaluation import surface_dice
+from uncertainty.utils.wrappers import curry
+
 
 def pairwise_surface_dice(preds, thresh):
     return tz.pipe(
