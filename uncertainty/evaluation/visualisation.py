@@ -1,3 +1,7 @@
+"""
+Functions to display slices of CT scans, ground truth, etc...
+"""
+
 import matplotlib.pyplot as plt
 import torch
 from matplotlib.figure import Figure

@@ -1,3 +1,11 @@
+"""
+ConfidNet, auxiliary network for predicting true class probability
+
+Reference:
+    https://github.com/valeoai/ConfidNet
+    Addressing Failure Prediction by Learning Model Confidence, Corbiere et al.
+"""
+
 from typing import Callable
 
 import toolz as tz

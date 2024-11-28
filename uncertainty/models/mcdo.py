@@ -1,3 +1,7 @@
+"""
+Enable dropout during inference for any model with dropout layer(s).
+"""
+
 from typing import override
 
 import lightning as lit

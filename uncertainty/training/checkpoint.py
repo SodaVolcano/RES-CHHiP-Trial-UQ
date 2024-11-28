@@ -1,5 +1,9 @@
+"""
+Functions for handling model checkpoints and loading them.
+"""
+
 import os
-from typing import Any, Literal
+from typing import Literal
 
 import dill
 import torch
@@ -8,7 +12,7 @@ from torch import nn
 
 from ..models.unet import UNet
 from .datasets import H5Dataset
-from .lightning import LitSegmentation, SegmentationData
+from .lightning import LitSegmentation
 
 
 def load_checkpoint(

@@ -1,3 +1,7 @@
+"""
+Uncertainty metrics for evaluating the uncertainty of a model's predictions.
+"""
+
 from itertools import combinations_with_replacement
 from typing import Callable, Literal, Optional
 

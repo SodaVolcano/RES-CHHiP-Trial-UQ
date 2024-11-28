@@ -1,5 +1,5 @@
 """
-An ensemble of models
+An ensemble of models.
 """
 
 from typing import Callable
@@ -39,7 +39,7 @@ class DeepEnsemble(nn.Module):
             if isinstance(model, Callable)
             else model
         )
-        self.ensemble_params, self.ensemble_buffers = stack_module_state(self.models)
+        self.ensemble_params, self.ensemble_buffers = stack_module_state(self.models)  # type: ignore
 
     def forward(self, x: torch.Tensor) -> list[torch.Tensor]:
         def call_model(params: dict, buffers: dict, x: torch.Tensor) -> torch.Tensor:

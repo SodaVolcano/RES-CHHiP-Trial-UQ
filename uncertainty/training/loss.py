@@ -1,3 +1,7 @@
+"""
+Training loss functions for segmentation models.
+"""
+
 import torch
 from torch import nn
 from torch.nn.functional import sigmoid

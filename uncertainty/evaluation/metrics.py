@@ -1,8 +1,11 @@
+"""
+Metrics for evaluating model performance.
+"""
+
 from itertools import combinations_with_replacement, product
 from typing import Callable, Literal, Optional
 
 from loguru import logger
-import medpy
 import numpy as np
 import toolz as tz
 from toolz import curried

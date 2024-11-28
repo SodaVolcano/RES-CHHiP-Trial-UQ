@@ -1,3 +1,7 @@
+"""
+PyTorch Dataset classes for loading data from H5 files.
+"""
+
 import os
 import random
 from itertools import islice

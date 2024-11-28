@@ -1,3 +1,7 @@
+"""
+Lightning modules for training models.
+"""
+
 import os
 import time
 from typing import Optional
