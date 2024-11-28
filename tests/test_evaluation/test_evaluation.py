@@ -3,6 +3,7 @@ from ..context import evaluation
 
 
 evaluate_prediction = evaluation.evaluate_prediction
+evaluate_predictions = evaluation.evaluate_predictions
 
 
 def get_3d_predictions():
@@ -186,11 +187,8 @@ class TestEvaluatePrediction:
             dtype=torch.float64,
         )
 
-        # replace nan with 0
-        result[5] = 0 if torch.isnan(result[5]) else result[5]
-        expected_result[5] = (
-            0 if torch.isnan(expected_result[5]) else expected_result[5]
-        )
+        result = torch.nan_to_num(result, nan=0.0)  # replace nan with 0
+        expected_result = torch.nan_to_num(expected_result, nan=0.0)
 
         # Assert the result is as expected
         assert torch.allclose(result, expected_result, atol=1e-4)
@@ -267,3 +265,222 @@ class TestEvaluatePrediction:
 
         # Assert the result is as expected
         assert torch.allclose(result, expected_output, atol=1e-4)
+
+
+class TestEvaluatePredictions:
+
+    # Evaluate single metric on single prediction tensor against label with macro averaging
+    def test_single_metric_various_averaging(self):
+        # Create test data
+        prediction, label = get_3d_predictions()
+        predictions = prediction.expand(20, -1, -1, -1, -1)
+        metric_names = ["dice"]
+
+        # Call function under test
+        macro = evaluate_predictions(predictions, label, metric_names, average="macro")
+        micro = evaluate_predictions(predictions, label, metric_names, average="micro")
+        none = evaluate_predictions(predictions, label, metric_names, average="none")
+
+        assert torch.allclose(macro, torch.tensor([0.4779]), atol=1e-4)
+        assert torch.allclose(micro, torch.tensor([0.4793]), atol=1e-4)
+        assert torch.allclose(none, torch.tensor([0.5128, 0.4595, 0.4615]), atol=1e-4)
+
+    # Evaluate metrics with aggregate_before_eval=True
+    def test_all_metrics_aggregation(self):
+        _, label = get_3d_predictions()
+        # pairwise metric will remove duplicates so we need to ensure each of
+        # 20 predictions are unique using rand() instead of expand()
+        torch.manual_seed(42)
+        predictions = torch.rand(20, 3, 4, 6, 3)
+
+        # Define metric names to evaluate
+        metric_names = METRIC_NAMES + ["pairwise_dice", "pairwise_surface_dice_0.2"]
+
+        expected = {
+            "macro": torch.tensor(
+                [
+                    1.2761,
+                    1.0000,
+                    0.4616,
+                    0.5001,
+                    0.5054,
+                    0.9322,
+                    0.4806,
+                    0.5449,
+                    0.0821,
+                    5.0526,
+                    0.4958,
+                    0.9322,
+                ],
+                dtype=torch.float64,
+            ),
+            "micro": torch.tensor(
+                [
+                    1.4142,
+                    1.0000,
+                    0.4615,
+                    0.4951,
+                    0.5068,
+                    torch.nan,
+                    0.4786,
+                    0.5385,
+                    0.0821,
+                    5.0526,
+                    0.4985,
+                    torch.nan,
+                ],
+                dtype=torch.float64,
+            ),
+            "none": torch.tensor(
+                [
+                    1.4142,
+                    1.0000,
+                    1.4142,
+                    1.0000,
+                    1.0000,
+                    1.0000,
+                    0.4667,
+                    0.3871,
+                    0.5309,
+                    0.5286,
+                    0.4865,
+                    0.4854,
+                    0.4776,
+                    0.5135,
+                    0.5250,
+                    0.9101,
+                    0.9335,
+                    0.9529,
+                    0.4324,
+                    0.4419,
+                    0.5676,
+                    0.5333,
+                    0.6129,
+                    0.4884,
+                    0.0791,
+                    0.0854,
+                    0.0818,
+                    5.1266,
+                    5.0141,
+                    5.0170,
+                    0.4936,
+                    0.4761,
+                    0.5177,
+                    0.9101,
+                    0.9335,
+                    0.9529,
+                ],
+                dtype=torch.float64,
+            ),
+        }
+
+        # Assert the result is as expected
+        for avg in expected.keys():
+            result = evaluate_predictions(predictions, label, metric_names, average=avg)
+            # repalce nans with zero
+            result = torch.nan_to_num(result, nan=0.0)
+            expected[avg] = torch.nan_to_num(expected[avg], nan=0.0)
+            assert torch.allclose(result, expected[avg], atol=1e-4)
+
+    # Evaluate spatial metrics with aggregate_before_eval=False and average results
+    def test_metrics_aggregate_false_average_results(self):
+        _, label = get_3d_predictions()
+        # pairwise metric will remove duplicates so we need to ensure each of
+        # 20 predictions are unique using rand() instead of expand()
+        torch.manual_seed(42)
+        predictions = torch.rand(20, 3, 4, 6, 3)
+
+        # Define metric names to evaluate
+        metric_names = METRIC_NAMES + ["pairwise_dice", "pairwise_surface_dice_0.2"]
+
+        expected = {
+            "macro": torch.tensor(
+                [
+                    1.2607,
+                    1.0173,
+                    0.4564,
+                    0.4847,
+                    0.5232,
+                    0.9378,
+                    0.5053,
+                    0.5490,
+                    0.0821,
+                    5.0526,
+                    0.4958,
+                    0.9378,
+                ],
+                dtype=torch.float64,
+            ),
+            "micro": torch.tensor(
+                [
+                    1.2278,
+                    1.0000,
+                    0.4513,
+                    0.4763,
+                    0.5252,
+                    torch.nan,
+                    0.5047,
+                    0.5487,
+                    0.0821,
+                    5.0526,
+                    0.4985,
+                    torch.nan,
+                ],
+                dtype=torch.float64,
+            ),
+            "none": torch.tensor(
+                [
+                    1.1657,
+                    1.2230,
+                    1.3935,
+                    1.0000,
+                    1.0124,
+                    1.0394,
+                    0.4735,
+                    0.3881,
+                    0.5076,
+                    0.4881,
+                    0.4635,
+                    0.5026,
+                    0.5156,
+                    0.5447,
+                    0.5094,
+                    0.9507,
+                    0.9203,
+                    0.9423,
+                    0.5095,
+                    0.4942,
+                    0.5122,
+                    0.5259,
+                    0.6123,
+                    0.5088,
+                    0.0791,
+                    0.0854,
+                    0.0818,
+                    5.1266,
+                    5.0141,
+                    5.0170,
+                    0.4936,
+                    0.4761,
+                    0.5177,
+                    0.9507,
+                    0.9203,
+                    0.9423,
+                ],
+                dtype=torch.float64,
+            ),
+        }
+
+        # Assert the result is as expected
+        for avg in expected.keys():
+            result = evaluate_predictions(
+                predictions,
+                label,
+                metric_names,
+                average=avg,
+                aggregate_before_eval=False,
+            )
+            # repalce nans with zero
+            result = torch.nan_to_num(result, nan=0.0)
+            expected[avg] = torch.nan_to_num(expected[avg], nan=0.0)
+            assert torch.allclose(result, expected[avg], atol=1e-4)

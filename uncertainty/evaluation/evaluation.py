@@ -2,7 +2,7 @@
 Evaluate prediction(s) against ground truth label(s) using a list of metrics.
 """
 
-from typing import Literal
+from typing import Callable, Literal
 
 import toolz as tz
 import torch
@@ -92,11 +92,14 @@ def evaluate_predictions(
     prediction before evaluating the metrics. If False, the metrics are evaluated
     for each prediction separately and then averaged.
 
-    Note that for uncertainty metrics, the `label` is not used.
+    Note that for uncertainty metrics, the `label` is not used. The `aggregate_before_eval`
+    parameter does not affect uncertainty evaluation, i.e. the predictions are NOT aggregated
+    before evaluating uncertainty metrics but rather uncertainty is evaluated using all
+    predictions.
 
     Parameters
     ----------
-    predictions : torch.Tensor
+    predictions : torch.Tensor | list[torch.Tensor] | tuple[torch.Tensor]
         N predictions of shape (N, C, ...)
     label : torch.Tensor
         The ground truth tensor of shape (C, ...)
@@ -132,53 +135,37 @@ def evaluate_predictions(
     torch.Tensor
         A tensor of shape `(num_metrics,)` with the average metrics across all predictions
     """
+
+    def _get_metric(
+        name: str,
+    ) -> Callable[
+        [torch.Tensor, torch.Tensor, Literal["micro", "macro", "none"]], torch.Tensor
+    ]:
+        """Return (wrapped) spatial metric or uncertainty metric function"""
+        spatial_metric = get_metric_func(name)
+        if spatial_metric is None:
+            # change uncertainty function signature to take in pred and label (not used)
+            return lambda pred, _, avg: get_uncertainty_metric(f"{name}")(pred, average=avg)  # type: ignore
+
+        if aggregate_before_eval:
+            return lambda preds, label, avg: tz.pipe(
+                preds, probability_map, spatial_metric(label=label, average=avg)
+            )
+
+        return lambda preds, label, avg: tz.pipe(
+            preds,
+            curried.map(spatial_metric(label=label, average=avg)),
+            list,
+            torch.vstack,
+            curry(torch.mean)(dim=0),
+        )
+
     if not isinstance(predictions, torch.Tensor):
         predictions = torch.stack(predictions)
 
-    if aggregate_before_eval:
-        return tz.pipe(
-            predictions,
-            probability_map,
-            evaluate_prediction(
-                label=label, metric_names=metric_names, average=average
-            ),
-        )
-    # Evaluate each prediction separately and then average the metrics
     return tz.pipe(
-        predictions,
-        curried.map(
-            evaluate_prediction(label=label, metric_names=metric_names, average=average)
-        ),
+        metric_names,
+        curried.map(lambda name: _get_metric(name)(predictions, label, average)),
         list,
-        torch.vstack,
-        curry(torch.mean)(dim=0),
-    )
-
-
-def compute_uncertainty():
-    """ """
-    pass
-    # uncertainty_names = ["mean_variance", "mean_entropy", "pairwise_dice"]
-    # spatial_metrics = list(
-    #     filter(
-    #         lambda x: x not in uncertainty_names
-    #         and not x.startswith("pairwise_surface_dice"),
-    #         metric_names,
-    #     )
-    # )
-    # uncertainty_metrics = list(
-    #     filter(
-    #         lambda x: x in uncertainty_names or x.startswith("pairwise_surface_dice"),
-    #         metric_names,
-    #     )
-    # )
-
-    # uncertainty_scores = tz.pipe(
-    #     uncertainty_metrics,
-    #     curried.map(
-    #         lambda name: get_uncertainty_metric(name)(predictions, average=average)
-    #     ),
-    #     # some tensors have no shape, add a shape to it
-    #     curried.map(lambda score: score.unsqueeze(0) if score.shape == () else score),
-    #     list,
-    # )
+        torch.tensor if average != "none" else torch.cat,
+    )  # type: ignore

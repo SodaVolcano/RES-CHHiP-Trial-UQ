@@ -67,6 +67,7 @@ def _prepare_tensors(
     )  # type: ignore
 
 
+@curry
 def dice(
     prediction: torch.Tensor,
     label: torch.Tensor,
@@ -170,6 +171,7 @@ def _medpy_wrapper(
     )  # type: ignore
 
 
+@curry
 def hausdorff_distance(
     prediction: torch.Tensor,
     label: torch.Tensor,
@@ -196,6 +198,7 @@ def hausdorff_distance(
     return _medpy_wrapper(hd)(prediction, label, average)
 
 
+@curry
 def hausdorff_distance_95(
     prediction: torch.Tensor,
     label: torch.Tensor,
@@ -222,6 +225,7 @@ def hausdorff_distance_95(
     return _medpy_wrapper(hd95)(prediction, label, average)  # type: ignore
 
 
+@curry
 def recall(
     prediction: torch.Tensor,
     label: torch.Tensor,
@@ -250,6 +254,7 @@ def recall(
     )
 
 
+@curry
 def precision(
     prediction: torch.Tensor,
     label: torch.Tensor,
@@ -278,6 +283,7 @@ def precision(
     )
 
 
+@curry
 def average_surface_distance(
     prediction: torch.Tensor,
     label: torch.Tensor,
@@ -301,6 +307,7 @@ def average_surface_distance(
     return _medpy_wrapper(asd)(prediction, label, average)
 
 
+@curry
 def average_symmetric_surface_distance(
     prediction: torch.Tensor,
     label: torch.Tensor,
@@ -324,6 +331,7 @@ def average_symmetric_surface_distance(
     return _medpy_wrapper(assd)(prediction, label, average)
 
 
+@curry
 def generalised_energy_distance(
     a: torch.Tensor,
     b: torch.Tensor,
@@ -396,6 +404,7 @@ def generalised_energy_distance(
     return torch.clip(torch.sqrt(ged_squared), 0, None)
 
 
+@curry
 def rc_curve_stats(
     risks: torch.Tensor, confids: torch.Tensor
 ) -> tuple[list[float], list[torch.Tensor], list[float]]:
@@ -471,6 +480,7 @@ def rc_curve_stats(
     return coverages, selective_risks, weights
 
 
+@curry
 def aurc(
     risks: torch.Tensor, confids: torch.Tensor
 ) -> tuple[torch.Tensor, list[float], list[torch.Tensor]]:
@@ -516,6 +526,7 @@ def aurc(
     )
 
 
+@curry
 def eaurc(
     risks: torch.Tensor, confids: torch.Tensor
 ) -> tuple[torch.Tensor, list[float], list[torch.Tensor]]:
