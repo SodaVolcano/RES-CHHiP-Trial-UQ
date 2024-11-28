@@ -1,6 +1,7 @@
-import torch
 import numpy as np
+import torch
 from kornia.augmentation import RandomAffine3D
+
 from ..context import data
 
 inverse_affine_transform = data.inverse_affine_transform

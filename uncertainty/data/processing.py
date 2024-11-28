@@ -4,18 +4,18 @@ Collection of functions to preprocess numpy arrays and patient scans
 
 from typing import Iterable, Literal, Optional
 
-from loguru import logger
 import numpy as np
 import SimpleITK as sitk
 import toolz as tz
 import torchio as tio
+from loguru import logger
 from toolz import curried
 
 from uncertainty.utils.parallel import pmap
 
 from .. import constants as c
-from ..utils import call_method, logger_wraps, curry
-from .datatypes import PatientScan, MaskDict, PatientScanPreprocessed
+from ..utils import call_method, curry, logger_wraps
+from .datatypes import MaskDict, PatientScan, PatientScanPreprocessed
 
 
 def to_torchio_subject(volume_mask: tuple[np.ndarray, np.ndarray]) -> tio.Subject:
@@ -310,9 +310,8 @@ def preprocess_mask(
         mask,
         curried.keyfilter(lambda name: name in names),
         curried.valmap(make_isotropic(spacings=spacings, method="nearest")),
-        lambda mask: np.stack(
-            list(mask.values()), axis=0
-        ),  # (organ, height, width, depth)
+        # to (organ, height, width, depth)
+        lambda mask: np.stack(list(mask.values()), axis=0),  
     )  # type: ignore
 
 
@@ -338,7 +337,7 @@ def preprocess_patient_scan(
         curried.update_in(keys=["organ_ordering"], func=lambda _: organ_ordering),
     )
     if scan["mask"] is None:
-        raise ValueError(f"Missing organs in {scan["patient_id"]} with organs {organ_ordering}")
+        raise ValueError(f"Missing organs in {scan["patient_id"]} with required organs {organ_ordering}")
         
     scan["volume"], scan["mask"] = tz.pipe(
         (scan["volume"], scan["mask"]), crop_to_body, ensure_min_size(min_size=min_size)
@@ -364,7 +363,7 @@ def preprocess_dataset(
     dataset : Iterable[PatientScan | None]
         Dataset of PatientScan objects
     n_workers : int
-        Number of parallel processes to use, set to 1 to disable, by default 1
+        Number of parallel processes to use, set to <= 1 to disable, by default 1
     """
     mapper = pmap(n_workers=n_workers) if n_workers > 1 else curried.map
     return tz.pipe(

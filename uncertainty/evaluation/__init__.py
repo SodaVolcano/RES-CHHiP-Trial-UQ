@@ -13,17 +13,18 @@ from .metrics import (
     dice,
     eaurc,
     generalised_energy_distance,
+    get_metric_func,
     hausdorff_distance,
     hausdorff_distance_95,
     precision,
     rc_curve_stats,
     recall,
     surface_dice,
-    get_metric_func,
 )
 from .uncertainties import (
     entropy_map,
     entropy_map_pixelwise,
+    get_uncertainty_metric,
     mean_entropy,
     mean_entropy_pixelwise,
     mean_variance,
@@ -33,7 +34,6 @@ from .uncertainties import (
     probability_map,
     variance_map,
     variance_pixelwise,
-    get_uncertainty_metric,
 )
 from .visualisation import display_slices_grid, display_uncertainty_maps
 

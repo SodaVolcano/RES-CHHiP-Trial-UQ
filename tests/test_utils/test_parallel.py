@@ -1,5 +1,6 @@
-from ..context import utils
 import time
+
+from ..context import utils
 
 pmap = utils.pmap
 

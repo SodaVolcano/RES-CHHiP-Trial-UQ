@@ -1,6 +1,6 @@
 import torch
-from ..context import evaluation
 
+from ..context import evaluation
 
 _aggregate_map_metric = evaluation.uncertainties._aggregate_map_metric
 _pairwise_metric = evaluation.uncertainties._pairwise_metric

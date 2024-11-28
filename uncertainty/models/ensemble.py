@@ -1,5 +1,5 @@
 """
-An ensemble of models.
+Class representing an ensemble of arbitrary models.
 """
 
 from typing import Callable

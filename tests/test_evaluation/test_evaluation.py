@@ -1,6 +1,6 @@
 import torch
-from ..context import evaluation
 
+from ..context import evaluation
 
 evaluate_prediction = evaluation.evaluate_prediction
 evaluate_predictions = evaluation.evaluate_predictions

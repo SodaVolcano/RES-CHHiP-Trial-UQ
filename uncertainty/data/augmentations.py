@@ -17,8 +17,8 @@ from torchio.transforms import (
     RandomGamma,
 )
 
-from .processing import from_torchio_subject, to_torchio_subject
 from ..utils.logging import logger_wraps
+from .processing import from_torchio_subject, to_torchio_subject
 
 
 def inverse_affine_transform(

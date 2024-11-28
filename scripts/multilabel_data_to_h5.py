@@ -6,16 +6,18 @@ import sys
 
 sys.path.append(".")
 sys.path.append("..")
-from tqdm import tqdm
+import os
+
 import h5py
 import toolz as tz
+from tqdm import tqdm
+
 from uncertainty.data.dicom import (
-    _load_rt_struct,
     _load_roi_mask,
-    load_volume,
+    _load_rt_struct,
     _preprocess_mask,
+    load_volume,
 )
-import os
 
 out_path = "temp.h5"
 observers = ["DR", "JD", "JdL", "KL", "MAE", "MEB", "MK", "RR", "RTW", "SAB"]

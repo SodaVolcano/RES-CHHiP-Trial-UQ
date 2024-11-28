@@ -2,11 +2,10 @@
 Datatype definitions for masks and patient scans
 """
 
-import numpy as np
-
 from datetime import date
-
 from typing import Annotated, TypedDict
+
+import numpy as np
 
 MaskDict = dict[Annotated[str, "organ name"], np.ndarray]
 

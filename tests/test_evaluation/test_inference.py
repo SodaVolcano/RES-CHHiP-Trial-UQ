@@ -1,9 +1,9 @@
-from ..context import evaluation
 import numpy as np
-from skimage.util import view_as_windows
-import torch
 import toolz as tz
+import torch
+from skimage.util import view_as_windows
 
+from ..context import evaluation
 
 _calc_pad_amount = evaluation.inference._calc_pad_amount
 _pad_image = evaluation.inference._pad_image
