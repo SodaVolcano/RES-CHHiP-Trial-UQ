@@ -12,8 +12,6 @@ import toolz as tz
 import torch
 from torch import nn
 
-from uncertainty.config import configuration
-
 from .unet import UNet
 from .unet_modules import _calc_n_kernels, _concat_with_skip
 
@@ -72,7 +70,7 @@ class UNetConfidNet(nn.Module):
         unet: UNet,
         config: dict,
         hidden_conv_dims: list[int] = [128, 128, 64, 64],
-        activation: Callable[[], nn.Module] = configuration()["activation"],
+        activation: Callable[[], nn.Module] = nn.LeakyReLU,
         last_activation: Callable[[], nn.Module] = nn.Sigmoid,
     ):
         """

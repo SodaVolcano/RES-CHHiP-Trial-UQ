@@ -2,8 +2,9 @@
 Reads configuration from a yaml file and returns a dictionary of configuration settings
 """
 
-from functools import cache
-
+from functools import cache, wraps
+import inspect
+import sys
 import yaml
 from torch import nn, optim
 
@@ -32,7 +33,16 @@ def unet_config(config_path: str = "configuration.yaml") -> dict:
 def logger_config(config_path: str = "configuration.yaml") -> dict:
     with open(config_path, "r") as file:
         config = yaml.safe_load(file)
-    return config["logger"]
+    config = config["logger"]
+
+    # Replace string with corresponding file object if present
+    mapping = {"stdout": sys.stdout, "stderr": sys.stderr}
+    config["sink"] = mapping.get(config["sink"], config["sink"])
+
+    # No retention for stdout and stderr
+    if config["sink"] in [sys.stdout, sys.stderr]:
+        config["retention"] = config.get("retention", None)
+    return config
 
 
 @cache
@@ -54,8 +64,39 @@ def training_config(config_path: str = "configuration.yaml") -> dict:
     return config["training"]
 
 
-def configuration() -> dict:
+def configuration(config_path: str = "configuration.yaml") -> dict:
     """
-    Preset configuration for U-Net model
+    The entire configuration for the project
     """
-    return data_config() | unet_config() | training_config() | logger_config()  # type: ignore
+    return {
+        "data": data_config(config_path),
+        "unet": unet_config(config_path),
+        "logger": logger_config(config_path),
+        "training": training_config(config_path),
+    }
+
+
+def auto_match_config(*, prefix: str = ""):
+    """
+    Automatically pass configuration values to function parameters
+
+    Parameters
+    ----------
+    prefix : str (optional)
+        Key in the configuration dictionary whose value is the
+        dictionary of configuration settings to pass to the function.
+        E.g. "data", "unet", "logger", "training"
+    """
+
+    def wrapper(func):
+
+        @wraps(func)
+        def wrapped(*args, **config):
+            params = inspect.signature(func).parameters
+            config = config[prefix] if prefix else config
+            filtered_kwargs = {k: v for k, v in config.items() if k in params}
+            return func(*args, **filtered_kwargs)
+
+        return wrapped
+
+    return wrapper

@@ -83,9 +83,16 @@ training:
     total_iters: 750
     power: 0.9
 
+# loguru settings, see https://loguru.readthedocs.io/en/stable/api/logger.html
 logger:
-  # loguru settings, see https://loguru.readthedocs.io/en/stable/api/logger.html
-  log_sink: "./logs/out_{time}.log"
-  log_format: "{time:YYYY-MM-DD at HH:mm:ss} {level} {message}"
-  log_level: "DEBUG"
-  log_retention: "7 days"
+  # Can also be "stdout" or "stderr" for standard output and error
+  sink: "./logs/out_{time}.log"
+  format: "<green>{time:YYYY-MM-DD at HH:mm:ss}</green> <level>{level: <8} {message}</level>"
+  # Log retention period, not used if using "stdout" or "stderr"
+  retention: "7 days"
+  # TRUE for detailed backtrace logging for debugging
+  backtrace: true
+  # extra diagnostic information
+  diagnose: true
+  # Log level; ["TRACE", "DEBUG", "INFO", "SUCCESS", "WARNING", "ERROR", "CRITICAL"]
+  level: "INFO"

@@ -67,7 +67,7 @@ class SmoothDiceLoss(nn.Module):
 
 class DiceBCELoss(nn.Module):
     """
-    Dice + BCE loss, defined as BCE + DiceLoss
+    Dice + Binary Cross-Entropy loss
 
     Parameters
     ----------

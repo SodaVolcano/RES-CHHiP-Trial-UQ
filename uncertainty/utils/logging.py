@@ -2,14 +2,17 @@
 Functions for logging
 """
 
+from enum import auto
 import inspect
 import logging
+import sys
+from typing import TextIO
 import warnings
 from functools import wraps
 
 from loguru import logger
 
-from uncertainty.config import configuration
+from ..config import auto_match_config
 
 
 class __InterceptHandler(logging.Handler):
@@ -36,25 +39,29 @@ class __InterceptHandler(logging.Handler):
         )
 
 
+@auto_match_config(prefix="logger")
 def config_logger(
-    sink=configuration()["log_sink"],
-    format=configuration()["log_format"],
-    level=configuration()["log_level"],
-    retention=configuration()["log_retention"],
+    sink: str | TextIO = sys.stderr,
+    format: str = "{time:YYYY-MM-DD at HH:mm:ss} {level} {message}",
+    level: str = "INFO",
+    backtrace: bool = True,
+    diagnose: bool = True,
+    retention: str | None = None,
 ):
     """
     Configure loguru logger settings and set it as as the default logger
     """
     logger.remove()
     logger.add(
-        sink,
+        sink,  # type: ignore
         format=format,
-        backtrace=True,
-        diagnose=True,
         level=level,
         retention=retention,
+        backtrace=backtrace,
+        diagnose=diagnose,
     )
 
+    # Intercept standard logging messages and redirect them to Loguru logger
     logging.basicConfig(handlers=[__InterceptHandler()], level=0, force=True)
     warnings.showwarning = lambda msg, *args, **kwargs: logger.warning(msg)
 

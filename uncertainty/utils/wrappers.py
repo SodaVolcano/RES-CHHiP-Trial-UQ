@@ -10,7 +10,10 @@ from toolz import curry as _curry
 
 def curry(func: Callable) -> Callable:
     """
-    Pass docstring to the @curry decorator from toolz
+    Partially parameterise a function.
+
+    A wrapper that passes docstring of the wrapped function
+    to the @curry decorator from toolz.
     """
 
     @wraps(func)
