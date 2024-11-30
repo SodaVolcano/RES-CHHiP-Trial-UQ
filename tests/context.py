@@ -21,7 +21,7 @@ training = uncertainty.training
 models = uncertainty.models
 evaluation = uncertainty.evaluation
 data = uncertainty.data
-config = uncertainty
+config = uncertainty.config
 
 # Patch paths
 PATCH_OS_WALK = "os.walk"

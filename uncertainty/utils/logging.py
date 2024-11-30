@@ -39,7 +39,7 @@ class __InterceptHandler(logging.Handler):
         )
 
 
-@auto_match_config(prefix="logger")
+@auto_match_config(prefixes=["logger"])
 def config_logger(
     sink: str | TextIO = sys.stderr,
     format: str = "{time:YYYY-MM-DD at HH:mm:ss} {level} {message}",

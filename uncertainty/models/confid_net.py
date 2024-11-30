@@ -14,6 +14,7 @@ from torch import nn
 
 from .unet import UNet
 from .unet_modules import _calc_n_kernels, _concat_with_skip
+from ..config import auto_match_config
 
 
 class UNetConfidNetEncoder(nn.Module):
@@ -65,10 +66,13 @@ class UNetConfidNetEncoder(nn.Module):
 
 
 class UNetConfidNet(nn.Module):
+    @auto_match_config(prefixes=["confidnet", "unet"])
     def __init__(
         self,
         unet: UNet,
-        config: dict,
+        n_kernels_init: int,
+        n_kernels_max: int,
+        output_channels: int,
         hidden_conv_dims: list[int] = [128, 128, 64, 64],
         activation: Callable[[], nn.Module] = nn.LeakyReLU,
         last_activation: Callable[[], nn.Module] = nn.Sigmoid,
@@ -80,12 +84,10 @@ class UNetConfidNet(nn.Module):
         super().__init__()
         self.unet = unet
         self.encoder = UNetConfidNetEncoder(unet)
-        input_dim = _calc_n_kernels(
-            config["n_kernels_init"], 1, config["n_kernels_max"]
-        )
-        output_dim = config["n_kernels_last"]
 
-        dims = [input_dim] + hidden_conv_dims + [output_dim]
+        input_dim = _calc_n_kernels(n_kernels_init, 1, n_kernels_max)
+        dims = [input_dim] + hidden_conv_dims + [output_channels]
+
         self.activation = activation()
         self.last_activation = last_activation()
         self.conv_activations = nn.ModuleList(
@@ -94,10 +96,14 @@ class UNetConfidNet(nn.Module):
                     nn.Conv3d(
                         in_dim,
                         out_dim,
-                        kernel_size=3 if out_dim != output_dim else 1,
+                        kernel_size=3 if out_dim != output_channels else 1,
                         padding="same",
                     ),
-                    self.activation if out_dim != output_dim else self.last_activation,
+                    (
+                        self.activation
+                        if out_dim != output_channels
+                        else self.last_activation
+                    ),
                 )
                 for in_dim, out_dim in zip(dims, dims[1:])
             ]

@@ -1,7 +1,7 @@
 from loguru import logger
 
 from .utils import config_logger
-from .config import logger_config
+from .config import configuration
 
 logger.enable("uncertainty")
-config_logger(logger_config())  # type: ignore
+config_logger(**configuration())  # type: ignore

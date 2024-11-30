@@ -1,14 +1,17 @@
 # Configuration file for the project
+# A configuration object is a dictionary where each key has the format <prefix>__<parameter>.
 
-# Data volumes are formatted as (height, width, depth, channel)
+# NOTE: ORDER of the prefixes ()"data", "unet"...) DO matter
+# keys that appear later will overwrite earlier keys
+# if they have the same name, see uncertainty.config.auto_match_config
+
+# Data volumes are formatted as (channel, height, width, depth)
 data:
   # Path to directory containing directories of DICOM slices
   data_dir: "./"
   # Name of preprocessed h5 files for training and testing data
   staging_train_name: "./staging/train.h5"
   staging_test_name: "./staging/test.h5"
-  # Channel of input volume, 1 for grayscale, 3 for RGB
-  input_channel: 1
   # Patch size to sample from volume to form training data
   # - try to keep each dimension divisible by (2 ** (n_level - 1))
   # - because U-Net downsamples by 2 at each level
@@ -40,6 +43,10 @@ unet:
   # Small value added to variance to avoid division by zero
   instance_norm_epsilon: 1e-5
   # ------------------ Encoder-Decoder Settings ------------------
+  # Channel of input volume, 1 for grayscale, 3 for RGB
+  input_channels: 1
+  # Output channels of the final layer, number of classes to predict
+  output_channels: 3
   # Number of kernels in the output of the first level of encoder
   # - This is doubled/halved at each level in the encoder/decoder
   n_kernels_init: 32
@@ -47,11 +54,19 @@ unet:
   n_kernels_max: 512
   # Number of resolutions/levels for the U-Net
   n_levels: 5
-  # Output channels of the final layer, number of classes to predict
-  n_kernels_last: 3
   # Activation function name from torch.nn for the final layer, usually
   # "Sigmoid" for binary classification or "Softmax" for multi-class classification
   final_layer_activation: "Sigmoid"
+
+confidnet:
+  # Dimension of the convolution layers
+  # Number of convolution is specified by the length of this list
+  hidden_conv_dims: [128, 128, 128, 64, 64]
+  # Activation function name from torch.nn for convolutional layers
+  activation: "LeakyReLU"
+  # Activation function name from torch.nn for the final layer, usually
+  # "Sigmoid" for binary classification or "Softmax" for multi-class classification
+  last_activation: "Sigmoid"
 
 training:
   # Path to directory to save model checkpoints

@@ -13,26 +13,28 @@ UNet = models.UNet
 MCDropout = models.MCDropout
 
 config = {
-    "n_kernels_max": 256,
-    "n_kernels_init": 4,
-    "n_convolutions_per_block": 2,
-    "kernel_size": 3,
-    "use_instance_norm": True,
-    "activation": nn.ReLU,
-    "dropout_rate": 0.8,
-    "instance_norm_epsilon": 1e-5,
-    "instance_norm_decay": 0.1,
-    "n_levels": 3,
-    "input_channel": 1,
-    "n_kernels_last": 1,
-    "final_layer_activation": nn.Sigmoid,
+    "unet__n_kernels_max": 256,
+    "unet__n_kernels_init": 4,
+    "unet__n_convolutions_per_block": 2,
+    "unet__kernel_size": 3,
+    "unet__use_instance_norm": True,
+    "unet__activation": nn.ReLU,
+    "unet__dropout_rate": 0.8,
+    "unet__instance_norm_epsilon": 1e-5,
+    "unet__instance_norm_momentum": 0.1,
+    "unet__instance_norm_decay": 0.1,
+    "unet__n_levels": 3,
+    "unet__input_channels": 1,
+    "unet__output_channels": 1,
+    "unet__n_kernels_last": 1,
+    "unet__final_layer_activation": nn.Sigmoid,
 }
 
 
 class TestMCDropout:
     # Initialize MCDropoutUNet with a valid Configuration and ensure it wraps a new UNet instance
     def test_initialization_with_valid_config(self):
-        unet_model = UNet(config, deep_supervision=False)  # type: ignore
+        unet_model = UNet(**config, deep_supervision=False)  # type: ignore
 
         model = MCDropout(model=unet_model)  # type: ignore
         input_ = torch.randn(2, 1, 128, 128, 128)
@@ -43,8 +45,8 @@ class TestMCDropout:
 
     # Test that passing the same input produces different outputs
     def test_same_input_different_output(self):
-        unet = UNet(config=config, deep_supervision=False)  # type: ignore
-        unet2 = UNet(config=config, deep_supervision=False)  # type: ignore
+        unet = UNet(**config, deep_supervision=False)  # type: ignore
+        unet2 = UNet(**config, deep_supervision=False)  # type: ignore
         unet2.eval()
         # Create an instance of MCDropoutUNet
         model = MCDropout(unet)  # type: ignore

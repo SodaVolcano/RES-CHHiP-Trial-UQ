@@ -42,6 +42,7 @@ class DeepEnsemble(nn.Module):
         self.ensemble_params, self.ensemble_buffers = stack_module_state(self.models)  # type: ignore
 
     def forward(self, x: torch.Tensor) -> list[torch.Tensor]:
+        # Vectorised form of the forward pass
         def call_model(params: dict, buffers: dict, x: torch.Tensor) -> torch.Tensor:
             return functional_call(self.models[0], (params, buffers), (x,))
 

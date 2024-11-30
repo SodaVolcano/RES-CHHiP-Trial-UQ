@@ -10,6 +10,7 @@ import torch
 from torch import nn
 
 from .unet_modules import Decoder, Encoder
+from ..config import auto_match_config
 
 
 class UNet(nn.Module):
@@ -35,11 +36,11 @@ class UNet(nn.Module):
         (bottleneck and last layer of decoder) is not returned.
     """
 
-    def __init__(self, config: dict, deep_supervision: bool = True):
+    @auto_match_config(prefixes=["unet", "training"])
+    def __init__(self, deep_supervision: bool = True, **kwargs):
         super().__init__()
-        self.config = config
-        self.encoder = Encoder(config)
-        self.decoder = Decoder(config, deep_supervision=deep_supervision)
+        self.encoder = Encoder(**kwargs)
+        self.decoder = Decoder(**kwargs, deep_supervision=deep_supervision)
         self.deep_supervision = deep_supervision
 
     def forward(self, x: torch.Tensor, logits: bool = False) -> torch.Tensor:
