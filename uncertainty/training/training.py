@@ -1,18 +1,83 @@
 """
-Functions for handling model checkpoints and loading them.
+Functions for managing training, such as checkpointing and data splitting.
 """
 
 import os
-from typing import Literal
+import pickle
+from random import randint
+from typing import Iterable, Literal
 
+import toolz as tz
+from toolz import curried
 import dill
 import torch
 from loguru import logger
 from torch import nn
+from sklearn.model_selection import KFold
+
+from ..utils.common import unpack_args
 
 from ..models.unet import UNet
 from .datasets import H5Dataset
 from .lightning import LitSegmentation
+
+
+def split_into_folds[
+    T
+](dataset, n_folds: int, return_indices: bool = False) -> Iterable[
+    tuple[list[T | int], list[T | int]]
+]:
+    """
+    Split a dataset into `n_folds` folds and return an Iterable of the split.
+
+    Parameters
+    ----------
+    dataset : Sequence
+        The dataset to split.
+    n_folds : int
+        The number of folds to split the dataset into.
+    return_indices : bool, optional
+        If True, return the indices of the dataset split instead of the actual data.
+    """
+    indices = KFold(n_splits=n_folds).split(dataset)  # type: ignore
+    if return_indices:
+        # cast from numpy array to list
+        return map(
+            unpack_args(lambda train, val: (train.tolist(), val.tolist())), indices
+        )
+    get_with_indices = lambda indices: [dataset[i] for i in indices]
+    return map(
+        unpack_args(
+            lambda train_idx, val_idx: (
+                get_with_indices(train_idx),
+                get_with_indices(val_idx),
+            )
+        ),
+        indices,
+    )
+
+
+def write_training_fold_file(
+    path: str, fold_indices: Iterable[tuple[list[int], list[int]]], seed: bool = True
+) -> None:
+    """
+    Write a file containing indices of each fold split (and optionally, fold-specific seed)
+    """
+    content = tz.pipe(
+        {
+            f"fold_{i}": {"train": train, "val": val}
+            for i, (train, val) in enumerate(fold_indices)
+        },
+        # add seed to each fold if specified
+        (curried.valmap(lambda x: x | {"seed": randint(0, 2**32 - 1)} if seed else x)),
+    )
+
+    with open(path, "wb") as f:
+        pickle.dump(content, f)
+
+
+def train_model(config: dict):
+    pass
 
 
 def load_checkpoint(

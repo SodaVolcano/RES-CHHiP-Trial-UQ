@@ -1,7 +1,7 @@
 import os
 
+import sys
 import torch
-from context import uncertainty as un
 from lightning import Trainer
 from lightning.pytorch.callbacks import ModelCheckpoint
 
@@ -11,12 +11,11 @@ import dill
 import torch
 from lightning.pytorch.loggers import TensorBoardLogger
 
-from scripts.__helpful_parser import HelpfulParser
-from uncertainty.config import Configuration
+from __helpful_parser import HelpfulParser
 
 
 def main(
-    config: Configuration,
+    config: dict,
     checkpoint_path: str,
     retrain: bool,
     deep_supervision: bool,
@@ -77,33 +76,26 @@ def main(
 
 
 if __name__ == "__main__":
-    config = un.config.configuration()
     parser = HelpfulParser(
-        description="Train a model on a dataset of DICOM files or h5 files."
+        description="Train a U-Net model on a dataset of DICOM files or h5 files."
     )
     parser.add_argument(
         "--data_path",
         type=str,
-        help="Path to the dataset.h5 file containing list of (x, y) pairs.",
-        default=os.path.join(config["staging_dir"], config["staging_fname"]),
+        help="Path to the H5 patient scan file.",
+        default=None,
     )
     parser.add_argument(
         "--checkpoint_path",
         type=str,
-        help="Path to save or load model checkpoints.",
-        default=config["model_checkpoint_path"],
+        help="Path to save or load model checkpoints. If the folder already exist, a number will be appended to the folder name.",
+        default=None,
     )
     parser.add_argument(
         "--retrain",
         action="store_true",
         help="Whether to retrain a model saved in the model checkpoint",
         default=False,
-    )
-    parser.add_argument(
-        "--no_deep_supervision",
-        action="store_false",
-        help="Disable deep supervision during training.",
-        default=not config["deep_supervision"],
     )
 
     args = parser.parse_args()

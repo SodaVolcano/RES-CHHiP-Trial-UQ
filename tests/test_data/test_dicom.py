@@ -10,7 +10,7 @@ c = constants
 _load_rt_struct = data.dicom._load_rt_struct
 load_mask = data.load_mask
 load_patient_scan = data.dicom.load_patient_scan
-load_patient_scans = data.dicom.load_patient_scans
+load_all_patient_scans = data.dicom.load_all_patient_scans
 load_all_masks = data.dicom.load_all_masks
 MaskDict = data.MaskDict
 PatientScan = data.PatientScan
@@ -288,7 +288,7 @@ class TestLoadPatientScans:
         mocker.patch(PATCH_LOAD_MASK, return_value=mock_mask)
 
         # Call the function under test
-        result = list(load_patient_scans(gen_path()))
+        result = list(load_all_patient_scans(gen_path()))
 
         # Assertions
         assert len(result) == 2
@@ -307,7 +307,7 @@ class TestLoadPatientScans:
         mocker.patch(PATCH_LISTDIR, return_value=[])
 
         # Call the function under test
-        result = list(load_patient_scans(gen_path()))
+        result = list(load_all_patient_scans(gen_path()))
 
         # Assertions
         assert result == []

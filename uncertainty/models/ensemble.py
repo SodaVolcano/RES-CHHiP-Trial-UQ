@@ -12,30 +12,30 @@ from torch.func import functional_call, stack_module_state  # type: ignore
 class DeepEnsemble(nn.Module):
     """
     An ensemble of models, produces multiple outputs from each member
+
+    See also uncertainty.evaluation.ensemble_inference for a fucntional
+    version for performing ensemble inference using a list of models.
+
+    Parameters
+    ----------
+    model : Callable[..., nn.Module] | list[nn.Module]
+        A callable PyTorch model class, or a list of PyTorch models
+    n_members: int
+        The number of models in the ensemble
+    *args, **kwargs : list, dict
+        Additional arguments to pass to the model_fn
     """
 
     def __init__(
         self,
         model: Callable[..., nn.Module] | list[nn.Module],
-        ensemble_size: int,
+        n_members: int,
         *args,
         **kwargs,
     ):
-        """
-        An ensemble of models
-
-        Parameters
-        ----------
-        ensemble_size : int
-            The number of models in the ensemble
-        model : Callable[..., nn.Module] | list[nn.Module]
-            A callable PyTorch model class, or a list of PyTorch models
-        *args, **kwargs : list, dict
-            Additional arguments to pass to the model_fn
-        """
         super().__init__()
         self.models = (
-            nn.ModuleList([model(*args, **kwargs) for _ in range(ensemble_size)])
+            nn.ModuleList([model(*args, **kwargs) for _ in range(n_members)])
             if isinstance(model, Callable)
             else model
         )

@@ -270,8 +270,6 @@ class H5Dataset(Dataset):
     ----------
     h5_file_path : str
         Path to the H5 file containing the dataset.
-    config: dict
-        Dictionary containing configurations.
     indices: list[int] | None
         Optinal list of indices. If specified, only elements
         with the specified indices are fetched. Good for specifying
@@ -293,14 +291,12 @@ class H5Dataset(Dataset):
     def __init__(
         self,
         h5_file_path: str,
-        config: dict = configuration(),
         indices: list[int] | None = None,
     ):
         self.h5_file_path = h5_file_path
         self.dataset = None
         with h5.File(h5_file_path, "r") as f:
             self.keys = list(f.keys())
-        self.config = config
         self.indices = indices or list(range(len(self.keys)))
 
     def __len__(self) -> int:

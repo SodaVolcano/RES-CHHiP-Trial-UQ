@@ -1,7 +1,8 @@
 """
 Reads configuration from a yaml file and returns a dictionary of configuration settings
 
-A configuration object is a dictionary where each key has the format <prefix>__<parameter>.
+A configuration object is a dictionary where each key has the format <prefix>__<parameter>
+(to distinguish configuration arguments from normal keyword arguments).
 """
 
 from functools import cache, wraps, reduce

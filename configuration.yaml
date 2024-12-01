@@ -8,10 +8,9 @@
 # Data volumes are formatted as (channel, height, width, depth)
 data:
   # Path to directory containing directories of DICOM slices
-  data_dir: "./"
+  data_dir: "./data"
   # Name of preprocessed h5 files for training and testing data
-  staging_train_name: "./staging/train.h5"
-  staging_test_name: "./staging/test.h5"
+  h5_path: "./staging/preprocessed_dataset.h5"
   # Patch size to sample from volume to form training data
   # - try to keep each dimension divisible by (2 ** (n_level - 1))
   # - because U-Net downsamples by 2 at each level
@@ -20,10 +19,6 @@ data:
   patch_step: 32
   # Percentage of patches in batch guaranteed to have foreground class
   foreground_oversample_ratio: 0.333
-  # Percentage of total dataset split for testing, other is for training
-  test_split: 0.2
-  # Percentage of TRAINING dataset split for validation
-  val_split: 0.2
 
 unet:
   # ------------------ Conolution Block ------------------
@@ -67,10 +62,33 @@ confidnet:
   # Activation function name from torch.nn for the final layer, usually
   # "Sigmoid" for binary classification or "Softmax" for multi-class classification
   last_activation: "Sigmoid"
+  # Path to pretrained U-Net model to use as encoder
+  pretrained_unet_path: "./checkpoints/unet"
+
+ensemble:
+  # Number of members in the ensemble
+  n_members: 10
+  # Name of model class used to initialise each member
+  model: "UNet"
 
 training:
+  # ------------------ Training Settings ------------------
   # Path to directory to save model checkpoints
-  model_checkpoint_path: "./checkpoints/unet_2"
+  # Configuration file, data splits and model checkpoints will be saved here
+  # Model checkpoints are saved as 
+  #     "<model_checkpoint_path>/fold_<int>/<model_name_lowercase>_<int>.pth"
+  model_checkpoint_path: "./checkpoints/"
+  # How many folds to split the data into for cross-validation
+  n_folds: 5
+  # Percentage of total dataset split for testing, other is for training
+  test_split: 0.4
+  # Percentage of TRAINING dataset split for validation
+  val_split: 0.2
+  # List of models to train for EACH fold, any of "unet", "confidnet", "ensemble_<int>"
+  # Note that order matters - if a model (e.g. confidnet) uses a pretrained model (e.g. 
+  # unet), then the former should appear later in the list
+  models_to_train: ["ensemble_10", "confidnet"]
+  # ------------------ Hyperparameters ------------------
   # Whether to train using deep supervision loss
   deep_supervision: true
   # Number of epochs to train for

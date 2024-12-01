@@ -331,7 +331,7 @@ def load_all_masks(dicom_collection_path: str) -> Iterable[MaskDict]:
 
 @logger_wraps(level="INFO")
 @curry
-def load_patient_scans(dicom_collection_path: str) -> Iterable[PatientScan]:
+def load_all_patient_scans(dicom_collection_path: str) -> Iterable[PatientScan]:
     """
     Load PatientScans from folders of DICOM files in `dicom_collection_path`
 
