@@ -20,7 +20,7 @@ PatientScan = TypedDict(
         "manufacturer": str,
         "scanner": str,
         "study_date": date,
-        "mask": MaskDict,
+        "masks": MaskDict,
     },
 )
 

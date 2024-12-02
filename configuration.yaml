@@ -11,14 +11,6 @@ data:
   data_dir: "./data"
   # Name of preprocessed h5 files for training and testing data
   h5_path: "./staging/preprocessed_dataset.h5"
-  # Patch size to sample from volume to form training data
-  # - try to keep each dimension divisible by (2 ** (n_level - 1))
-  # - because U-Net downsamples by 2 at each level
-  patch_size: [256, 256, 64]
-  # Step size for sliding window patch sampler (used for validation and testing)
-  patch_step: 32
-  # Percentage of patches in batch guaranteed to have foreground class
-  foreground_oversample_ratio: 0.333
 
 unet:
   # ------------------ Conolution Block ------------------
@@ -37,6 +29,7 @@ unet:
   instance_norm_decay: 0.9
   # Small value added to variance to avoid division by zero
   instance_norm_epsilon: 1e-5
+
   # ------------------ Encoder-Decoder Settings ------------------
   # Channel of input volume, 1 for grayscale, 3 for RGB
   input_channels: 1
@@ -72,27 +65,27 @@ ensemble:
   model: "UNet"
 
 training:
-  # ------------------ Training Settings ------------------
-  # Path to directory to save model checkpoints
-  # Configuration file, data splits and model checkpoints will be saved here
-  # Model checkpoints are saved as 
+  # ------------------ Checkpoint Settings ------------------
+  # Path to directory to save model checkpoints; model checkpoints are saved as
   #     "<model_checkpoint_path>/fold_<int>/<model_name_lowercase>_<int>.pth"
-  model_checkpoint_path: "./checkpoints/"
-  # How many folds to split the data into for cross-validation
-  n_folds: 5
-  # Percentage of total dataset split for testing, other is for training
-  test_split: 0.4
-  # Percentage of TRAINING dataset split for validation
-  val_split: 0.2
+  # Configuration file, data splits and model checkpoints will be saved here
+  checkpoint_path: "./checkpoints/"
+  # See https://lightning.ai/docs/pytorch/stable/api/lightning.pytorch.callbacks.ModelCheckpoint.html
+  checkpoint_name: "{epoch:03d}-{val_loss:.4f}"
+  # Save model checkpoint every n epochs
+  checkpoint_every_n_epochs: 100
+  # Whether to save the last checkpoint as "last.pth"
+  save_last_checkpoint: true
   # List of models to train for EACH fold, any of "unet", "confidnet", "ensemble_<int>"
   # Note that order matters - if a model (e.g. confidnet) uses a pretrained model (e.g. 
   # unet), then the former should appear later in the list
   models_to_train: ["ensemble_10", "confidnet"]
-  # ------------------ Hyperparameters ------------------
-  # Whether to train using deep supervision loss
-  deep_supervision: true
-  # Number of epochs to train for
-  n_epochs: 750
+
+  # ------------------ Data Settings ------------------
+  # How many folds to split the data into for cross-validation (determines valiation split ratio)
+  n_folds: 5
+  # Percentage of total dataset split for testing, other is for training
+  test_split: 0.4
   # Number of batches for each epoch in training
   n_batches_per_epoch: 250
   # Number of batches for each epoch in validation
@@ -101,6 +94,20 @@ training:
   batch_size: 2
   # Size of each batch in validation and testing
   batch_size_eval: 4
+  # Patch size to sample from volume to form training data
+  # - try to keep each dimension divisible by (2 ** (n_level - 1))
+  # - because U-Net downsamples by 2 at each level
+  patch_size: [256, 256, 64]
+  # Step size for sliding window patch sampler (used for validation and testing)
+  patch_step: 32
+  # Percentage of patches in batch guaranteed to have foreground class
+  foreground_oversample_ratio: 0.333
+
+  # ------------------ Hyperparameters ------------------
+  # Whether to train using deep supervision loss
+  deep_supervision: true
+  # Number of epochs to train for
+  n_epochs: 750
   # Weight initialiser for model from torch.nn.init
   initialiser: "kaiming_normal_"
   # Optimiser for training from torch.optim
@@ -116,8 +123,9 @@ training:
     total_iters: 750
     power: 0.9
 
-# loguru settings, see https://loguru.readthedocs.io/en/stable/api/logger.html
 logger:
+  #  ------------ loguru settings -------------------
+  # see https://loguru.readthedocs.io/en/stable/api/logger.html
   # Can also be "stdout" or "stderr" for standard output and error
   sink: "./logs/out_{time}.log"
   format: "<green>{time:YYYY-MM-DD at HH:mm:ss}</green> <level>{level: <8} {message}</level>"
@@ -129,3 +137,7 @@ logger:
   diagnose: true
   # Log level; ["TRACE", "DEBUG", "INFO", "SUCCESS", "WARNING", "ERROR", "CRITICAL"]
   level: "INFO"
+
+  #  ---------- tensorboard settings -------------------
+  #  see https://lightning.ai/docs/pytorch/stable/extensions/logging.html
+  tb_logger_path: "./logs/"

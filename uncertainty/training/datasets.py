@@ -4,6 +4,7 @@ PyTorch Dataset classes for loading data from H5 files.
 
 import os
 import random
+import time
 from itertools import islice
 from typing import Callable
 
@@ -13,11 +14,17 @@ import toolz as tz
 import torch
 import torch.utils
 from kornia.augmentation import RandomAffine3D
-from skimage.util import view_as_windows
 from toolz import curried
 from torch.utils.data import Dataset, IterableDataset, Subset
 
-from ..config import configuration
+
+import lightning as lit
+from pytorch_lightning import seed_everything
+from torch.utils.data import DataLoader
+
+from uncertainty.config import auto_match_config
+
+from ..data import augmentations
 
 
 def get_unique_filename(base_path):
@@ -34,72 +41,6 @@ def get_unique_filename(base_path):
         counter += 1
 
 
-class SlidingPatchDataset(IterableDataset):
-    """
-    Produce rolling window of patches from a dataset of 3D images.
-    """
-
-    def __init__(
-        self,
-        h5_file_path: str,
-        config: dict,
-        patch_size: tuple[int, ...],
-        patch_step: int,
-        transform: Callable[
-            [tuple[np.ndarray, np.ndarray]], tuple[np.ndarray, np.ndarray]
-        ] = tz.identity,
-    ):
-        self.h5_file_path = h5_file_path
-        self.config = config
-        self.dataset = None
-        self.transform = transform
-        self.patch_size = patch_size
-        self.patch_step = patch_step
-
-    @torch.no_grad()
-    def __patch_iter(self, idx: int):
-        """
-        Return an iterator of patches for data at index `idx`
-        """
-        if self.dataset is None:
-            self.dataset = H5Dataset(self.h5_file_path, self.config)
-
-        x_patches, y_patches = tz.pipe(
-            self.dataset[idx],
-            curried.map(
-                lambda arr: arr.numpy() if isinstance(arr, torch.Tensor) else arr
-            ),
-            curried.map(
-                lambda arr: view_as_windows(
-                    arr, (arr.shape[0], *self.patch_size), self.patch_step
-                )
-            ),  # type: ignore
-            tuple,
-        )
-        assert x_patches is not None and y_patches is not None
-        for idx in np.ndindex(x_patches.shape[:-4]):  # type: ignore
-            yield torch.tensor(x_patches[idx]), torch.tensor(y_patches[idx])
-
-    @torch.no_grad()
-    def __iter__(self):  # type: ignore
-        """
-        Return iterator of patches over all data in the dataset
-        """
-        if self.dataset is None:
-            self.dataset = H5Dataset(self.h5_file_path, self.config)
-
-        return tz.pipe(
-            range(len(self.dataset)),
-            curried.map(self.__patch_iter),
-            tz.concat,
-            curried.map(self.transform),
-        )
-
-    def __del__(self):
-        if self.dataset is not None:
-            del self.dataset
-
-
 class RandomPatchDataset(IterableDataset):
     """
     Randomly sample patches from a dataset of 3D images.
@@ -110,48 +51,40 @@ class RandomPatchDataset(IterableDataset):
 
     Parameters
     ----------
-    dataset:
-
+    h5_path : str
+        Path to the H5 file containing the PatientScan dataset.
+    indices : list[int]
+        List of indices to sample from the dataset.
     batch_size:
-        Number of patches in a single batch. Each batch is guaranteed
-        to have a certain number of patches with a foreground class (oversampling)
-    patch_size : tuple[int]
+        Number of patches in a single batch.
+    patch_size : tuple[int, int, int]
         Size of the patch to extract from the dataset.
     fg_oversample_ratio : float
-        Ratio of patches with guaranteed foreground class to include in each batch. Hard
-        fixed with a minimum of 1 per batch.
-    ensemble_size : int
-        Number of models in the ensemble to fetch batch for. Batch size is `batch_size * ensemble_size`
-        intended to feed each ensemble member with `batch_size` number of patches, each with
-        oversampled patches.
+        Ratio of patches guaranteed to contain the foreground class in each batch.
+        Hard fixed with a minimum of 1 per batch.
     transform : Callable[[tuple[np.ndarray, np.ndarray]], tuple[np.ndarray, np.ndarray]]
         Function to apply to the (x, y) patch pair. Default is the identity function.
         Intended to be used for data augmentation.
-    config : dict
-        Configuration dictionary
     """
 
+    @auto_match_config(prefixes=["training"])
     def __init__(
         self,
-        h5_file_path: str,
-        config: dict,
-        indices: list[int] | Subset,
+        h5_path: str,
+        indices: list[int],
         batch_size: int,
-        patch_size: tuple[int, ...],
-        fg_oversample_ratio: float,
-        ensemble_size: int = 1,
+        patch_size: tuple[int, int, int],
+        foreground_oversample_ratio: float,
         transform: Callable[
             [tuple[np.ndarray, np.ndarray]], tuple[np.ndarray, np.ndarray]
         ] = tz.identity,
     ):
         self.indices = indices
-        self.config = config
-        self.h5_file_path = h5_file_path
-        self.dataset = None
+        self.h5_path = h5_path
+        self.dataset = None  # initialised later to avoid expensive pickling
         self.transform = transform
         self.patch_size = patch_size
-        self.fg_ratio = fg_oversample_ratio
-        self.ensemble_size = ensemble_size
+        self.fg_ratio = foreground_oversample_ratio
         self.batch_size = batch_size
         self.affine = RandomAffine3D(
             5, align_corners=True, shears=0, scale=(0.9, 1.1), p=0.15
@@ -171,7 +104,7 @@ class RandomPatchDataset(IterableDataset):
         Return an infinite stream of randomly augmented and sampled patches
         """
         if self.dataset is None:
-            self.dataset = H5Dataset(self.h5_file_path, self.config)
+            self.dataset = H5Dataset(self.h5_path, self.indices)
 
         while True:
             # type: ignore
@@ -183,7 +116,9 @@ class RandomPatchDataset(IterableDataset):
             )
 
     @torch.no_grad()
-    def __sample_patch(self, x, y) -> tuple[np.ndarray, np.ndarray]:
+    def __sample_patch(
+        self, x: np.ndarray, y: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray]:
         """
         Randomly sample a patch from (x, y)
         """
@@ -200,25 +135,25 @@ class RandomPatchDataset(IterableDataset):
                 d_coord : d_coord + self.patch_size[2],
             ]
 
-        return (_extract_patch(x), _extract_patch(y))  # type: ignore
+        return (_extract_patch(x), _extract_patch(y))
 
     @torch.no_grad()
-    def __fg_patch_iter(self, length: int):
+    def __fg_patch_iter(self, n_patches: int):
         """
-        Iterator of `length` patches guaranteed to contain a foreground
+        Iterator of `n_patches` patches guaranteed to contain a foreground
         """
         return tz.pipe(
             self.__patch_iter(),
             curried.filter(lambda xy: torch.any(xy[1])),
-            lambda x: islice(x, length),
+            lambda x: islice(x, n_patches),
         )
 
     @torch.no_grad()
-    def __random_patch_iter(self, length: int):
+    def __random_patch_iter(self, n_patches: int):
         """
-        Iterator of `length` patches randomly sampled
+        Iterator of `n_patches` patches randomly sampled
         """
-        return islice(self.__patch_iter(), length)
+        return islice(self.__patch_iter(), n_patches)
 
     @torch.no_grad()
     def __oversampled_iter(self):
@@ -226,12 +161,11 @@ class RandomPatchDataset(IterableDataset):
         Iterator of length `batch_size` with oversampled foreground examples
         """
         n_fg_samples = max(1, int(round(self.batch_size * self.fg_ratio)))
-        return tz.pipe(
+        return tz.concat(
             (
                 self.__fg_patch_iter(n_fg_samples),
                 self.__random_patch_iter(self.batch_size - n_fg_samples),
-            ),
-            tz.concat,
+            )
         )
 
     @torch.no_grad()
@@ -262,6 +196,11 @@ class RandomPatchDataset(IterableDataset):
             del self.dataset
 
 
+def _seed_with_time(id: int):
+    """Seed everything with current time and id"""
+    seed_everything(int(time.time() + (id * 3)), verbose=False)
+
+
 class H5Dataset(Dataset):
     """
     PyTorch Dataset for loading (x, y) pairs from an H5 file.
@@ -278,24 +217,20 @@ class H5Dataset(Dataset):
 
     Attributes
     ----------
-    h5_file_path : str
-        The file path of the H5 file.
-    h5_file : h5py.File
-        The opened H5 file object.
-    keys : list of str
-        List of keys corresponding to the dataset entries in the H5 file.
+    h5_path : str
+        Path to the H5 file containing the dataset.
     indices: list[int] | None
         List of indices that can be fetched from the dataset.
     """
 
     def __init__(
         self,
-        h5_file_path: str,
+        h5_path: str,
         indices: list[int] | None = None,
     ):
-        self.h5_file_path = h5_file_path
+        self.h5_path = h5_path
         self.dataset = None
-        with h5.File(h5_file_path, "r") as f:
+        with h5.File(h5_path, "r") as f:
             self.keys = list(f.keys())
         self.indices = indices or list(range(len(self.keys)))
 
@@ -303,11 +238,11 @@ class H5Dataset(Dataset):
         return len(self.indices)
 
     @torch.no_grad()
-    def __getitem__(self, index: int):
-        # opened HDF5 is not pickleable, so don't open in __init__
-        # open once to prevent overhead
+    def __getitem__(self, index: int) -> tuple[np.ndarray, np.ndarray]:
+        # opened HDF5 is not pickleable, so don't open in __init__!
+        # open once here to prevent overhead
         if self.dataset is None:
-            self.dataset = h5.File(self.h5_file_path, "r")
+            self.dataset = h5.File(self.h5_path, "r")
 
         return tz.pipe(
             self.dataset[self.keys[self.indices[index]]],
@@ -320,3 +255,76 @@ class H5Dataset(Dataset):
     def __del__(self):
         if self.dataset is not None:
             self.dataset.close()
+
+
+class SegmentationData(lit.LightningDataModule):
+    """
+    Prepares the train and validation DataLoader for the segmentation task.
+
+    """
+
+    def __init__(
+        self,
+        train_indices: list[int] | None = None,
+        val_indices: list[int] | None = None,
+        augmentations: Callable = augmentations(),
+    ):
+        """
+        Pass in checkpoint_path if you want to dump the indices
+        """
+        super().__init__()
+        self.augmentations = augmentations(p=1)
+        self.train_indices = train_indices
+        self.val_indices = val_indices
+
+    def train_dataloader(self):
+        return DataLoader(
+            RandomPatchDataset(
+                self.train_fname,
+                self.config,
+                self.train_indices,
+                self.config["batch_size"],
+                patch_size=self.config["patch_size"],
+                fg_oversample_ratio=self.config["foreground_oversample_ratio"],
+                transform=self.augmentations,
+            ),
+            num_workers=8,
+            batch_size=self.config["batch_size"],
+            prefetch_factor=1,
+            # persistent_workers=True,
+            pin_memory=True,
+            worker_init_fn=_seed_with_time,
+        )
+
+    def val_dataloader(self):
+        return DataLoader(
+            RandomPatchDataset(
+                self.train_fname,
+                self.config,
+                self.val_indices,
+                self.config["batch_size"],
+                self.config["patch_size"],
+                fg_oversample_ratio=self.config["foreground_oversample_ratio"],
+            ),
+            num_workers=8,
+            batch_size=self.config["batch_size_eval"],
+            prefetch_factor=1,
+            pin_memory=True,
+            # persistent_workers=True,
+            worker_init_fn=_seed_with_time,
+        )
+
+    def test_dataloader(self):
+        return DataLoader(
+            SlidingPatchDataset(
+                self.test_fname,
+                self.config,
+                self.config["patch_size"],
+                self.config["patch_step"],
+            ),
+            num_workers=4,
+            batch_size=self.config["batch_size_eval"],
+            prefetch_factor=3,
+            persistent_workers=True,
+            pin_memory=True,
+        )

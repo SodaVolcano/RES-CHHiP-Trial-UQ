@@ -7,11 +7,8 @@ from lightning.pytorch.callbacks import ModelCheckpoint
 
 sys.path.append("..")
 sys.path.append(".")
-import dill
 import torch
 from lightning.pytorch.loggers import TensorBoardLogger
-
-from __helpful_parser import HelpfulParser
 
 
 def main(
@@ -20,9 +17,6 @@ def main(
     retrain: bool,
     deep_supervision: bool,
 ):
-    torch.set_float32_matmul_precision("medium")
-    torch.autograd.set_detect_anomaly(True)
-
     model = un.models.UNet(config, deep_supervision)
     model = un.training.LitSegmentation(model, config=config, save_hyperparams=True)
 
@@ -73,42 +67,3 @@ def main(
         trainer.fit(model, data)
     # don't test, prevent possible data-snooping :(
     # trainer.test(model, data)
-
-
-if __name__ == "__main__":
-    parser = HelpfulParser(
-        description="Train a U-Net model on a dataset of DICOM files or h5 files."
-    )
-    parser.add_argument(
-        "--data_path",
-        type=str,
-        help="Path to the H5 patient scan file.",
-        default=None,
-    )
-    parser.add_argument(
-        "--checkpoint_path",
-        type=str,
-        help="Path to save or load model checkpoints. If the folder already exist, a number will be appended to the folder name.",
-        default=None,
-    )
-    parser.add_argument(
-        "--retrain",
-        action="store_true",
-        help="Whether to retrain a model saved in the model checkpoint",
-        default=False,
-    )
-
-    args = parser.parse_args()
-    config["staging_dir"] = os.path.dirname(args.data_path)
-    config["staging_fname"] = os.path.basename(args.data_path)
-    checkpoint_path = args.checkpoint_path
-    if args.retrain:
-        with open(os.path.join(checkpoint_path, "config.pkl"), "rb") as f:
-            config = dill.load(f)
-
-    main(
-        config,
-        checkpoint_path,
-        args.retrain,
-        deep_supervision=not args.no_deep_supervision,
-    )

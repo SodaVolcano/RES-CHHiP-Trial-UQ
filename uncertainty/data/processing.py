@@ -311,7 +311,7 @@ def preprocess_mask(
         curried.keyfilter(lambda name: name in names),
         curried.valmap(make_isotropic(spacings=spacings, method="nearest")),
         # to (organ, height, width, depth)
-        lambda mask: np.stack(list(mask.values()), axis=0),  
+        lambda mask: np.stack(list(mask.values()), axis=0),
     )  # type: ignore
 
 
@@ -337,8 +337,10 @@ def preprocess_patient_scan(
         curried.update_in(keys=["organ_ordering"], func=lambda _: organ_ordering),
     )
     if scan["mask"] is None:
-        raise ValueError(f"Missing organs in {scan["patient_id"]} with required organs {organ_ordering}")
-        
+        raise ValueError(
+            f"Missing organs in {scan["patient_id"]} with required organs {organ_ordering}"
+        )
+
     scan["volume"], scan["mask"] = tz.pipe(
         (scan["volume"], scan["mask"]), crop_to_body, ensure_min_size(min_size=min_size)
     )

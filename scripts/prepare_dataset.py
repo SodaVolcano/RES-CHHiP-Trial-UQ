@@ -10,7 +10,7 @@ sys.path.append("..")
 sys.path.append(".")
 from __helpful_parser import HelpfulParser
 from uncertainty.utils import config_logger
-from uncertainty.config import configuration
+from uncertainty import configuration
 from uncertainty.data import (
     preprocess_dataset,
     load_all_patient_scans,
@@ -38,18 +38,18 @@ if __name__ == "__main__":
         default="configuration.yaml",
     )
     parser.add_argument(
-        "--in_path",
+        "--in-path",
         "-i",
         type=str,
-        help="Path to the folder containing folders of DICOM files.",
-        default=None,
+        help="Path to the folder containing folders of DICOM files. If not provided, the data_dir from the configuration file will be used.",
+        optional=True,
     )
     parser.add_argument(
-        "--out_path",
+        "--out-path",
         "-o",
         type=str,
-        help="Output path to store the h5 file.",
-        default=None,
+        help="Output path to store the h5 file. If not provided, the h5_path from the configuration file will be used.",
+        optional=True,
     )
     parser.add_argument(
         "--preprocess",
@@ -69,7 +69,7 @@ if __name__ == "__main__":
         "--logging",
         "-l",
         action="store_true",
-        help="Enable logging. Default is False.",
+        help="Enable logging. Default is True.",
         default=True,
     )
 

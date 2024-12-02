@@ -3,10 +3,13 @@ Functions for managing training, such as checkpointing and data splitting.
 """
 
 import os
+from pathlib import Path
 import pickle
 from random import randint
-from typing import Iterable, Literal
+import shutil
+from typing import Iterable, Literal, Sequence, TypedDict
 
+import lightning
 import toolz as tz
 from toolz import curried
 import dill
@@ -14,6 +17,13 @@ import torch
 from loguru import logger
 from torch import nn
 from sklearn.model_selection import KFold
+from lightning.pytorch.loggers import TensorBoardLogger
+from lightning.pytorch.callbacks import ModelCheckpoint
+from lightning import Trainer
+
+from uncertainty.config import auto_match_config
+
+from ..utils import curry, logger_wraps
 
 from ..utils.common import unpack_args
 
@@ -22,10 +32,16 @@ from .datasets import H5Dataset
 from .lightning import LitSegmentation
 
 
+DataSplitDict = TypedDict(
+    "DataSplitDict", {"train": list[int], "val": list[int], "seed": int}
+)
+
+
+@logger_wraps(level="INFO")
 def split_into_folds[
     T
-](dataset, n_folds: int, return_indices: bool = False) -> Iterable[
-    tuple[list[T | int], list[T | int]]
+](dataset: Sequence[T], n_folds: int, return_indices: bool = False) -> Iterable[
+    tuple[list[int] | Sequence[T], list[int] | Sequence[T]]
 ]:
     """
     Split a dataset into `n_folds` folds and return an Iterable of the split.
@@ -39,6 +55,13 @@ def split_into_folds[
     return_indices : bool, optional
         If True, return the indices of the dataset split instead of the actual data.
     """
+    if n_folds <= 1:
+        logger.warning(
+            f"Number of folds specified is {n_folds}. No splitting is performed."
+        )
+        split = [list(range(len(dataset)))] if return_indices else [dataset]
+        return zip(split, [[]])  # validation set is empty
+
     indices = KFold(n_splits=n_folds).split(dataset)  # type: ignore
     if return_indices:
         # cast from numpy array to list
@@ -57,11 +80,26 @@ def split_into_folds[
     )
 
 
+@logger_wraps(level="INFO")
 def write_training_fold_file(
-    path: str, fold_indices: Iterable[tuple[list[int], list[int]]], seed: bool = True
+    path: str,
+    fold_indices: Iterable[tuple[list[int], list[int]]],
+    seed: bool = True,
+    force: bool = False,
 ) -> None:
     """
     Write a file containing indices of each fold split (and optionally, fold-specific seed)
+
+    Parameters
+    ----------
+    path : str
+        The path to write the file to.
+    fold_indices : Iterable[tuple[list[int], list[int]]]
+        An iterable of tuples containing the training and validation indices for each fold.
+    seed : bool, optional
+        If True, add a random seed to each fold.
+    force : bool, optional
+        If True, overwrite the file if it exists.
     """
     content = tz.pipe(
         {
@@ -72,12 +110,150 @@ def write_training_fold_file(
         (curried.valmap(lambda x: x | {"seed": randint(0, 2**32 - 1)} if seed else x)),
     )
 
+    if Path(path).exists():
+        if not force:
+            logger.warning(
+                f"File {path} already exists. If you wish to ovewrite, use `force=True`."
+            )
+            return
+
     with open(path, "wb") as f:
         pickle.dump(content, f)
 
 
-def train_model(config: dict):
-    pass
+def read_training_fold_file(
+    path: str | Path,
+    fold: int | None = None,
+) -> DataSplitDict | dict[str, DataSplitDict]:
+    """
+    Read configuration for a fold from the training fold file at `path`.
+
+    If `fold` is not provided, the entire file is read and returned.
+    """
+    with open(path, "rb") as f:
+        content = pickle.load(f)
+    if fold is not None:
+        return content[f"fold_{fold}"]
+    return content
+
+
+@logger_wraps(level="INFO")
+def init_checkpoint_dir(
+    checkpoint_path: str,
+    config_path: str,
+    n_folds: int,
+    dataset: Sequence,
+    force: bool = False,
+) -> tuple[Path, list[Path]] | None:
+    """
+    Initialise the checkpoint directory.
+
+    Parameters
+    ----------
+    checkpoint_path : str
+        The path to the checkpoint directory.
+    config_path : str
+        The path to the configuration file to be copied.
+    n_folds : int
+        The number of folds to split the dataset into.
+    dataset : Sequence
+        The dataset to split into folds.
+    force : bool, optional
+        If True, overwrite the checkpoint directory if it exists.
+
+    Returns
+    -------
+    tuple[Path, list[Path]] | None
+        A tuple containing the data split path and a list of fold directories.
+        If the checkpoint directory already exists and `force` is False, None is returned.
+    """
+    checkpoint_dir = Path(checkpoint_path)
+
+    if checkpoint_dir.exists():
+        if not force:
+            logger.warning(
+                f"Directory {checkpoint_dir} already exists. If you wish to ovewrite, use `force=True`."
+            )
+            return
+        shutil.rmtree(checkpoint_dir)  # Remove the existing directory if force is True
+
+    # Create the checkpoint directory and fold subdirectories
+    checkpoint_dir.mkdir(parents=True, exist_ok=True)
+    for i in range(1, n_folds + 1):
+        (checkpoint_dir / f"fold_{i}").mkdir()
+
+    config_name = os.path.basename(config_path)
+    shutil.copy(config_path, checkpoint_dir / config_name)
+
+    # Split dataset into folds and write to validation_folds.pkl
+    fold_indices = split_into_folds(dataset, n_folds, return_indices=True)
+    data_split_path = checkpoint_dir / "validation_folds.pkl"
+    write_training_fold_file(data_split_path, fold_indices)
+
+    return data_split_path, list(checkpoint_dir.glob("fold_*"))
+
+
+@auto_match_config(prefixes=["training"])
+def train_model(
+    model: lightning.LightningModule,
+    h5_path: str,
+    train_indices: list[int],
+    val_indices: list[int],
+    # Logging parameters
+    log_dir: str | Path,
+    experiment_name: str,
+    # Checkpoint parameters
+    checkpoint_path: str,
+    checkpoint_name: str,
+    checkpoint_every_n_epochs: int,
+    # Training parameters
+    n_epochs: int,
+    n_batches_per_epoch: int,
+    n_batches_val: int,
+    check_val_every_n_epoch: int,
+    save_last: bool = True,
+    strategy: str = "ddp",
+    accelerator: str = "gpu",
+    precision: str = "16-mixed",
+    enable_progress_bar: bool = True,
+    enable_model_summary: bool = True,
+):
+    tb_logger = TensorBoardLogger(save_dir=log_dir, name=experiment_name)
+    model_checkpoint = curry(ModelCheckpoint)(
+        monitor="val_loss" if len(val_indices) > 0 else "train_loss",
+        mode="min",
+        dirpath=checkpoint_path,
+        save_on_train_epoch_end=len(val_indices) == 0,
+    )
+
+    checkpoint = model_checkpoint(
+        filename=checkpoint_name,
+        every_n_epochs=checkpoint_every_n_epochs,
+        save_top_k=-1,
+    )
+    checkpoint_last = model_checkpoint(
+        filename="last",
+        save_top_k=1,
+    )
+
+    trainer = Trainer(
+        max_epochs=n_epochs,
+        limit_train_batches=n_batches_per_epoch,
+        limit_val_batches=n_batches_val if n_batches_val > 0 else 0,
+        num_sanity_val_steps=0 if len(val_indices) == 0 else 2,
+        callbacks=[checkpoint, checkpoint_last] if save_last else [checkpoint],
+        strategy=strategy,
+        check_val_every_n_epoch=check_val_every_n_epoch,
+        accelerator=accelerator,
+        precision=precision,  # type: ignore
+        enable_progress_bar=enable_progress_bar,
+        enable_model_summary=enable_model_summary,
+        logger=tb_logger,
+    )
+    # if retrain:
+    #     trainer.fit(model, data, ckpt_path=checkpoint_path)
+    # else:
+    trainer.fit(model, dataset)
 
 
 def load_checkpoint(

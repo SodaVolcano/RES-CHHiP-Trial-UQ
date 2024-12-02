@@ -14,11 +14,7 @@ from .wrappers import curry
 @curry
 def growby[
     T, R
-](
-    init: T,
-    f: Callable[[T | R], R],
-    length: int | None = None,
-) -> Iterable[T | R]:
+](init: T, f: Callable[[T | R], R], length: int | None = None,) -> Iterable[T | R]:
     """
     Grow a sequence by repeatedly applying f to last item in sequence
 

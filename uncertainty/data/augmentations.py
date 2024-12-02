@@ -88,7 +88,7 @@ def torchio_augmentations(
 
 @logger_wraps(level="INFO")
 def augmentations(
-    p: float = 1.0,
+    ps: list[float] = [0.15, 0.2, 0.2, 0.2]
 ) -> Callable[
     [tuple[np.ndarray, np.ndarray]], tuple[np.ndarray, np.ndarray] | tio.Subject
 ]:
@@ -103,9 +103,9 @@ def augmentations(
 
     Parameters
     ---------
-    p: float
-        Probability of applying the augmentor, default is 1.0
+    ps: float
+        Probability of applying each augmentation, see `torchio_augmentations()`
     """
     return lambda arr: tz.pipe(
-        arr, to_torchio_subject, torchio_augmentations(p=p), from_torchio_subject
+        arr, to_torchio_subject, torchio_augmentations(ps=ps), from_torchio_subject
     )
