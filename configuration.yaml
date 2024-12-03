@@ -103,6 +103,21 @@ training:
   # Percentage of patches in batch guaranteed to have foreground class
   foreground_oversample_ratio: 0.333
 
+  # ------------------ Dataloader Settings ------------------
+  # How many subprocesses for data loading (training and validation set)
+  num_workers_train: 8
+  num_workers_val: 8
+  # Number of batches loaded in advance across all workers
+  # e.g. factor = 2 means total_batch = 2 * n_workers
+  prefetch_factor_train: 1
+  prefetch_factor_val: 1
+  # Don't kill dataloader processes after dataset is consumed once
+  persistent_workers_train: false
+  persistent_workers_val: false
+  # copy Tensors into device/CUDA pinned memory before returning
+  pin_memory_train: true
+  pin_memory_val: true
+
   # ------------------ Hyperparameters ------------------
   # Whether to train using deep supervision loss
   deep_supervision: true

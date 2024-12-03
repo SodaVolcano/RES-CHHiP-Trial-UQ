@@ -27,20 +27,6 @@ from uncertainty.config import auto_match_config
 from ..data import augmentations
 
 
-def get_unique_filename(base_path):
-    """Generate a unique filename by appending (copy) if the file already exists."""
-    if not os.path.exists(base_path):
-        return base_path
-
-    base, ext = os.path.splitext(base_path)
-    counter = 1
-    while True:
-        new_filename = f"{base} (copy{counter}){ext}"
-        if not os.path.exists(new_filename):
-            return new_filename
-        counter += 1
-
-
 class RandomPatchDataset(IterableDataset):
     """
     Randomly sample patches from a dataset of 3D images.
@@ -53,13 +39,14 @@ class RandomPatchDataset(IterableDataset):
     ----------
     h5_path : str
         Path to the H5 file containing the PatientScan dataset.
-    indices : list[int]
-        List of indices to sample from the dataset.
+    indices : list[str] | None
+        List of indices (patient IDs) that can be fetched from the dataset.
+        If None, the whole dataset is used.
     batch_size:
         Number of patches in a single batch.
     patch_size : tuple[int, int, int]
         Size of the patch to extract from the dataset.
-    fg_oversample_ratio : float
+    foreground_oversample_ratio : float
         Ratio of patches guaranteed to contain the foreground class in each batch.
         Hard fixed with a minimum of 1 per batch.
     transform : Callable[[tuple[np.ndarray, np.ndarray]], tuple[np.ndarray, np.ndarray]]
@@ -67,11 +54,11 @@ class RandomPatchDataset(IterableDataset):
         Intended to be used for data augmentation.
     """
 
-    @auto_match_config(prefixes=["training"])
+    @auto_match_config(prefixes=["data", "training"])
     def __init__(
         self,
         h5_path: str,
-        indices: list[int],
+        indices: list[str] | None,
         batch_size: int,
         patch_size: tuple[int, int, int],
         foreground_oversample_ratio: float,
@@ -108,7 +95,7 @@ class RandomPatchDataset(IterableDataset):
 
         while True:
             yield tz.pipe(
-                self.dataset[random.choice(self.indices)],
+                self.dataset[random.choice(self.dataset.indices)],
                 lambda xy: self.__sample_patch(*xy),
                 curried.map(lambda arr: torch.tensor(arr)),
                 tuple,
@@ -143,7 +130,7 @@ class RandomPatchDataset(IterableDataset):
         """
         return tz.pipe(
             self.__patch_iter(),
-            curried.filter(lambda xy: torch.any(xy[1])),
+            curried.filter(lambda x_y: torch.any(x_y[1])),
             lambda x: islice(x, n_patches),
         )
 
@@ -214,6 +201,7 @@ class H5Dataset(Dataset):
         Path to the H5 file containing the dataset.
     indices : list[str] | None
         List of indices (patient IDs) that can be fetched from the dataset.
+        If None, the whole dataset is used.
     """
 
     def __init__(
@@ -257,11 +245,69 @@ class H5Dataset(Dataset):
 
 class SegmentationData(lit.LightningDataModule):
     """
-    Prepares the train and validation DataLoader for the segmentation task.
+    Prepares the train and validation DataLoaders for the segmentation task.
+
+
+    Note: The test DataLoader is not implemented, use the inference functions from
+    `uncertainty.evaluation` instead.
+
+    Tip: It's recommended to pass most parameters using a configuration dictionary,
+    i.e. `SegmentationData(**config, train_indices=..., val_indices=...)`. Parameters
+    required by the function that are present in `config` will be automatically
+    matched and passed in.
+
+    Parameters
+    -----------
+    h5_path : str
+        Path to the H5 file containing the dataset.
+    train_indices : list[str] | None
+        List of indices (patient IDs) assigned to the training set. If None,
+        the whole dataset will be used.
+    val_indices : list[str] | None
+        List of indices (patient IDs) assigned to the validation set. If None,
+        the whole dataset will be used.
+    batch_size : int
+        Batch size for the training DataLoader.
+    batch_size_eval : int
+        Batch size for the validation DataLoader.
+    patch_size : tuple[int, int, int]
+        Size of the patch to extract from the dataset.
+    foreground_oversample_ratio : float
+        Ratio of patches guaranteed to contain the foreground class in each batch.
+    num_workers_train : int
+        Number of workers for the training DataLoader.
+    num_workers_val : int
+        Number of workers for the validation DataLoader.
+    prefetch_factor_train : int
+        Number of samples loaded in advance by the training DataLoader.
+    prefetch_factor_val : int
+        Number of samples loaded in advance by the validation DataLoader.
+    persistent_workers_train : bool
+        Whether to keep the workers alive between epochs for the training DataLoader.
+    persistent_workers_val : bool
+        Whether to keep the workers alive between epochs for the validation DataLoader.
+    pin_memory_train : bool
+        Whether to pin memory for the training DataLoader.
+    pin_memory_val : bool
+        Whether to pin memory for the validation DataLoader.
     """
 
+    @auto_match_config(prefixes=["data", "training"])
     def __init__(
         self,
+        h5_path: str,
+        batch_size: int,
+        batch_size_eval: int,
+        patch_size: tuple[int, int, int],
+        foreground_oversample_ratio: float,
+        num_workers_train: int,
+        num_workers_val: int,
+        prefetch_factor_train: int = 0,
+        prefetch_factor_val: int = 0,
+        persistent_workers_train: bool = False,
+        persistent_workers_val: bool = False,
+        pin_memory_train: bool = False,
+        pin_memory_val: bool = False,
         train_indices: list[str] | None = None,
         val_indices: list[str] | None = None,
         augmentations: Callable = augmentations(),
@@ -271,57 +317,58 @@ class SegmentationData(lit.LightningDataModule):
         """
         super().__init__()
         self.augmentations = augmentations(p=1)
+        self.h5_path = h5_path
+        self.batch_size = batch_size
+        self.batch_size_eval = batch_size_eval
+        self.patch_size = patch_size
+        self.fg_ratio = foreground_oversample_ratio
         self.train_indices = train_indices
         self.val_indices = val_indices
+        self.num_workers_train = num_workers_train
+        self.num_workers_val = num_workers_val
+        self.prefetch_factor_train = prefetch_factor_train
+        self.prefetch_factor_val = prefetch_factor_val
+        self.persistent_workers_train = persistent_workers_train
+        self.persistent_workers_val = persistent_workers_val
+        self.pin_memory_train = pin_memory_train
+        self.pin_memory_val = pin_memory_val
 
     def train_dataloader(self):
         return DataLoader(
             RandomPatchDataset(
-                self.train_fname,
-                self.config,
+                self.h5_path,
                 self.train_indices,
-                self.config["batch_size"],
-                patch_size=self.config["patch_size"],
-                fg_oversample_ratio=self.config["foreground_oversample_ratio"],
+                self.batch_size,
+                self.patch_size,
+                self.fg_ratio,
                 transform=self.augmentations,
             ),
-            num_workers=8,
-            batch_size=self.config["batch_size"],
-            prefetch_factor=1,
-            # persistent_workers=True,
-            pin_memory=True,
+            num_workers=self.num_workers_train,
+            batch_size=self.batch_size,
+            prefetch_factor=self.prefetch_factor_train,
+            persistent_workers=self.persistent_workers_train,
+            pin_memory=self.pin_memory_train,
             worker_init_fn=_seed_with_time,
         )
 
     def val_dataloader(self):
         return DataLoader(
             RandomPatchDataset(
-                self.train_fname,
-                self.config,
+                self.h5_path,
                 self.val_indices,
-                self.config["batch_size"],
-                self.config["patch_size"],
-                fg_oversample_ratio=self.config["foreground_oversample_ratio"],
+                self.batch_size,
+                self.patch_size,
+                self.fg_ratio,
             ),
-            num_workers=8,
-            batch_size=self.config["batch_size_eval"],
-            prefetch_factor=1,
-            pin_memory=True,
-            # persistent_workers=True,
+            num_workers=self.num_workers_val,
+            batch_size=self.batch_size_eval,
+            prefetch_factor=self.prefetch_factor_val,
+            pin_memory=self.pin_memory_val,
+            persistent_workers=self.persistent_workers_val,
             worker_init_fn=_seed_with_time,
         )
 
     def test_dataloader(self):
-        return DataLoader(
-            SlidingPatchDataset(
-                self.test_fname,
-                self.config,
-                self.config["patch_size"],
-                self.config["patch_step"],
-            ),
-            num_workers=4,
-            batch_size=self.config["batch_size_eval"],
-            prefetch_factor=3,
-            persistent_workers=True,
-            pin_memory=True,
+        raise NotImplementedError(
+            "Don't use the test loader, use functions from uncertainty.evaluation instead"
         )
