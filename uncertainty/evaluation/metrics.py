@@ -5,7 +5,6 @@ Metrics for evaluating model performance.
 from itertools import combinations_with_replacement, product
 from typing import Callable, Literal, Optional
 
-from loguru import logger
 import numpy as np
 import toolz as tz
 import torch

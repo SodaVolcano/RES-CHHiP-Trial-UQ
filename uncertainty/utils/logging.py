@@ -2,13 +2,13 @@
 Functions for logging
 """
 
-from enum import auto
 import inspect
 import logging
 import sys
-from typing import TextIO
 import warnings
+from enum import auto
 from functools import wraps
+from typing import TextIO
 
 from loguru import logger
 

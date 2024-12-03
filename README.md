@@ -17,8 +17,6 @@ Instructions below assumes you are at the top-level of the project directory (i.
 uv run python ./scripts/dicom_to_h5.py   # equivalent to running `python /scripts/dicom_to_h5.py`
 ```
 
-
-
 ## Nix
 
 **Warning: CUDA not supported for this option, idk how to fix :'(**
@@ -34,9 +32,10 @@ nix --extra-experimental-features nix-command --extra-experimental-features flak
 
 # Usage
 
-## Example Scripts
-
-Example usages of the functions in `uncertainty` is found under `scripts/`.
+## Scripts
+Run in this order
+1. `scripts/prepare_dataset.py` - explantion here...
+2. ..
 
 ## Configuration
 

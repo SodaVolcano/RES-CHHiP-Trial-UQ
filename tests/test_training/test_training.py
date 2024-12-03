@@ -1,9 +1,8 @@
-from pathlib import Path
 import pickle
-from pathlib import Path
 import tempfile
-from ..context import training
+from pathlib import Path
 
+from ..context import training
 
 split_into_folds = training.split_into_folds
 write_training_fold_file = training.write_training_fold_file

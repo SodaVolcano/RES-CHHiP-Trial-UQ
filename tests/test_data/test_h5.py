@@ -1,8 +1,9 @@
-import tempfile
-import numpy as np
-from datetime import date
-import h5py
 import os
+import tempfile
+from datetime import date
+
+import h5py
+import numpy as np
 
 from ..context import data
 

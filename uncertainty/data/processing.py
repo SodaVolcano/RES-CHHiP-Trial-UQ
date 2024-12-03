@@ -66,7 +66,6 @@ def ensure_min_size(
         tio.CropOrPad(
             target_shape,  # type: ignore
             padding_mode=np.min(volume),
-
             mask_name="mask",
         ),
         from_torchio_subject,
@@ -256,7 +255,9 @@ def _bounding_box3d(img: np.ndarray):
 @logger_wraps()
 @curry
 def crop_to_body(
-    vol_mask: tuple[np.ndarray, np.ndarray], trim_border_px: int = 3, thresh: float = c.BODY_THRESH
+    vol_mask: tuple[np.ndarray, np.ndarray],
+    trim_border_px: int = 3,
+    thresh: float = c.BODY_THRESH,
 ):
     """
     Crop both `x`, `y` to bounding box of the body using threshold thresh
@@ -274,7 +275,12 @@ def crop_to_body(
     """
     # crop borders to avoid high pixel values along
     vol, mask = tuple(
-        arr[:, trim_border_px:-trim_border_px, trim_border_px:-trim_border_px, trim_border_px:-trim_border_px]
+        arr[
+            :,
+            trim_border_px:-trim_border_px,
+            trim_border_px:-trim_border_px,
+            trim_border_px:-trim_border_px,
+        ]
         for arr in vol_mask
     )
     body_mask = vol > thresh
@@ -291,7 +297,7 @@ def preprocess_volume(
 ) -> np.ndarray:
     """
     Return preprocessed volume of shape (1, H, W, D)
-    
+
     Parameters
     ----------
     volume : np.ndarray
@@ -376,8 +382,15 @@ def preprocess_patient_scan(
 
     scan = tz.pipe(
         scan,
-        curried.update_in(keys=["volume"], func=preprocess_volume(spacings=scan["spacings"])),
-        curried.update_in(keys=["masks"], func=preprocess_mask(spacings=scan['spacings'], organ_ordering=organ_ordering)),
+        curried.update_in(
+            keys=["volume"], func=preprocess_volume(spacings=scan["spacings"])
+        ),
+        curried.update_in(
+            keys=["masks"],
+            func=preprocess_mask(
+                spacings=scan["spacings"], organ_ordering=organ_ordering
+            ),
+        ),
         curried.update_in(keys=["organ_ordering"], func=lambda _: organ_ordering),
     )
     if scan["masks"] is None:
@@ -386,7 +399,9 @@ def preprocess_patient_scan(
         )
 
     scan["volume"], scan["masks"] = tz.pipe(
-        (scan["volume"], scan["masks"]), crop_to_body, ensure_min_size(min_size=min_size)
+        (scan["volume"], scan["masks"]),
+        crop_to_body,
+        ensure_min_size(min_size=min_size),
     )
     return scan  # type: ignore
 
@@ -420,6 +435,8 @@ def preprocess_dataset(
     mapper = pmap(n_workers=n_workers) if n_workers > 1 else curried.map
     return tz.pipe(
         dataset,
-        mapper(preprocess_patient_scan(min_size=min_size, organ_ordering=organ_ordering)),
+        mapper(
+            preprocess_patient_scan(min_size=min_size, organ_ordering=organ_ordering)
+        ),
         curried.filter(lambda scan: scan is not None),
     )  # type: ignore

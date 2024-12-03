@@ -1,7 +1,8 @@
+from datetime import date
+
 import numpy as np
 
 from ..context import data
-from datetime import date
 
 # Import aliases
 map_interval = data.map_interval

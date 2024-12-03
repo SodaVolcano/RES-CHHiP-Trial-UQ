@@ -1,6 +1,6 @@
 import os
-
 import sys
+
 import torch
 from lightning import Trainer
 from lightning.pytorch.callbacks import ModelCheckpoint
@@ -10,12 +10,11 @@ sys.path.append("..")
 sys.path.append(".")
 import dill
 import torch
+from __helpful_parser import HelpfulParser
 from lightning.pytorch.loggers import TensorBoardLogger
+
 from uncertainty import configuration
 from uncertainty.utils import config_logger
-
-
-from __helpful_parser import HelpfulParser
 
 
 def main(config: dict, in_path: str, checkpoint_path: str):

@@ -1,8 +1,9 @@
 import tempfile
-import numpy as np
 from datetime import date
 
-from ..context import training, data
+import numpy as np
+
+from ..context import data, training
 
 H5Dataset = training.H5Dataset
 save_scans_to_h5 = data.save_scans_to_h5

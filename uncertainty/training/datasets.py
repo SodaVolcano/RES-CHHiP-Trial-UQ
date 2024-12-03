@@ -2,25 +2,21 @@
 PyTorch Dataset classes for loading data from H5 files.
 """
 
-import os
 import random
 import time
 from itertools import islice
 from typing import Callable
 
 import h5py as h5
+import lightning as lit
 import numpy as np
 import toolz as tz
 import torch
 import torch.utils
 from kornia.augmentation import RandomAffine3D
-from toolz import curried
-from torch.utils.data import Dataset, IterableDataset, Subset
-
-
-import lightning as lit
 from pytorch_lightning import seed_everything
-from torch.utils.data import DataLoader
+from toolz import curried
+from torch.utils.data import DataLoader, Dataset, IterableDataset
 
 from uncertainty.config import auto_match_config
 
@@ -42,7 +38,7 @@ class RandomPatchDataset(IterableDataset):
     indices : list[str] | None
         List of indices (patient IDs) that can be fetched from the dataset.
         If None, the whole dataset is used.
-    batch_size:
+    batch_size: int
         Number of patches in a single batch.
     patch_size : tuple[int, int, int]
         Size of the patch to extract from the dataset.

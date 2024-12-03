@@ -6,10 +6,10 @@ from .augmentations import (
 from .datatypes import MaskDict, PatientScan, PatientScanPreprocessed
 from .dicom import (
     load_all_masks,
+    load_all_patient_scans,
     load_all_volumes,
     load_mask,
     load_patient_scan,
-    load_all_patient_scans,
     load_volume,
 )
 from .h5 import load_scans_from_h5, save_scans_to_h5

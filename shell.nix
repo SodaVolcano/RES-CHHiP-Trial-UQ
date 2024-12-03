@@ -15,6 +15,9 @@ pkgs.mkShellNoCC {
     (writeShellScriptBin "py" "uv run python")
     (writeShellScriptBin "python" "uv run python")
     (writeShellScriptBin "python3" "uv run python")
+    (writeShellScriptBin "black" "uv run black .")
+    (writeShellScriptBin "pytest" "uv run pytest .")
+    (writeShellScriptBin "isort" "uv run isort .")
   ];
 
   shellHook = ''

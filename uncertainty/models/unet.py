@@ -9,8 +9,8 @@ References:
 import torch
 from torch import nn
 
-from .unet_modules import Decoder, Encoder
 from ..config import auto_match_config
+from .unet_modules import Decoder, Encoder
 
 
 class UNet(nn.Module):

@@ -12,9 +12,9 @@ import toolz as tz
 import torch
 from torch import nn
 
+from ..config import auto_match_config
 from .unet import UNet
 from .unet_modules import _calc_n_kernels, _concat_with_skip
-from ..config import auto_match_config
 
 
 class UNetConfidNetEncoder(nn.Module):

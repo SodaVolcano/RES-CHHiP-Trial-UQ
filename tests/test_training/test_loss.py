@@ -1,6 +1,7 @@
 import torch
-from ..context import training
 from torch import nn
+
+from ..context import training
 
 ConfidNetMSELoss = training.ConfidNetMSELoss
 DeepSupervisionLoss = training.DeepSupervisionLoss

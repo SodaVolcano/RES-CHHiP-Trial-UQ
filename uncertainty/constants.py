@@ -89,7 +89,7 @@ ROI_EXCLUSION_LIST: Final[list[str]] = [
 
 
 # list of ROI name variants in the patient scans for organs of interest
-# Variants are mapped to the standard name of the organ
+# Variants are mapped to the standard name (key of the dictionary) of the organ
 # Preprocessed masks will have same name order as this list
 ORGAN_MATCHES: Final[dict[str, list[str]]] = {
     "prostate": [

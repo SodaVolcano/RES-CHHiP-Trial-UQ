@@ -5,14 +5,15 @@ A configuration object is a dictionary where each key has the format <prefix>__<
 (to distinguish configuration arguments from normal keyword arguments).
 """
 
-from functools import cache, wraps, reduce
-import re
 import inspect
+import re
 import sys
-import yaml
-from torch import nn, optim
+from functools import cache, reduce, wraps
+
 import toolz as tz
+import yaml
 from toolz import curried
+from torch import nn, optim
 
 _with_prefix = lambda prefix, dict_: tz.keymap(lambda k: f"{prefix}__{k}", dict_)
 

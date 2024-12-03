@@ -3,34 +3,31 @@ Functions for managing training, such as checkpointing and data splitting.
 """
 
 import os
-from pathlib import Path
 import pickle
-from random import randint
 import shutil
+from pathlib import Path
+from random import randint
 from typing import Iterable, Literal, Sequence, TypedDict
 
+import dill
 import lightning
 import toolz as tz
-from toolz import curried
-import dill
 import torch
-from loguru import logger
-from torch import nn
-from sklearn.model_selection import KFold
-from lightning.pytorch.loggers import TensorBoardLogger
-from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning import Trainer
+from lightning.pytorch.callbacks import ModelCheckpoint
+from lightning.pytorch.loggers import TensorBoardLogger
+from loguru import logger
+from sklearn.model_selection import KFold
+from toolz import curried
+from torch import nn
 
 from uncertainty.config import auto_match_config
 
-from ..utils import curry, logger_wraps
-
-from ..utils.common import unpack_args
-
 from ..models.unet import UNet
+from ..utils import curry, logger_wraps
+from ..utils.common import unpack_args
 from .datasets import H5Dataset
 from .lightning import LitSegmentation
-
 
 DataSplitDict = TypedDict(
     "DataSplitDict", {"train": list[int], "val": list[int], "seed": int}

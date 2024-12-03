@@ -1,16 +1,16 @@
 # Configuration file for the project
 # A configuration object is a dictionary where each key has the format <prefix>__<parameter>.
 
-# NOTE: ORDER of the prefixes ()"data", "unet"...) DO matter
-# keys that appear later will overwrite earlier keys
-# if they have the same name, see uncertainty.config.auto_match_config
+# NOTE: ORDER of the prefixes ("data", "unet"...) DO matter as keys that
+# appear later will overwrite earlier keys if the keys have the same name.
+# see uncertainty.config.auto_match_config
 
 # Data volumes are formatted as (channel, height, width, depth)
 data:
   # Path to directory containing directories of DICOM slices
   data_dir: "./data"
   # Name of preprocessed h5 files for training and testing data
-  h5_path: "./staging/preprocessed_dataset.h5"
+  h5_path: "./data/preprocessed_dataset.h5"
 
 unet:
   # ------------------ Conolution Block ------------------
@@ -141,8 +141,9 @@ training:
 logger:
   #  ------------ loguru settings -------------------
   # see https://loguru.readthedocs.io/en/stable/api/logger.html
-  # Can also be "stdout" or "stderr" for standard output and error
+  # Where to output the logs, can also be "stdout" or "stderr" for standard output and error
   sink: "./logs/out_{time}.log"
+  # Log message format
   format: "<green>{time:YYYY-MM-DD at HH:mm:ss}</green> <level>{level: <8} {message}</level>"
   # Log retention period, not used if using "stdout" or "stderr"
   retention: "7 days"
