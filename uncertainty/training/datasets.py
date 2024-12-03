@@ -107,7 +107,6 @@ class RandomPatchDataset(IterableDataset):
             self.dataset = H5Dataset(self.h5_path, self.indices)
 
         while True:
-            # type: ignore
             yield tz.pipe(
                 self.dataset[random.choice(self.indices)],
                 lambda xy: self.__sample_patch(*xy),
@@ -183,7 +182,7 @@ class RandomPatchDataset(IterableDataset):
             if len(batch) == 0:
                 batch = (vol_mask for vol_mask in self.__oversampled_iter())
                 x, y = zip(*batch)
-                # Apply augmentation batch-wise, more efficient
+                # Apply augmentation batch-wise, more efficient than element-wise
                 x = self.affine(torch.stack(x))
                 y = self.affine_mask(torch.stack(y), self.affine._params)
 
@@ -205,51 +204,50 @@ class H5Dataset(Dataset):
     """
     PyTorch Dataset for loading (x, y) pairs from an H5 file.
 
-    Parameters
-    ----------
-    h5_file_path : str
-        Path to the H5 file containing the dataset.
-    indices: list[int] | None
-        Optinal list of indices. If specified, only elements
-        with the specified indices are fetched. Good for specifying
-        train-validation split. If the indices are shuffled, the
-        dataset will also be shuffled.
+    H5 file must contain preprocessed data where the masks are stored as
+    a single numpy array where the channels correspond to the different
+    organs.
 
-    Attributes
+    Parameters
     ----------
     h5_path : str
         Path to the H5 file containing the dataset.
-    indices: list[int] | None
-        List of indices that can be fetched from the dataset.
+    indices : list[str] | None
+        List of indices (patient IDs) that can be fetched from the dataset.
     """
 
     def __init__(
         self,
         h5_path: str,
-        indices: list[int] | None = None,
+        indices: list[str] | None = None,
     ):
         self.h5_path = h5_path
         self.dataset = None
         with h5.File(h5_path, "r") as f:
-            self.keys = list(f.keys())
-        self.indices = indices or list(range(len(self.keys)))
+            self.indices = indices or list(f.keys())
 
     def __len__(self) -> int:
         return len(self.indices)
 
+    def __iter__(self):
+        for idx in self.indices:
+            yield self[idx]
+
     @torch.no_grad()
-    def __getitem__(self, index: int) -> tuple[np.ndarray, np.ndarray]:
+    def __getitem__(self, idx: str) -> tuple[np.ndarray, np.ndarray]:
+        """
+        Get the (x, y) pair for the given index.
+        """
         # opened HDF5 is not pickleable, so don't open in __init__!
         # open once here to prevent overhead
         if self.dataset is None:
             self.dataset = h5.File(self.h5_path, "r")
 
         return tz.pipe(
-            self.dataset[self.keys[self.indices[index]]],
-            # [:] changes data from dataset to numpy array
-            lambda group: (group["x"][:], group["y"][:]),
+            self.dataset[idx],
+            lambda group: (group["volume"][:], group["masks"][:]),
             tuple,
-        )
+        )  # type: ignore
 
     @torch.no_grad()
     def __del__(self):
@@ -260,13 +258,12 @@ class H5Dataset(Dataset):
 class SegmentationData(lit.LightningDataModule):
     """
     Prepares the train and validation DataLoader for the segmentation task.
-
     """
 
     def __init__(
         self,
-        train_indices: list[int] | None = None,
-        val_indices: list[int] | None = None,
+        train_indices: list[str] | None = None,
+        val_indices: list[str] | None = None,
         augmentations: Callable = augmentations(),
     ):
         """

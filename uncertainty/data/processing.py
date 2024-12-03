@@ -336,13 +336,13 @@ def preprocess_patient_scan(
         curried.update_in(keys=["mask"], func=preprocess_mask),
         curried.update_in(keys=["organ_ordering"], func=lambda _: organ_ordering),
     )
-    if scan["mask"] is None:
+    if scan["masks"] is None:
         raise ValueError(
             f"Missing organs in {scan["patient_id"]} with required organs {organ_ordering}"
         )
 
-    scan["volume"], scan["mask"] = tz.pipe(
-        (scan["volume"], scan["mask"]), crop_to_body, ensure_min_size(min_size=min_size)
+    scan["volume"], scan["masks"] = tz.pipe(
+        (scan["volume"], scan["masks"]), crop_to_body, ensure_min_size(min_size=min_size)
     )
     return scan  # type: ignore
 
