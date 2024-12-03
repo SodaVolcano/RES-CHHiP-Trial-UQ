@@ -2,7 +2,7 @@
 Collection of functions to preprocess numpy arrays and patient scans
 """
 
-from typing import Iterable, Literal, Optional
+from typing import Iterable, Literal, Optional, Sequence
 
 import numpy as np
 import SimpleITK as sitk
@@ -45,7 +45,7 @@ def from_torchio_subject(subject: tio.Subject) -> tuple[np.ndarray, np.ndarray]:
     """
     Transform a torchio Subject object into a (volume, mask) pair
     """
-    return subject["volume"].data, subject["mask"].data  # type: ignore
+    return subject["volume"].data.numpy(), subject["mask"].data.numpy()  # type: ignore
 
 
 @logger_wraps()
@@ -54,7 +54,7 @@ def ensure_min_size(
     vol_mask: tuple[np.ndarray, np.ndarray], min_size: tuple[int, int, int]
 ) -> tuple[np.ndarray, np.ndarray]:
     """
-    Ensure volume and mask (C, H, W, D) are at least size min_size (H, W, D)
+    Ensure volume and mask (C, H, W, D) are at least size `min_size` (H, W, D)
     """
     volume = vol_mask[0]
     target_shape = [
@@ -66,6 +66,7 @@ def ensure_min_size(
         tio.CropOrPad(
             target_shape,  # type: ignore
             padding_mode=np.min(volume),
+
             mask_name="mask",
         ),
         from_torchio_subject,
@@ -80,7 +81,7 @@ def map_interval(
     array: np.ndarray,
 ) -> np.ndarray:
     """
-    Map values in an array in range from_range to to_range
+    Map values in an `array` in range `from_range` to `to_range`
     """
     return tz.pipe(
         array,
@@ -94,7 +95,7 @@ def map_interval(
 @logger_wraps()
 def z_score_scale(array: np.ndarray) -> np.ndarray:
     """
-    Z-score normalise array to have mean 0 and standard deviation 1
+    Z-score normalise `array` to have mean 0 and standard deviation 1
 
     Calculated as (x - mean) / std
     """
@@ -105,26 +106,26 @@ def z_score_scale(array: np.ndarray) -> np.ndarray:
 @curry
 def make_isotropic(
     array: np.ndarray,
-    spacings: Iterable[np.number],
+    spacings: Sequence[np.number],
     method: Literal["nearest", "linear", "b_spline", "gaussian"] = "linear",
 ) -> np.ndarray:
     """
     Return an isotropic array with uniformly 1 unit of spacing between coordinates
 
-    Array can ONLY be **2D** or **3D**
+    Array can ONLY be **2D** or **3D**.
 
     Parameters
     ----------
-    spacings : Iterable[npt.Number]
+    spacings : Sequence[np.number]
         Spacing of coordinate points for each axis
-    array : npt.NDArray[Any, npt.Number]
+    array : np.nddarray
         Either a **2D** or **3D** array to interpolate
     method : str, optional
         Interpolation method, by default "linear"
 
     Returns
     -------
-    npt.NDArray[Any, npt.Number]
+    np.ndarray
         Interpolated array on an isotropic grid
     """
     interpolators = {
@@ -255,42 +256,76 @@ def _bounding_box3d(img: np.ndarray):
 @logger_wraps()
 @curry
 def crop_to_body(
-    x: np.ndarray, y: np.ndarray, precrop_px: int = 3, thresh: float = c.BODY_THRESH
+    vol_mask: tuple[np.ndarray, np.ndarray], trim_border_px: int = 3, thresh: float = c.BODY_THRESH
 ):
     """
-    Crop both (x, y) to bounding box of the body using threshold thresh
+    Crop both `x`, `y` to bounding box of the body using threshold thresh
+
+    Parameters
+    ----------
+    vol_mask: tuple[np.ndarray, np.ndarray]
+        Volume and mask arrays of shape (C, H, W, D)
+    trim_border_px : int
+        Number of pixels to crop from the borders before computing bounding box, used
+        to avoid artefacts at the border
+    thresh : float
+        Threshold to use for body segmentation. After thresholding, 1 should represent
+        the body region.
     """
     # crop borders to avoid high pixel values along
-    x, y = tuple(
-        arr[:, precrop_px:-precrop_px, precrop_px:-precrop_px, precrop_px:-precrop_px]
-        for arr in [x, y]
+    vol, mask = tuple(
+        arr[:, trim_border_px:-trim_border_px, trim_border_px:-trim_border_px, trim_border_px:-trim_border_px]
+        for arr in vol_mask
     )
-    mask = x > thresh
-    rmin, rmax, cmin, cmax, zmin, zmax = _bounding_box3d(mask[0])
-    return tuple(arr[:, rmin:rmax, cmin:cmax, zmin:zmax] for arr in [x, y])
+    body_mask = vol > thresh
+    rmin, rmax, cmin, cmax, zmin, zmax = _bounding_box3d(body_mask[0])
+    return tuple(arr[:, rmin:rmax, cmin:cmax, zmin:zmax] for arr in [vol, mask])
 
 
-@logger_wraps()
+@logger_wraps(level="INFO")
 @curry
 def preprocess_volume(
     volume: np.ndarray,
     spacings: tuple[float, float, float],
-    interpolation: str,
+    interpolation: str = "linear",
 ) -> np.ndarray:
-    """Return preprocessed volume of shape (1, H, W, D)"""
+    """
+    Return preprocessed volume of shape (1, H, W, D)
+    
+    Parameters
+    ----------
+    volume : np.ndarray
+        Volume array of shape (H, W, D)
+    spacings : tuple[float, float, float]
+        Spacing of coordinate points for each axis
+    interpolation : str
+        Interpolation method, one of "nearest", "linear", "b_spline", "gaussian"
+    """
+    assert len(volume.shape) == 3, "Volume must be of shape (H, W, D)"
     return tz.pipe(
         volume,
-        make_isotropic(spacings, method=interpolation),
+        make_isotropic(spacings=spacings, method=interpolation),
         curry(np.expand_dims)(axis=0),  # Add channel dimension, now (C, H, W, D)
         z_score_scale,
     )
 
 
+@logger_wraps(level="INFO")
+@curry
 def preprocess_mask(
     mask: MaskDict, spacings: tuple[float, float, float], organ_ordering: list[str]
 ) -> Optional[np.ndarray]:
     """
-    Return preprocesed mask of shape (C, H, W, D) where C is the number of organs
+    Return preprocesed `mask` of shape (C, H, W, D) where C is the number of organs
+
+    Parameters
+    ----------
+    mask : MaskDict
+        Dictionary of masks for different organs
+    spacings : tuple[float, float, float]
+        Spacing of coordinate points for each axis
+    organ_ordering : list[str]
+        List of organ names in order to keep
     """
     # List of organ names to keep
     names = tz.pipe(
@@ -328,12 +363,21 @@ def preprocess_patient_scan(
 
     Mask for multiple organs are stacked along the first dimension to have shape
     (organ, height, width, depth). Mask is `None` if not all organs are present.
+
+    Parameters
+    ----------
+    scan : PatientScan
+        PatientScan object
+    min_size : tuple[int, int, int]
+        Minimum size for volume and masks
+    organ_ordering : list[str]
+        List of organ names in order to keep
     """
 
     scan = tz.pipe(
         scan,
-        curried.update_in(keys=["volume"], func=preprocess_volume),
-        curried.update_in(keys=["mask"], func=preprocess_mask),
+        curried.update_in(keys=["volume"], func=preprocess_volume(spacings=scan["spacings"])),
+        curried.update_in(keys=["masks"], func=preprocess_mask(spacings=scan['spacings'], organ_ordering=organ_ordering)),
         curried.update_in(keys=["organ_ordering"], func=lambda _: organ_ordering),
     )
     if scan["masks"] is None:
@@ -351,6 +395,8 @@ def preprocess_patient_scan(
 @curry
 def preprocess_dataset(
     dataset: Iterable[PatientScan],
+    min_size: tuple[int, int, int],
+    organ_ordering: list[str] = list(c.ORGAN_MATCHES.keys()),
     n_workers: int = 1,
 ) -> Iterable[PatientScanPreprocessed]:
     """
@@ -364,12 +410,16 @@ def preprocess_dataset(
     ----------
     dataset : Iterable[PatientScan | None]
         Dataset of PatientScan objects
+    min_size : tuple[int, int, int]
+        Minimum size for volume and masks
+    organ_ordering : list[str]
+        List of organ names in order to keep
     n_workers : int
         Number of parallel processes to use, set to <= 1 to disable, by default 1
     """
     mapper = pmap(n_workers=n_workers) if n_workers > 1 else curried.map
     return tz.pipe(
         dataset,
-        mapper(preprocess_patient_scan),
+        mapper(preprocess_patient_scan(min_size=min_size, organ_ordering=organ_ordering)),
         curried.filter(lambda scan: scan is not None),
     )  # type: ignore
