@@ -22,4 +22,5 @@ __all__ = [
     "placeholder_matches",
     "curry",
     "pmap",
+    "next_available_path",
 ]

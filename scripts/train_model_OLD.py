@@ -21,9 +21,9 @@ def main(
     model = un.training.LitSegmentation(model, config=config, save_hyperparams=True)
 
     train_val_indices = None
-    if retrain:
-        indices = torch.load(os.path.join(checkpoint_path, "indices.pt"))
-        train_val_indices = (indices["train_indices"], indices["val_indices"])
+    # if retrain:
+    #     indices = torch.load(os.path.join(checkpoint_path, "indices.pt"))
+    # train_val_indices = (indices["train_indices"], indices["val_indices"])
     data = un.training.SegmentationData(config, checkpoint_path, train_val_indices)
 
     tb_logger = TensorBoardLogger(save_dir="./logs/", name="lightning_log_tb")

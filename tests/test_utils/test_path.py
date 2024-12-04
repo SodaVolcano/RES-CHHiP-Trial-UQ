@@ -1,10 +1,13 @@
 from typing import Generator
+from unittest import mock
+
 
 from ..context import PATCH_LIST_FILES, PATCH_OS_WALK, utils
 
 generate_full_paths = utils.generate_full_paths
 list_files = utils.list_files
 resolve_path_placeholders = utils.resolve_path_placeholders
+next_available_path = utils.next_available_path
 
 
 class TestListFiles:
@@ -233,3 +236,52 @@ class TestResolvePathPlaceholders:
 
         result = resolve_path_placeholders(path_pattern, placeholders)
         assert result == expected
+
+
+class TestNextAvailablePath:
+
+    # Returns original path when it does not exist
+    def test_returns_original_path_when_not_exists(self, mocker):
+        test_path = "/test/path/file"
+        mocker.patch("os.path.exists", return_value=False)
+
+        result = next_available_path(test_path)
+
+        assert result == test_path
+
+    # Handles paths with no file extension
+    def test_handles_path_without_extension(self, mocker):
+        test_path = "/test/path/file"
+        exists_mock = mocker.patch("os.path.exists")
+        exists_mock.side_effect = [True, False]
+
+        result = next_available_path(test_path)
+
+        assert result == "/test/path/file-1"
+
+    # Returns path with incremented suffix when previous suffixed paths exist
+    def test_incremented_suffix_for_existing_paths(self, mocker):
+        # Mock os.path.exists to simulate existing files
+        mocker.patch(
+            "os.path.exists",
+            side_effect=lambda x: x in {"file.txt", "file-1.txt", "file-2.txt"},
+        )
+
+        # Call the function with a path that already exists
+        result = next_available_path("file.txt")
+
+        # Assert that the result is the next available path
+        assert result == "file-3.txt"
+
+    # Handles paths with file extensions correctly
+    def test_handles_existing_file_without_extension(self):
+        # Mock os.path.exists to simulate existing files
+        with mock.patch("os.path.exists") as mock_exists:
+            # Simulate that 'file.txt' and 'file-1.txt' exist
+            mock_exists.side_effect = lambda path: path in ["file", "file-1"]
+
+            # Call the function with a path that has an extension
+            result = next_available_path("file")
+
+            # Assert that the function returns the next available path with the correct extension
+            assert result == "file-2"

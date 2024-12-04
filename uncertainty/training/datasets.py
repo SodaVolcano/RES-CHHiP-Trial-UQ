@@ -18,9 +18,8 @@ from toolz import curried
 from torch.utils.data import DataLoader, Dataset, IterableDataset
 
 from ..config import auto_match_config
-from ..utils import unpack_args
-
 from ..data import augmentations, batch_augmentations
+from ..utils import unpack_args
 
 
 class RandomPatchDataset(IterableDataset):

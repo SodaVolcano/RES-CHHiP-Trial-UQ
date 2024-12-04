@@ -26,8 +26,114 @@ from uncertainty.config import auto_match_config
 from ..models.unet import UNet
 from ..utils import curry, logger_wraps
 from ..utils.common import unpack_args
-from .datasets import H5Dataset
+from .datasets import H5Dataset, SegmentationData
 from .lightning import LitSegmentation
+
+
+@auto_match_config(prefixes=["training", "data"])
+def train_model(
+    model: lightning.LightningModule,
+    dataset: SegmentationData,
+    # Logging parameters
+    log_dir: str | Path,
+    experiment_name: str,
+    # Checkpoint parameters
+    checkpoint_path: str,
+    checkpoint_name: str,
+    checkpoint_every_n_epochs: int,
+    # Training parameters
+    n_epochs: int,
+    n_batches_per_epoch: int,
+    n_batches_val: int,
+    check_val_every_n_epoch: int,
+    save_last: bool = True,
+    strategy: str = "ddp",
+    accelerator: str = "gpu" if torch.cuda.is_available() else "cpu",
+    precision: str = "16-mixed",
+    enable_progress_bar: bool = True,
+    enable_model_summary: bool = True,
+):
+    """
+    Train a model and save checkpoints in `<checkpoint_path>/<experiment_name>/<model_classname>-<int>`.
+
+    Parameters
+    ----------
+    model : lightning.LightningModule
+        The PyTorch Lightning model to be trained. Should define the training, validation, and optional test steps.
+    dataset : SegmentationData
+        The dataset containing training and validation dataloaders.
+    log_dir : str | Path
+        Directory path where TensorBoard logs will be saved. Used for monitoring training progress and metrics.
+    experiment_name : str
+        Name of the experiment, which will be used to organise logs under the specified `log_dir`.
+    checkpoint_path : str
+        Directory path where model checkpoints will be saved.
+    checkpoint_name : str
+        Base name for the checkpoint files. Each checkpoint will be saved with this name followed by an epoch or step indicator.
+    checkpoint_every_n_epochs : int
+        Frequency (in epochs) at which model checkpoints are saved during training.
+    n_epochs : int
+        Total number of epochs to train the model.
+    n_batches_per_epoch : int
+        Number of training batches to run per epoch. Useful for limiting training iterations in debugging or resource-constrained settings.
+    n_batches_val : int
+        Number of batches to use during validation. Limits the validation set size for efficiency.
+    check_val_every_n_epoch : int
+        Frequency (in epochs) at which validation is performed. A value of 0 disables validation.
+    save_last : bool, optional
+        Whether to save the final model checkpoint at the end of training, even if it's not the best-performing one. Default is `True`.
+    strategy : str, optional
+        Specifies the distributed training strategy, see https://lightning.ai/docs/pytorch/stable/extensions/strategy.html
+    accelerator : str, optional
+        Device type to run the model on. Options include `"gpu"`, `"cpu"`, or `"tpu"`. Defaults to `"gpu"` if available.
+    precision : str, optional
+        Training precision of float values.
+    enable_progress_bar : bool, optional
+        Whether to show a progress bar during training.
+    enable_model_summary : bool, optional
+        Whether to print a model summary before training starts.
+    """
+    run_validation = check_val_every_n_epoch > 0
+
+    tb_logger = TensorBoardLogger(save_dir=log_dir, name=experiment_name)
+
+    model_checkpoint = curry(ModelCheckpoint)(
+        monitor="val_loss" if run_validation else "train_loss",
+        mode="min",
+        dirpath=checkpoint_path,
+        save_on_train_epoch_end=not run_validation,
+    )
+
+    checkpoint = model_checkpoint(
+        filename=checkpoint_name,
+        every_n_epochs=checkpoint_every_n_epochs,
+        save_top_k=-1,
+    )
+    checkpoint_last = model_checkpoint(
+        filename="last",
+        save_top_k=1,
+    )
+
+    trainer = Trainer(
+        max_epochs=n_epochs,
+        limit_train_batches=n_batches_per_epoch,
+        limit_val_batches=n_batches_val if run_validation else 0,
+        num_sanity_val_steps=0 if not run_validation else 2,
+        callbacks=[checkpoint, checkpoint_last] if save_last else [checkpoint],
+        strategy=strategy,
+        check_val_every_n_epoch=check_val_every_n_epoch,
+        accelerator=accelerator,
+        precision=precision,  # type: ignore
+        enable_progress_bar=enable_progress_bar,
+        enable_model_summary=enable_model_summary,
+        logger=tb_logger,
+    )
+    # TODO: add retrain
+    # if retrain:
+    #     trainer.fit(model, data, ckpt_path=checkpoint_path)
+    # else:
+    trainer.fit(model, dataset)
+
 
 DataSplitDict = TypedDict(
     "DataSplitDict", {"train": list[int], "val": list[int], "seed": int}
@@ -79,7 +185,7 @@ def split_into_folds[
 
 @logger_wraps(level="INFO")
 def write_training_fold_file(
-    path: str,
+    path: str | Path,
     fold_indices: Iterable[tuple[list[int], list[int]]],
     seed: bool = True,
     force: bool = False,
@@ -185,72 +291,9 @@ def init_checkpoint_dir(
     # Split dataset into folds and write to validation_folds.pkl
     fold_indices = split_into_folds(dataset, n_folds, return_indices=True)
     data_split_path = checkpoint_dir / "validation_folds.pkl"
-    write_training_fold_file(data_split_path, fold_indices)
+    write_training_fold_file(data_split_path, fold_indices)  # type: ignore
 
     return data_split_path, list(checkpoint_dir.glob("fold_*"))
-
-
-@auto_match_config(prefixes=["training"])
-def train_model(
-    model: lightning.LightningModule,
-    h5_path: str,
-    train_indices: list[int],
-    val_indices: list[int],
-    # Logging parameters
-    log_dir: str | Path,
-    experiment_name: str,
-    # Checkpoint parameters
-    checkpoint_path: str,
-    checkpoint_name: str,
-    checkpoint_every_n_epochs: int,
-    # Training parameters
-    n_epochs: int,
-    n_batches_per_epoch: int,
-    n_batches_val: int,
-    check_val_every_n_epoch: int,
-    save_last: bool = True,
-    strategy: str = "ddp",
-    accelerator: str = "gpu",
-    precision: str = "16-mixed",
-    enable_progress_bar: bool = True,
-    enable_model_summary: bool = True,
-):
-    tb_logger = TensorBoardLogger(save_dir=log_dir, name=experiment_name)
-    model_checkpoint = curry(ModelCheckpoint)(
-        monitor="val_loss" if len(val_indices) > 0 else "train_loss",
-        mode="min",
-        dirpath=checkpoint_path,
-        save_on_train_epoch_end=len(val_indices) == 0,
-    )
-
-    checkpoint = model_checkpoint(
-        filename=checkpoint_name,
-        every_n_epochs=checkpoint_every_n_epochs,
-        save_top_k=-1,
-    )
-    checkpoint_last = model_checkpoint(
-        filename="last",
-        save_top_k=1,
-    )
-
-    trainer = Trainer(
-        max_epochs=n_epochs,
-        limit_train_batches=n_batches_per_epoch,
-        limit_val_batches=n_batches_val if n_batches_val > 0 else 0,
-        num_sanity_val_steps=0 if len(val_indices) == 0 else 2,
-        callbacks=[checkpoint, checkpoint_last] if save_last else [checkpoint],
-        strategy=strategy,
-        check_val_every_n_epoch=check_val_every_n_epoch,
-        accelerator=accelerator,
-        precision=precision,  # type: ignore
-        enable_progress_bar=enable_progress_bar,
-        enable_model_summary=enable_model_summary,
-        logger=tb_logger,
-    )
-    # if retrain:
-    #     trainer.fit(model, data, ckpt_path=checkpoint_path)
-    # else:
-    trainer.fit(model, dataset)
 
 
 def load_checkpoint(
