@@ -37,11 +37,10 @@ class UNet(nn.Module):
     """
 
     @auto_match_config(prefixes=["unet", "training"])
-    def __init__(self, deep_supervision: bool = True, **kwargs):
+    def __init__(self, **kwargs):
         super().__init__()
         self.encoder = Encoder(**kwargs)
-        self.decoder = Decoder(**kwargs, deep_supervision=deep_supervision)
-        self.deep_supervision = deep_supervision
+        self.decoder = Decoder(**kwargs)
 
     def forward(self, x: torch.Tensor, logits: bool = False) -> torch.Tensor:
         encoded, skips = self.encoder(x)

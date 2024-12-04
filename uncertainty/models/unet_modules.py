@@ -125,6 +125,8 @@ class ConvBlock(nn.Module):
     dropout_rate : float
         Dropout rate, only enabled at the last level (i.e. this parameter
         is ignored for all levels except the last)
+    kernel_size : int
+        Kernel size for convolution
     kwargs : dict
         Additional parameters to pass to ConvLayer
     """
@@ -183,7 +185,6 @@ class DownConvBlock(nn.Module):
     def __init__(
         self,
         level: int,
-        n_levels: int,
         n_kernels_init: int,
         n_kernels_max: int,
         n_convolutions_per_block: int,
@@ -194,7 +195,6 @@ class DownConvBlock(nn.Module):
             nn.MaxPool3d(kernel_size=2, stride=(2, 2, 2)),
             ConvBlock(
                 level=level,
-                n_levels=n_levels,
                 in_channels=_calc_n_kernels(n_kernels_init, level - 1, n_kernels_max),
                 out_channels=_calc_n_kernels(n_kernels_init, level, n_kernels_max),
                 n_convolutions=n_convolutions_per_block,
@@ -293,7 +293,6 @@ class UpConvBlock(nn.Module):
         self,
         level: int,
         n_kernels_init: int,
-        n_levels: int,
         n_kernels_max: int,
         kernel_size: int,
         n_convolutions_per_block: int,
@@ -312,7 +311,6 @@ class UpConvBlock(nn.Module):
             in_channels=_calc_n_kernels(n_kernels_init, level, n_kernels_max) * 2,
             out_channels=_calc_n_kernels(n_kernels_init, level, n_kernels_max),
             n_convolutions=n_convolutions_per_block,
-            n_levels=n_levels,
             kernel_size=kernel_size,
             **kwargs,
         )
@@ -327,6 +325,16 @@ class Decoder(nn.Module):
 
     Parameters
     ----------
+    n_levels : int
+        Total number of resolution levels in the U-Net
+    n_kernels_init : int
+        Initial number of kernels at the first level
+    output_channels : int
+        Number of output channels
+    n_kernels_max : int
+        Maximum number of kernels at any level
+    final_layer_activation : Callable[..., nn.Module]
+        Function returning an activation module, e.g. `nn.Softmax`
     deep_supervision : bool
         If True, a list of outputs from each level is returned. The outputs
         are from convolving the output of each level with a 1x1 convolution.
