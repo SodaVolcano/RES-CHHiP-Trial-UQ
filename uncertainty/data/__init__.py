@@ -1,8 +1,8 @@
 from .augmentations import (
     augmentations,
+    batch_augmentations,
     inverse_affine_transform,
     torchio_augmentations,
-    batch_augmentations,
 )
 from .datatypes import MaskDict, PatientScan, PatientScanPreprocessed
 from .dicom import (

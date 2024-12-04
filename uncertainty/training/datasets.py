@@ -17,7 +17,8 @@ from pytorch_lightning import seed_everything
 from toolz import curried
 from torch.utils.data import DataLoader, Dataset, IterableDataset
 
-from uncertainty.config import auto_match_config
+from ..config import auto_match_config
+from ..utils import unpack_args
 
 from ..data import augmentations, batch_augmentations
 
@@ -163,10 +164,16 @@ class RandomPatchDataset(IterableDataset):
 
         while True:
             if len(batch) == 0:
-                batch = (vol_mask for vol_mask in self.__oversampled_iter())
-                x, y = zip(*batch)
-                x, y = self.batch_transform((torch.stack(x), torch.stack(y)))
-                batch = list(map(self.transform, zip(x, y)))
+                batch = tz.pipe(
+                    (vol_mask for vol_mask in self.__oversampled_iter()),
+                    unpack_args(zip),
+                    curried.map(torch.stack),
+                    tuple,
+                    self.batch_transform,
+                    unpack_args(zip),
+                    curried.map(self.transform),
+                    list,
+                )
             yield batch.pop()
 
     @torch.no_grad()

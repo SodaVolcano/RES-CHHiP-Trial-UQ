@@ -8,8 +8,8 @@ import numpy as np
 import toolz as tz
 import torch
 import torchio as tio
-from kornia.geometry.transform import get_affine_matrix3d, warp_affine3d
 from kornia.augmentation import RandomAffine3D
+from kornia.geometry.transform import get_affine_matrix3d, warp_affine3d
 from torchio.transforms import (
     Compose,
     RandomAnisotropy,
