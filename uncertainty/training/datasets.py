@@ -5,7 +5,7 @@ PyTorch Dataset classes for loading data from H5 files.
 import random
 import time
 from itertools import islice
-from typing import Callable
+from typing import Callable, Generator, Iterable
 
 import h5py as h5
 import lightning as lit
@@ -45,7 +45,7 @@ class RandomPatchDataset(IterableDataset):
     foreground_oversample_ratio : float
         Ratio of patches guaranteed to contain the foreground class in each batch.
         Hard fixed with a minimum of 1 per batch.
-    transform : Callable[[tuple[np.ndarray, np.ndarray]], tuple[np.ndarray, np.ndarray]]
+    transform : Callable[[tuple[torch.Tensor, torch.Tensor]], tuple[torch.Tensor, torch.Tensor]]
         Function to apply to the (x, y) patch pair. Default is the identity function.
         Intended to be used for data augmentation.
     """
@@ -59,7 +59,7 @@ class RandomPatchDataset(IterableDataset):
         patch_size: tuple[int, int, int],
         foreground_oversample_ratio: float,
         transform: Callable[
-            [tuple[np.ndarray, np.ndarray]], tuple[np.ndarray, np.ndarray]
+            [tuple[torch.Tensor, torch.Tensor]], tuple[torch.Tensor, torch.Tensor]
         ] = tz.identity,
     ):
         self.indices = indices
@@ -82,7 +82,7 @@ class RandomPatchDataset(IterableDataset):
         )
 
     @torch.no_grad()
-    def __patch_iter(self):
+    def __patch_iter(self) -> Generator[tuple[torch.Tensor, torch.Tensor], None, None]:
         """
         Return an infinite stream of randomly augmented and sampled patches
         """
@@ -95,7 +95,7 @@ class RandomPatchDataset(IterableDataset):
                 lambda xy: self.__sample_patch(*xy),
                 curried.map(lambda arr: torch.tensor(arr)),
                 tuple,
-            )
+            )  # type: ignore
 
     @torch.no_grad()
     def __sample_patch(
@@ -120,7 +120,9 @@ class RandomPatchDataset(IterableDataset):
         return (_extract_patch(x), _extract_patch(y))
 
     @torch.no_grad()
-    def __fg_patch_iter(self, n_patches: int):
+    def __fg_patch_iter(
+        self, n_patches: int
+    ) -> Iterable[tuple[torch.Tensor, torch.Tensor]]:
         """
         Iterator of `n_patches` patches guaranteed to contain a foreground
         """
@@ -128,17 +130,19 @@ class RandomPatchDataset(IterableDataset):
             self.__patch_iter(),
             curried.filter(lambda x_y: torch.any(x_y[1])),
             lambda x: islice(x, n_patches),
-        )
+        )  # type: ignore
 
     @torch.no_grad()
-    def __random_patch_iter(self, n_patches: int):
+    def __random_patch_iter(
+        self, n_patches: int
+    ) -> Iterable[tuple[torch.Tensor, torch.Tensor]]:
         """
         Iterator of `n_patches` patches randomly sampled
         """
         return islice(self.__patch_iter(), n_patches)
 
     @torch.no_grad()
-    def __oversampled_iter(self):
+    def __oversampled_iter(self) -> Iterable[tuple[torch.Tensor, torch.Tensor]]:
         """
         Iterator of length `batch_size` with oversampled foreground examples
         """
@@ -147,11 +151,11 @@ class RandomPatchDataset(IterableDataset):
             (
                 self.__fg_patch_iter(n_fg_samples),
                 self.__random_patch_iter(self.batch_size - n_fg_samples),
-            )
+            )  # type: ignore
         )
 
     @torch.no_grad()
-    def __iter__(self):
+    def __iter__(self) -> Generator[tuple[torch.Tensor, torch.Tensor], None, None]:
         """
         Return infinite stream of sampled patches
 
@@ -165,9 +169,11 @@ class RandomPatchDataset(IterableDataset):
             if len(batch) == 0:
                 batch = (vol_mask for vol_mask in self.__oversampled_iter())
                 x, y = zip(*batch)
-                # Apply augmentation batch-wise, more efficient than element-wise
-                x = self.affine(torch.stack(x))
-                y = self.affine_mask(torch.stack(y), self.affine._params)
+                # transform == tz.identity implies no augmentation
+                if self.transform != tz.identity:
+                    # Apply augmentation batch-wise, more efficient than element-wise
+                    x = self.affine(torch.stack(x))
+                    y = self.affine_mask(torch.stack(y), self.affine._params)
 
                 batch = list(map(self.transform, zip(x, y)))
             yield batch.pop()

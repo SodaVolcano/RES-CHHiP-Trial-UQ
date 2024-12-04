@@ -108,7 +108,11 @@ def auto_match_config(*, prefixes: list[str]):
     the function parameters. Subset of the dictionary can be selected
     by specifying the prefixes of the keys to select.
 
-    Note that if a function have the parameter `kwargs`, the remaining
+    Note that if a function have the parameter `kwargs`, the entire
+    configuration dictionary with the prefixes kept will be passed to it.
+    This is useful for passing the configuration dictionary to inner functions.
+
+    the remaining
     configuration dictionary after passing the values to the other
     parameters will be passed to the `kwargs` parameter. This is useful
     for passing the configuration dictionary to inner functions.
@@ -141,6 +145,16 @@ def auto_match_config(*, prefixes: list[str]):
     >>> test(b=5, **config)  # b=5 overrides config["2__b"]
     30 4
     15
+    >>> @auto_match_config(prefixes=["a"])
+    ... def test2(c, common_param):
+    ...    print(c, common_param)
+    >>> @auto_match_config(prefixes=["a"])
+    ... def test(a, common_param, **kwargs):
+    ...     print(a, common_param)
+    ...     test2(**kwargs)  # no need to pass common_param in test2
+    >>> config = {"a__a": 30, "a__common_param": 4, "a__c": 7}
+    30 4
+    7 4
     """
 
     def wrapper(func):

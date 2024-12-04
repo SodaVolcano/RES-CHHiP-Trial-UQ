@@ -133,18 +133,18 @@ class TestAutoMatchConfig:
         result = test(1, 2)
         assert result == (1, 2)
 
+    def test_kwargs_and_config(self):
+        config = {"test__a": 1, "test__b": -1234}
+
+        @auto_match_config(prefixes=["test"])
+        def test(a, b, c):
+            return a, b, c
+
+        result = test(c=4, b=2, **config)  # b=2 overrides config["test__b"]
+        assert result == (1, 2, 4)
+
     # Test that kwargs in config used in outer function are passed to inner function as well
     def test_config_param_passed_to_inner_function_with_same_param(self):
-        def test_kwargs_and_config(self):
-            config = {"test__a": 1, "test__b": -1234}
-
-            @auto_match_config(prefixes=["test"])
-            def test(a, b, c):
-                return a, b, c
-
-            result = test(c=4, b=2, **config)  # b=2 overrides config["test__b"]
-
-            assert result == (1, 2, 4)
 
         @auto_match_config(prefixes=["a"])
         def test(a, b, c, **kwargs):
