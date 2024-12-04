@@ -417,8 +417,8 @@ def preprocess_dataset(
     """
     Preprocess a dataset of PatientScan objects into (volume, masks) pairs
 
-    Mask for multiple organs are stacked along the last dimension to have
-    shape (height, width, depth, n_organs). An instance is filtered out if
+    Mask for multiple organs are stacked along the first dimension to have
+    shape (n_organs, height, width, depth). An instance is filtered out if
     not all organs are present.
 
     Parameters

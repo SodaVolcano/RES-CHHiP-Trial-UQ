@@ -1,16 +1,14 @@
 # Configuration file for the project
 # A configuration object is a dictionary where each key has the format <prefix>__<parameter>.
 
-# NOTE: ORDER of the prefixes ("data", "unet"...) DO matter as keys that
-# appear later will overwrite earlier keys if the keys have the same name.
-# see uncertainty.config.auto_match_config
-
 # Data volumes are formatted as (channel, height, width, depth)
 data:
   # Path to directory containing directories of DICOM slices
   data_dir: "./data"
   # Name of preprocessed h5 files for training and testing data
   h5_path: "./data/preprocessed_dataset.h5"
+  # Number of processes for data preprocessing
+  n_workers: 2
 
 unet:
   # ------------------ Conolution Block ------------------
