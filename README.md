@@ -38,6 +38,9 @@ Run in this order
 2. ..
 
 ## Configuration
+configuration.yaml
+augmentation.py - preset, use as template to make your own function
+processing.py
 
 The project provides preset configurations. You can pass in your own configuration/constants if you do not wish to use the preset values.
 

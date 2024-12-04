@@ -9,6 +9,7 @@ import toolz as tz
 import torch
 import torchio as tio
 from kornia.geometry.transform import get_affine_matrix3d, warp_affine3d
+from kornia.augmentation import RandomAffine3D
 from torchio.transforms import (
     Compose,
     RandomAnisotropy,
@@ -16,6 +17,8 @@ from torchio.transforms import (
     RandomFlip,
     RandomGamma,
 )
+
+from uncertainty.utils.common import unpack_args
 
 from ..utils.logging import logger_wraps
 from .processing import from_torchio_subject, to_torchio_subject
@@ -89,9 +92,7 @@ def torchio_augmentations(
 @logger_wraps(level="INFO")
 def augmentations(
     ps: list[float] = [0.15, 0.2, 0.2, 0.2]
-) -> Callable[
-    [tuple[np.ndarray, np.ndarray]], tuple[np.ndarray, np.ndarray] | tio.Subject
-]:
+) -> Callable[[tuple[torch.Tensor, torch.Tensor]], tuple[torch.Tensor, torch.Tensor]]:
     """
     Returns a function to augment a (volume, masks) pair
 
@@ -104,8 +105,43 @@ def augmentations(
     Parameters
     ---------
     ps: float
-        Probability of applying each augmentation, see `torchio_augmentations()`
+        Probability of applying each augmentation
     """
     return lambda arr: tz.pipe(
         arr, to_torchio_subject, torchio_augmentations(ps=ps), from_torchio_subject
     )
+
+
+def batch_augmentations(
+    ps: list[float] = [0.15],
+) -> Callable[[tuple[torch.Tensor, torch.Tensor]], tuple[torch.Tensor, torch.Tensor]]:
+    """
+    Apply augmentations to a batch of volumes and masks of shape (B, C, D, H, W)
+
+    Parameters
+    ----------
+    x_y: tuple[torch.Tensor, torch.Tensor]
+        Batch of tensors for instances and labels, each of shape (B, C, D, H, W)
+
+    Returns
+    -------
+    ps: float
+        Probability of applying each augmentation
+    """
+    # Affine is faster when applied batch-wise!
+    affine = RandomAffine3D(5, align_corners=True, shears=0, scale=(0.9, 1.1), p=ps[0])
+    affine_mask = RandomAffine3D(
+        5,
+        align_corners=True,
+        shears=0,
+        scale=(0.9, 1.1),
+        resample="nearest",
+        p=ps[0],
+    )
+
+    def _affine(x, y):
+        x_augmented = affine(x)
+        y_augmented = affine_mask(y, affine._params)
+        return x_augmented, y_augmented
+
+    return unpack_args(_affine)

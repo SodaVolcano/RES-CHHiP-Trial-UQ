@@ -1,8 +1,8 @@
-import torch
 import tempfile
 from datetime import date
 
 import numpy as np
+import torch
 
 from ..context import data, training
 
@@ -180,3 +180,47 @@ class TestRandomPatchDataset:
                     if torch.any(buffer[j][1]):
                         count += 1
                 assert count >= 3
+
+    # Test that augmentation parameter works
+    def test_augmentation_function(self):
+        with tempfile.NamedTemporaryFile() as tmp:
+            test_file = tmp.name
+            data = get_dataset(10)
+            save_scans_to_h5(data, test_file)
+            aug = lambda x_y: (torch.ones_like(x_y[0]), torch.zeros_like(x_y[1]))
+
+            dataset = RandomPatchDataset(
+                h5_path=test_file,
+                indices=None,
+                patch_size=(4, 4, 4),
+                batch_size=3,
+                foreground_oversample_ratio=0.5,
+                transform=aug,
+            )
+            it = iter(dataset)
+
+            for _, (x, y) in zip(range(10), it):
+                assert torch.equal(x, torch.ones_like(x))
+                assert torch.equal(y, torch.zeros_like(y))
+
+    # Test that batch augmentation parameter works
+    def test_batch_augmentation_function(self):
+        with tempfile.NamedTemporaryFile() as tmp:
+            test_file = tmp.name
+            data = get_dataset(10)
+            save_scans_to_h5(data, test_file)
+            aug = lambda x_y: (torch.ones_like(x_y[0]), torch.zeros_like(x_y[1]))
+
+            dataset = RandomPatchDataset(
+                h5_path=test_file,
+                indices=None,
+                patch_size=(4, 4, 4),
+                batch_size=3,
+                foreground_oversample_ratio=0.5,
+                batch_transform=aug,
+            )
+            it = iter(dataset)
+
+            for _, (x, y) in zip(range(10), it):
+                assert torch.equal(x, torch.ones_like(x))
+                assert torch.equal(y, torch.zeros_like(y))

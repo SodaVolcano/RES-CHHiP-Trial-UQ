@@ -2,6 +2,7 @@ from .augmentations import (
     augmentations,
     inverse_affine_transform,
     torchio_augmentations,
+    batch_augmentations,
 )
 from .datatypes import MaskDict, PatientScan, PatientScanPreprocessed
 from .dicom import (
@@ -57,4 +58,5 @@ __all__ = [
     "augmentations",
     "torchio_augmentations",
     "inverse_affine_transform",
+    "batch_augmentations",
 ]

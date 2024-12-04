@@ -13,14 +13,13 @@ import numpy as np
 import toolz as tz
 import torch
 import torch.utils
-from kornia.augmentation import RandomAffine3D
 from pytorch_lightning import seed_everything
 from toolz import curried
 from torch.utils.data import DataLoader, Dataset, IterableDataset
 
 from uncertainty.config import auto_match_config
 
-from ..data import augmentations
+from ..data import augmentations, batch_augmentations
 
 
 class RandomPatchDataset(IterableDataset):
@@ -48,6 +47,10 @@ class RandomPatchDataset(IterableDataset):
     transform : Callable[[tuple[torch.Tensor, torch.Tensor]], tuple[torch.Tensor, torch.Tensor]]
         Function to apply to the (x, y) patch pair. Default is the identity function.
         Intended to be used for data augmentation.
+    batch_transform : Callable[[tuple[torch.Tensor, torch.Tensor]], tuple[torch.Tensor, torch.Tensor]]
+        Function to apply to batches of (x, y) patch pair. Default is the identity function.
+        Intended to be used for data augmentation that computes on the whole batch (e.g. functions
+        from the Kornia library).
     """
 
     @auto_match_config(prefixes=["data", "training"])
@@ -61,6 +64,9 @@ class RandomPatchDataset(IterableDataset):
         transform: Callable[
             [tuple[torch.Tensor, torch.Tensor]], tuple[torch.Tensor, torch.Tensor]
         ] = tz.identity,
+        batch_transform: Callable[
+            [tuple[torch.Tensor, torch.Tensor]], tuple[torch.Tensor, torch.Tensor]
+        ] = tz.identity,
     ):
         self.indices = indices
         self.h5_path = h5_path
@@ -69,17 +75,7 @@ class RandomPatchDataset(IterableDataset):
         self.patch_size = patch_size
         self.fg_ratio = foreground_oversample_ratio
         self.batch_size = batch_size
-        self.affine = RandomAffine3D(
-            5, align_corners=True, shears=0, scale=(0.9, 1.1), p=0.15
-        )
-        self.affine_mask = RandomAffine3D(
-            5,
-            align_corners=True,
-            shears=0,
-            scale=(0.9, 1.1),
-            resample="nearest",
-            p=0.15,
-        )
+        self.batch_transform = batch_transform
 
     @torch.no_grad()
     def __patch_iter(self) -> Generator[tuple[torch.Tensor, torch.Tensor], None, None]:
@@ -169,12 +165,7 @@ class RandomPatchDataset(IterableDataset):
             if len(batch) == 0:
                 batch = (vol_mask for vol_mask in self.__oversampled_iter())
                 x, y = zip(*batch)
-                # transform == tz.identity implies no augmentation
-                if self.transform != tz.identity:
-                    # Apply augmentation batch-wise, more efficient than element-wise
-                    x = self.affine(torch.stack(x))
-                    y = self.affine_mask(torch.stack(y), self.affine._params)
-
+                x, y = self.batch_transform((torch.stack(x), torch.stack(y)))
                 batch = list(map(self.transform, zip(x, y)))
             yield batch.pop()
 
@@ -254,8 +245,8 @@ class SegmentationData(lit.LightningDataModule):
     `uncertainty.evaluation` instead.
 
     Tip: It's recommended to pass most parameters using a configuration dictionary,
-    i.e. `SegmentationData(**config, train_indices=..., val_indices=...)`. Parameters
-    required by the function that are present in `config` will be automatically
+    i.e. `SegmentationData(**config, train_indices=..., val_indices=..., augmentations=...)`.
+    Parameters required by the function that are present in `config` will be automatically
     matched and passed in.
 
     Parameters
@@ -292,6 +283,13 @@ class SegmentationData(lit.LightningDataModule):
         Whether to pin memory for the training DataLoader.
     pin_memory_val : bool
         Whether to pin memory for the validation DataLoader.
+    augmentations : Callable[[tuple[torch.Tensor, torch.Tensor]], tuple[torch.Tensor, torch.Tensor]]
+        Function to apply to the (x, y) patch pair. Default is the identity function.
+        Intended to be used for data augmentation.
+    batch_augmentations : Callable[[tuple[torch.Tensor, torch.Tensor]], tuple[torch.Tensor, torch.Tensor]]
+        Function to apply to batches of (x, y) patch pair. Default is the identity function.
+        Intended to be used for data augmentation that computes on the whole batch (e.g. functions
+        from the Kornia library).
     """
 
     @auto_match_config(prefixes=["data", "training"])
@@ -312,13 +310,19 @@ class SegmentationData(lit.LightningDataModule):
         pin_memory_val: bool = False,
         train_indices: list[str] | None = None,
         val_indices: list[str] | None = None,
-        augmentations: Callable = augmentations(),
+        augmentations: Callable[
+            [tuple[torch.Tensor, torch.Tensor]], tuple[torch.Tensor, torch.Tensor]
+        ] = augmentations(),
+        batch_augmentations: Callable[
+            [tuple[torch.Tensor, torch.Tensor]], tuple[torch.Tensor, torch.Tensor]
+        ] = batch_augmentations(),
     ):
         """
         Pass in checkpoint_path if you want to dump the indices
         """
         super().__init__()
-        self.augmentations = augmentations(p=1)
+        self.augmentations = augmentations
+        self.batch_augmentations = batch_augmentations
         self.h5_path = h5_path
         self.batch_size = batch_size
         self.batch_size_eval = batch_size_eval
@@ -344,6 +348,7 @@ class SegmentationData(lit.LightningDataModule):
                 self.patch_size,
                 self.fg_ratio,
                 transform=self.augmentations,
+                batch_transform=self.batch_augmentations,
             ),
             num_workers=self.num_workers_train,
             batch_size=self.batch_size,
