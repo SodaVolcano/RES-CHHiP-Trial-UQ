@@ -34,7 +34,7 @@ class TestAutoMatchConfig:
 
     # Empty config dictionary is handled gracefully
     def test_empty_config_handling(self):
-        @auto_match_config()
+        @auto_match_config(prefixes=["1"])
         def sample_func(a, b):
             return a + b
 
@@ -45,11 +45,11 @@ class TestAutoMatchConfig:
 
     # Function executes successfully without prefixes and direct config dictionary
     def test_auto_match_config_without_prefixes(self):
-        @auto_match_config()
+        @auto_match_config(prefixes=["4"])
         def multiply(x, y):
             return x * y
 
-        config = {"x": 3, "y": 4}
+        config = {"4__x": 3, "4__y": 4}
         result = multiply(**config)
         assert result == 12
 
@@ -74,12 +74,12 @@ class TestAutoMatchConfig:
 
     # test that remaining config values are passed to kwargs
     def test_passing_kwargs_to_inner_function(self):
-        @auto_match_config()
+        @auto_match_config(prefixes=["1"])
         def test2(c, d, **kwargs):
             res = test3(**kwargs)
             return res * (c + d)
 
-        @auto_match_config()
+        @auto_match_config(prefixes=["1"])
         def test3(e, f):
             return e + f
 
@@ -133,14 +133,29 @@ class TestAutoMatchConfig:
         result = test(1, 2)
         assert result == (1, 2)
 
-    # Test that specifying keyword argument and arguments in config works
-    def test_kwargs_and_config(self):
-        config = {"test__a": 1, "test__b": -1234}
+    # Test that kwargs in config used in outer function are passed to inner function as well
+    def test_config_param_passed_to_inner_function_with_same_param(self):
+        def test_kwargs_and_config(self):
+            config = {"test__a": 1, "test__b": -1234}
 
-        @auto_match_config(prefixes=["test"])
-        def test(a, b, c):
-            return a, b, c
+            @auto_match_config(prefixes=["test"])
+            def test(a, b, c):
+                return a, b, c
 
-        result = test(c=4, b=2, **config)  # b=2 overrides config["test__b"]
+            result = test(c=4, b=2, **config)  # b=2 overrides config["test__b"]
 
-        assert result == (1, 2, 4)
+            assert result == (1, 2, 4)
+
+        @auto_match_config(prefixes=["a"])
+        def test(a, b, c, **kwargs):
+            b2, e, f = test2(**kwargs)
+            return a * b + c * b2 + e * f
+
+        @auto_match_config(prefixes=["a"])  # b is the param used in test() as well
+        def test2(b, e, f):
+            return b, e, f
+
+        config = {"a__a": 1, "a__b": 2, "a__c": 3, "a__d": 4, "a__e": 5, "a__f": 6}
+        result = test(**config)
+
+        assert result == 38

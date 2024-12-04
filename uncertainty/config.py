@@ -99,7 +99,7 @@ def configuration(config_path: str = "configuration.yaml") -> dict:
     )
 
 
-def auto_match_config(*, prefixes: list[str] = []):
+def auto_match_config(*, prefixes: list[str]):
     """
     Automatically pass configuration values to function parameters
 
@@ -120,12 +120,13 @@ def auto_match_config(*, prefixes: list[str] = []):
 
     Parameters
     ----------
-    prefixes : str (optional)
+    prefixes : str
         Beginning string of the keys delimited by "__" in the configuration
         dictionary. If specified, only the keys that have the prefix
         are passed to the function. If two keys have the same prefix,
         the value in the dictionary that appears later in the configuration
-        dictionary is used.
+        dictionary is used. Mandatory as this is the only way to distinguish
+        between configuration values and other keyword arguments.
 
     Examples
     --------
@@ -160,13 +161,13 @@ def auto_match_config(*, prefixes: list[str] = []):
                     if prefixes
                     else tz.identity
                 ),
-                # let non_config_kwargs override config values
+                # let non_config_kwargs override config values by adding non-config kwargs later
                 lambda config_kwargs: tz.merge(config_kwargs, non_config_kwargs),
                 curried.keymap(strip_prefix),
                 (
                     curried.keyfilter(lambda k: k in params)
                     if "kwargs" not in params
-                    else tz.identity  # don't filter, pass rest of args to kwargs
+                    else lambda config_kwargs: curried.merge(kwargs, config_kwargs)
                 ),
             )
 
