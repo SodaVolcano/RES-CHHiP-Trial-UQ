@@ -431,7 +431,7 @@ class TestInitTrainingDir:
         config_copy, split_path, fold_dirs = init_training_dir(
             train_dir=train_dir,
             config_path=config_path,
-            dataset=dataset,
+            dataset_indices=dataset,
             n_folds=3,
             test_split=0.2,
         )  # type: ignore
@@ -462,7 +462,7 @@ class TestInitTrainingDir:
         result = init_training_dir(
             train_dir=train_dir,
             config_path=config_path,
-            dataset=dataset,
+            dataset_indices=dataset,
             n_folds=3,
             test_split=0.2,
         )

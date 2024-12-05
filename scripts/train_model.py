@@ -6,6 +6,13 @@ from lightning import Trainer
 from lightning.pytorch.callbacks import ModelCheckpoint
 from loguru import logger
 
+from uncertainty.training.datasets import H5Dataset, SegmentationData
+from uncertainty.training.training import (
+    init_training_dir,
+    read_training_fold_file,
+    train_models,
+)
+
 sys.path.append("..")
 sys.path.append(".")
 import dill
@@ -16,44 +23,40 @@ from lightning.pytorch.loggers import TensorBoardLogger
 from uncertainty import configuration
 from uncertainty.utils import config_logger
 
-"""
-1. init_training(train_dir: str, config_path: str, n_folds):
-    0. if not exist: create train_dir
-    1. if config exists and config_path != that config, FAIL, else copy config over -> configuration.yaml
-    2. if exist, use it, else perform test-train split -> train-test-split.pkl
-    3. if exist, use it, else perform k-fold split -> validation_folds.pkl
-    4. if not exist: create checkpoint folders for each fold
-    5. train models for each fold paths
-    
-2. Train models(models: list[str], checkpoint_dir: str, train_val_split, config)
-    1. for each model in models:
-        - parse quantity and model class from model
-        - create model folder names using model name and quantity  [model_name_1, model_name_2, ...]
-            [(model_fn, "model_name_1"), (model_fn, "model_name_2"), ...]
-        - for each model folder:
-            - create model folder
-            - train_model
-                - init model class
-                - init data class using train_val_split
-                - train!
 
-
-
-"""
-
-
-def main(config: dict, in_path: str, checkpoint_dir: str):
+def main(
+    config: dict, h5_path: str, train_dir: str, config_path: str, models: list[str]
+):
     torch.set_float32_matmul_precision("medium")
     torch.autograd.set_detect_anomaly(True)
 
     # split into test set
+    dataset = H5Dataset(h5_path)
 
-    # split data into folds
-    # for each fold,
-    # set the path to checkpoint
-    # get the model function and init it
-    # make dataset using only those indices
-    # train model
+    res = init_training_dir(train_dir, config_path, dataset.indices, **config)
+    assert (
+        res != None
+    ), f"Failed to initialise training directory, specified configuration file at {config_path} already exist in training directory!"
+    _, fold_split_path, checkpoint_paths = res
+
+    for fold_idx, ckpt_path in enumerate(checkpoint_paths):
+        train_indices, val_indices, seed = read_training_fold_file(
+            fold_split_path, fold_idx
+        )
+        dataset = SegmentationData(
+            h5_path,
+            train_indices=train_indices,  # type: ignore
+            val_indices=val_indices,  # type: ignore
+            **config,
+        )
+        train_models(
+            models,
+            dataset=dataset,
+            checkpoint_dir=ckpt_path,
+            experiment_name=f"fold_{fold_idx}",
+            seed=seed,  # type: ignore
+            **config,
+        )
 
 
 if __name__ == "__main__":
@@ -73,10 +76,10 @@ if __name__ == "__main__":
         optional=True,
     )
     parser.add_argument(
-        "--checkpoint-dir",
+        "--train-dir",
         "-o",
         type=str,
-        help="Directory to save or load model checkpoints. A folder container folders for each fold will be created, and the checkpoints for each model will be saved in the respective fold folder. If not provided, the checkpoint_dir from the configuration file will be used.",
+        help="Model training directory to save or load model checkpoints. A folder container folders for each fold will be created, and the checkpoints for each model will be saved in the respective fold folder. If not provided, the checkpoint_dir from the configuration file will be used.",
         optional=True,
     )
     parser.add_argument(
@@ -86,12 +89,13 @@ if __name__ == "__main__":
         help="Enable logging. Default is True.",
         default=True,
     )
-    # parser.add_argument(
-    #     "--retrain",
-    #     action="store_true",
-    #     help="Whether to retrain a model saved in the model checkpoint",
-    #     default=False,
-    # )
+    parser.add_argument(
+        "--models",
+        "-m",
+        type=str,
+        help="List of models to train, separated by comma.",
+        default="",
+    )
 
     args = parser.parse_args()
     config = configuration(args.config)
@@ -100,14 +104,11 @@ if __name__ == "__main__":
         logger.enable("uncertainty")
         config_logger(**config)
 
-    # if args.retrain:
-    #     with open(os.path.join(checkpoint_path, "config.pkl"), "rb") as f:
-    #         config = dill.load(f)
-
     # TODO: add retrain argument
     main(
         config=config,
-        in_path=args.in_path or config["data__h5_path"],
-        checkpoint_dir=args.checkpoint_path or config["training__checkpoint_dir"],
-        # retrain=args.retrain,
+        config_path=args.config,
+        h5_path=args.in_path or config["data__h5_path"],
+        train_dir=args.train_dir or config["training__train_dir"],
+        models=args.models.split(",") if args.models else config["training__models"],
     )

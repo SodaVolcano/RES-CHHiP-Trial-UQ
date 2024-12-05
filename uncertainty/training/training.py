@@ -308,7 +308,10 @@ def write_training_fold_file(
 def read_training_fold_file(
     path: str | Path,
     fold: int | None = None,
-) -> tuple[list[int], list[int], int | None] | dict[str, DataSplitDict]:
+) -> (
+    tuple[list[int] | list[str], list[int] | list[str], int | None]
+    | dict[str, DataSplitDict]
+):
     """
     Read configuration for a fold from the training fold file at `path`.
 
@@ -361,10 +364,11 @@ def train_test_split(
     return train_indices, test_indices
 
 
+@auto_match_config(prefixes=["training"])
 def init_training_dir(
     train_dir: str | Path,
     config_path: str,
-    dataset: Sequence,
+    dataset_indices: Sequence[int] | Sequence[str],
     n_folds: int,
     test_split: float,
 ) -> tuple[Path, Path, list[Path]] | None:
@@ -373,8 +377,9 @@ def init_training_dir(
 
     The function will create a new directory at `train_dir` (if it doesn't exists) and copy the
     configuration file at `config_path` to it. It will then perform a test-train split on the dataset
-    and split the remaining training set into folds, saving the indices to `train-test-split.pkl` and
-    `validation-fold-splits.pkl` respectively. Lastly, it will create checkpoint folders for each fold.
+    indices and split the remaining training indices into folds, saving the indices to
+    `train-test-split.pkl` and `validation-fold-splits.pkl` respectively. Lastly, it will create
+    checkpoint folders for each fold.
 
     Parameters
     ----------
@@ -384,8 +389,8 @@ def init_training_dir(
         The path to the configuration file to be copied to `train_dir`. If a configuration file
         already exists in `train_dir` and its path is not the same as `config_path`, the function
         will fail.
-    dataset : Sequence
-        The dataset to split into folds.
+    dataset_indices : Sequence[int] | Sequence[str]
+        The indices from the dataset to be split into test and train sets.
     n_folds : int
         The number of folds to split the training set into after splitting into test and train sets.
     test_split : float
@@ -394,8 +399,8 @@ def init_training_dir(
     Returns
     -------
     tuple[Path, Path, list[Path]] | None
-        A tuple containing:
-         - The paths to the copied configuration file
+        A tuple containing paths to...
+         - the copied configuration file
          - test-train split file
          - the checkpoint folders for each fold
         None is returned if the configuration file already exists in the directory but
@@ -416,11 +421,11 @@ def init_training_dir(
     # Perform test-train split if not already done
     if not os.path.exists(split_path := train_dir / "train-test-split.pkl"):
         with open(split_path, "wb") as f:
-            pickle.dump(train_test_split(dataset, test_split), f)
+            pickle.dump(train_test_split(dataset_indices, test_split), f)
 
     # Perform k-fold split if not already done
     if not os.path.exists(data_split_path := train_dir / "validation-fold-splits.pkl"):
-        fold_indices = split_into_folds(dataset, n_folds, return_indices=True)
+        fold_indices = split_into_folds(dataset_indices, n_folds)
         write_training_fold_file(data_split_path, fold_indices)  # type: ignore
 
     # Create checkpoint folders for each fold
