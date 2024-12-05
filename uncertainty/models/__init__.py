@@ -11,3 +11,10 @@ __all__ = [
     "UNetConfidNet",
     "unet_modules",
 ]
+
+
+def get_model(name: str):
+    return {
+        "unet": UNet,
+        "confidnet": UNetConfidNet,
+    }.get(name, None)

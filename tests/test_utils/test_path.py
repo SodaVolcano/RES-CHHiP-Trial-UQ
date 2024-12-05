@@ -1,6 +1,6 @@
 from typing import Generator
 from unittest import mock
-
+from pathlib import Path
 
 from ..context import PATCH_LIST_FILES, PATCH_OS_WALK, utils
 
@@ -247,7 +247,7 @@ class TestNextAvailablePath:
 
         result = next_available_path(test_path)
 
-        assert result == test_path
+        assert result == Path(test_path)
 
     # Handles paths with no file extension
     def test_handles_path_without_extension(self, mocker):
@@ -257,31 +257,31 @@ class TestNextAvailablePath:
 
         result = next_available_path(test_path)
 
-        assert result == "/test/path/file-1"
+        assert result == Path("/test/path/file-0")
 
     # Returns path with incremented suffix when previous suffixed paths exist
     def test_incremented_suffix_for_existing_paths(self, mocker):
         # Mock os.path.exists to simulate existing files
         mocker.patch(
             "os.path.exists",
-            side_effect=lambda x: x in {"file.txt", "file-1.txt", "file-2.txt"},
+            side_effect=lambda x: x in {"file.txt", "file-0.txt", "file-1.txt"},
         )
 
         # Call the function with a path that already exists
         result = next_available_path("file.txt")
 
         # Assert that the result is the next available path
-        assert result == "file-3.txt"
+        assert result == Path("file-2.txt")
 
     # Handles paths with file extensions correctly
     def test_handles_existing_file_without_extension(self):
         # Mock os.path.exists to simulate existing files
         with mock.patch("os.path.exists") as mock_exists:
             # Simulate that 'file.txt' and 'file-1.txt' exist
-            mock_exists.side_effect = lambda path: path in ["file", "file-1"]
+            mock_exists.side_effect = lambda path: path in ["file", "file-0"]
 
             # Call the function with a path that has an extension
             result = next_available_path("file")
 
             # Assert that the function returns the next available path with the correct extension
-            assert result == "file-2"
+            assert result == Path("file-1")

@@ -85,7 +85,7 @@ if __name__ == "__main__":
 
     if args.logging:
         logger.enable("uncertainty")
-        config_logger()
+        config_logger(**config)
 
     main(
         args.in_path or config["data__data_dir"],

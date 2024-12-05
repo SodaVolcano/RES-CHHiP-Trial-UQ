@@ -274,13 +274,17 @@ class SegmentationData(lit.LightningDataModule):
     foreground_oversample_ratio : float
         Ratio of patches guaranteed to contain the foreground class in each batch.
     num_workers_train : int
-        Number of workers for the training DataLoader.
+        Number of workers for the training DataLoader. Set to 0 to disable multiprocessing
+        and use the main process for data loading.
     num_workers_val : int
-        Number of workers for the validation DataLoader.
+        Number of workers for the validation DataLoader. Set to 0 to disable multiprocessing
+        and use the main process for data loading.
     prefetch_factor_train : int
-        Number of samples loaded in advance by the training DataLoader.
+        Number of samples loaded in advance by the training DataLoader. If `num_workers_train`
+        is set to 0, this parameter is ignored.
     prefetch_factor_val : int
-        Number of samples loaded in advance by the validation DataLoader.
+        Number of samples loaded in advance by the validation DataLoader. If `num_workers_val`
+        is set to 0, this parameter is ignored.
     persistent_workers_train : bool
         Whether to keep the workers alive between epochs for the training DataLoader.
     persistent_workers_val : bool
@@ -308,8 +312,8 @@ class SegmentationData(lit.LightningDataModule):
         foreground_oversample_ratio: float,
         num_workers_train: int,
         num_workers_val: int,
-        prefetch_factor_train: int = 0,
-        prefetch_factor_val: int = 0,
+        prefetch_factor_train: int | None,
+        prefetch_factor_val: int | None,
         persistent_workers_train: bool = False,
         persistent_workers_val: bool = False,
         pin_memory_train: bool = False,
@@ -358,7 +362,9 @@ class SegmentationData(lit.LightningDataModule):
             ),
             num_workers=self.num_workers_train,
             batch_size=self.batch_size,
-            prefetch_factor=self.prefetch_factor_train,
+            prefetch_factor=(
+                self.prefetch_factor_train if self.num_workers_train > 0 else None
+            ),
             persistent_workers=self.persistent_workers_train,
             pin_memory=self.pin_memory_train,
             worker_init_fn=_seed_with_time,
@@ -375,7 +381,9 @@ class SegmentationData(lit.LightningDataModule):
             ),
             num_workers=self.num_workers_val,
             batch_size=self.batch_size_eval,
-            prefetch_factor=self.prefetch_factor_val,
+            prefetch_factor=(
+                self.prefetch_factor_val if self.num_workers_val > 0 else None
+            ),
             pin_memory=self.pin_memory_val,
             persistent_workers=self.persistent_workers_val,
             worker_init_fn=_seed_with_time,

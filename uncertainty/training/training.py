@@ -4,30 +4,38 @@ Functions for managing training, such as checkpointing and data splitting.
 
 import os
 import pickle
+import random
 import shutil
 from pathlib import Path
 from random import randint
-from typing import Iterable, Literal, Sequence, TypedDict
+from struct import unpack
+from typing import Callable, Iterable, Literal, Sequence, TypedDict
 
 import dill
 import lightning
 import toolz as tz
 import torch
-from lightning import Trainer
+from lightning import Trainer, seed_everything
 from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch.loggers import TensorBoardLogger
 from loguru import logger
 from sklearn.model_selection import KFold
+from sklearn.model_selection import train_test_split as sk_train_test_split
 from toolz import curried
 from torch import nn
 
-from uncertainty.config import auto_match_config
-
+from ..config import auto_match_config
+from ..models import get_model
 from ..models.unet import UNet
 from ..utils import curry, logger_wraps
 from ..utils.common import unpack_args
+from ..utils.path import next_available_path
 from .datasets import H5Dataset, SegmentationData
 from .lightning import LitSegmentation
+
+DataSplitDict = TypedDict(
+    "DataSplitDict", {"train": list[int], "val": list[int], "seed": int}
+)
 
 
 @auto_match_config(prefixes=["training", "data"])
@@ -38,7 +46,7 @@ def train_model(
     log_dir: str | Path,
     experiment_name: str,
     # Checkpoint parameters
-    checkpoint_path: str,
+    checkpoint_path: str | Path,
     checkpoint_name: str,
     checkpoint_every_n_epochs: int,
     # Training parameters
@@ -46,15 +54,15 @@ def train_model(
     n_batches_per_epoch: int,
     n_batches_val: int,
     check_val_every_n_epoch: int,
-    save_last: bool = True,
+    save_last_checkpoint: bool = True,
     strategy: str = "ddp",
-    accelerator: str = "gpu" if torch.cuda.is_available() else "cpu",
+    accelerator: str = "auto",
     precision: str = "16-mixed",
     enable_progress_bar: bool = True,
     enable_model_summary: bool = True,
 ):
     """
-    Train a model and save checkpoints in `<checkpoint_path>/<experiment_name>/<model_classname>-<int>`.
+    Train a model and save checkpoints in `<checkpoint_path>/<experiment_name>/<model_classname_lowercase>[-<int>]`.
 
     Parameters
     ----------
@@ -85,7 +93,7 @@ def train_model(
     strategy : str, optional
         Specifies the distributed training strategy, see https://lightning.ai/docs/pytorch/stable/extensions/strategy.html
     accelerator : str, optional
-        Device type to run the model on. Options include `"gpu"`, `"cpu"`, or `"tpu"`. Defaults to `"gpu"` if available.
+        Device type to run the model on. Options include `"auto"`, `"gpu"`, `"cpu"`, or `"tpu"`. Defaults to `"auto"` if available.
     precision : str, optional
         Training precision of float values.
     enable_progress_bar : bool, optional
@@ -97,19 +105,20 @@ def train_model(
 
     tb_logger = TensorBoardLogger(save_dir=log_dir, name=experiment_name)
 
-    model_checkpoint = curry(ModelCheckpoint)(
+    checkpoint = ModelCheckpoint(
         monitor="val_loss" if run_validation else "train_loss",
         mode="min",
         dirpath=checkpoint_path,
         save_on_train_epoch_end=not run_validation,
-    )
-
-    checkpoint = model_checkpoint(
         filename=checkpoint_name,
         every_n_epochs=checkpoint_every_n_epochs,
         save_top_k=-1,
     )
-    checkpoint_last = model_checkpoint(
+    checkpoint_last = ModelCheckpoint(
+        monitor="val_loss" if run_validation else "train_loss",
+        mode="min",
+        dirpath=checkpoint_path,
+        save_on_train_epoch_end=not run_validation,
         filename="last",
         save_top_k=1,
     )
@@ -119,7 +128,9 @@ def train_model(
         limit_train_batches=n_batches_per_epoch,
         limit_val_batches=n_batches_val if run_validation else 0,
         num_sanity_val_steps=0 if not run_validation else 2,
-        callbacks=[checkpoint, checkpoint_last] if save_last else [checkpoint],
+        callbacks=(
+            [checkpoint, checkpoint_last] if save_last_checkpoint else [checkpoint]
+        ),
         strategy=strategy,
         check_val_every_n_epoch=check_val_every_n_epoch,
         accelerator=accelerator,
@@ -135,9 +146,79 @@ def train_model(
     trainer.fit(model, dataset)
 
 
-DataSplitDict = TypedDict(
-    "DataSplitDict", {"train": list[int], "val": list[int], "seed": int}
-)
+@auto_match_config(prefixes=["training", "data", "unet", "confidnet"])
+def train_models(
+    models: list[str],
+    dataset: SegmentationData,
+    checkpoint_dir: Path | str,
+    experiment_name: str,
+    seed: int | None = None,
+    **kwargs,
+):
+    """
+    Train multiple models on the same dataset and save checkpoints in the specified directory.
+
+    Parameters
+    ----------
+    models : list[str]
+        A list of model names to train. Each model name can be a single model name or a string
+        with the format "<model_name>_<quantity>", where `<model_name>` is the model class name
+        in lowercase and `<quantity>` is the number of models to train. e.g. "unet_3" will train
+        3 UNet models.
+    dataset : SegmentationData
+        The dataset containing training and validation dataloaders.
+    checkpoint_dir : Path | str
+        Directory path where model checkpoints will be saved.
+    experiment_name : str
+        Name of the experiment, which will be used to organise logs under the specified `log_dir`.
+        e.g. "fold_0", "fold_1", etc.
+    seed : int, optional
+        Random seed to use for reproducibility. Used at the beginning before training all models.
+    **kwargs
+        Additional keyword arguments used to initialise the models and configure the training process.
+    """
+    checkpoint_dir = Path(checkpoint_dir)
+    if seed is not None:
+        seed_everything(seed)
+
+    def parse_model_str(model: str) -> list[tuple[Callable, Path]]:
+        """Get model function and path where model checkpoints will be stored"""
+        if "_" not in model:
+            return [(get_model(model), Path(model))]
+        return tz.pipe(
+            model.split("_"),
+            unpack_args(
+                lambda name, quantity: [
+                    (get_model(name), checkpoint_dir / f"{name}_{i}")
+                    for i in range(int(quantity))
+                ]
+            ),
+        )  # type: ignore
+
+    tz.pipe(
+        models,
+        curried.map(parse_model_str),
+        tz.concat,
+        curried.map(
+            unpack_args(
+                lambda model_fn, model_path: (
+                    train_model(
+                        model_fn(**kwargs),
+                        dataset,
+                        checkpoint_path=model_path,
+                        experiment_name=experiment_name,
+                        **kwargs,
+                    )
+                )
+            )
+        ),
+    )
+
+
+def _get_with_indices[
+    T
+](indices: list[int] | list[str], dataset: Sequence[T] | dict[str, T]) -> Sequence[T]:
+    return [dataset[i] for i in indices]  # type: ignore
 
 
 @logger_wraps(level="INFO")
@@ -171,12 +252,11 @@ def split_into_folds[
         return map(
             unpack_args(lambda train, val: (train.tolist(), val.tolist())), indices
         )
-    get_with_indices = lambda indices: [dataset[i] for i in indices]
     return map(
         unpack_args(
             lambda train_idx, val_idx: (
-                get_with_indices(train_idx),
-                get_with_indices(val_idx),
+                _get_with_indices(train_idx, dataset),
+                _get_with_indices(val_idx, dataset),
             )
         ),
         indices,
@@ -227,189 +307,241 @@ def write_training_fold_file(
 def read_training_fold_file(
     path: str | Path,
     fold: int | None = None,
-) -> DataSplitDict | dict[str, DataSplitDict]:
+) -> tuple[list[int], list[int], int | None] | dict[str, DataSplitDict]:
     """
     Read configuration for a fold from the training fold file at `path`.
 
-    If `fold` is not provided, the entire file is read and returned.
+    If `fold` is not provided, the entire file is read and returned. Else,
+    the function returns the train, validation indices and the seed value
+    for the specified fold (if the seed exists).
     """
     with open(path, "rb") as f:
         content = pickle.load(f)
     if fold is not None:
         return content[f"fold_{fold}"]
-    return content
+    return content["train"], content["val"], content.get("seed", None)
 
 
-@logger_wraps(level="INFO")
-def init_checkpoint_dir(
-    checkpoint_path: str,
-    config_path: str,
-    n_folds: int,
+def train_test_split(
     dataset: Sequence,
-    force: bool = False,
-) -> tuple[Path, list[Path]] | None:
+    test_split: float,
+    return_indices: bool = False,
+    seed: int | None = None,
+) -> tuple[Sequence, Sequence]:
     """
-    Initialise the checkpoint directory.
+    Split a dataset into training and test sets.
 
     Parameters
     ----------
-    checkpoint_path : str
-        The path to the checkpoint directory.
+    dataset : Sequence
+        The dataset to split.
+    test_split : float
+        The proportion of the dataset to allocate to the test set.
+    return_indices : bool, optional
+        If True, return the indices of the dataset split instead of the actual data.
+    seed : int, optional
+        The random seed to use for the split.
+
+    Returns
+    -------
+    tuple[Sequence, Sequence]
+        A tuple containing the training and test sets.
+    """
+    indices = list(range(len(dataset)))
+    random.shuffle(indices)
+    train_indices, test_indices = sk_train_test_split(
+        indices, test_size=test_split, random_state=seed
+    )
+    if not return_indices:
+        return (
+            _get_with_indices(train_indices, dataset),
+            _get_with_indices(test_indices, dataset),
+        )
+    return train_indices, test_indices
+
+
+def init_training_dir(
+    train_dir: str | Path,
+    config_path: str,
+    dataset: Sequence,
+    n_folds: int,
+    test_split: float,
+) -> tuple[Path, Path, list[Path]] | None:
+    """
+    Initialise directory for training and perform data splitting.
+
+    The function will create a new directory at `train_dir` (if it doesn't exists) and copy the
+    configuration file at `config_path` to it. It will then perform a test-train split on the dataset
+    and split the remaining training set into folds, saving the indices to `train-test-split.pkl` and
+    `validation-fold-splits.pkl` respectively. Lastly, it will create checkpoint folders for each fold.
+
+    Parameters
+    ----------
+    train_dir : str | Path
+        The path to the training directory. If it doesn't exist, a new directory will be created.
     config_path : str
-        The path to the configuration file to be copied.
-    n_folds : int
-        The number of folds to split the dataset into.
+        The path to the configuration file to be copied to `train_dir`. If a configuration file
+        already exists in `train_dir` and its path is not the same as `config_path`, the function
+        will fail.
     dataset : Sequence
         The dataset to split into folds.
-    force : bool, optional
-        If True, overwrite the checkpoint directory if it exists.
+    n_folds : int
+        The number of folds to split the training set into after splitting into test and train sets.
+    test_split : float
+        The proportion of the dataset to allocate to the test set before splitting into folds.
 
     Returns
     -------
-    tuple[Path, list[Path]] | None
-        A tuple containing the data split path and a list of fold directories.
-        If the checkpoint directory already exists and `force` is False, None is returned.
-    """
-    checkpoint_dir = Path(checkpoint_path)
-
-    if checkpoint_dir.exists():
-        if not force:
-            logger.warning(
-                f"Directory {checkpoint_dir} already exists. If you wish to ovewrite, use `force=True`."
-            )
-            return
-        shutil.rmtree(checkpoint_dir)  # Remove the existing directory if force is True
-
-    # Create the checkpoint directory and fold subdirectories
-    checkpoint_dir.mkdir(parents=True, exist_ok=True)
-    for i in range(1, n_folds + 1):
-        (checkpoint_dir / f"fold_{i}").mkdir()
-
-    config_name = os.path.basename(config_path)
-    shutil.copy(config_path, checkpoint_dir / config_name)
-
-    # Split dataset into folds and write to validation_folds.pkl
-    fold_indices = split_into_folds(dataset, n_folds, return_indices=True)
-    data_split_path = checkpoint_dir / "validation_folds.pkl"
-    write_training_fold_file(data_split_path, fold_indices)  # type: ignore
-
-    return data_split_path, list(checkpoint_dir.glob("fold_*"))
-
-
-def load_checkpoint(
-    ckpt_dir: None | str = None,
-    model_path: str | None = None,
-    config_path: str | None = None,
-    indices_path: str | None = None,
-) -> tuple[
-    nn.Module,
-    dict,
-    dict[Literal["train_indices", "val_indices"], list[int]],
-    H5Dataset,
-    H5Dataset,
-]:
-    """
-    Load the model, configuration, and its dataset from a checkpoint folder.
-
-    Parameters
-    ----------
-    ckpt_dir : str, optional
-        Folder containing "latest.ckpt", "config.pkl", and "indices.pt" for
-        the model weights, configuration object, and train-validation split
-        indices respectively. If they are not named as those files, pass in
-        `model_path`, `config_path`, and `indices_path` instead of this parameter.
-    model_path : str, optional
-        Path to the model checkpoint file. If not provided, defaults to
-        "latest.ckpt" in the `ckpt_dir`.
-    config_path : str, optional
-        Path to the configuration file. If not provided, defaults to
-        "config.pkl" in the `ckpt_dir`.
-    indices_path : str, optional
-        Path to the indices file. If not provided, defaults to
-        "indices.pt" in the `ckpt_dir`.
-
-    Returns
-    -------
-    tuple
+    tuple[Path, Path, list[Path]] | None
         A tuple containing:
-        - ckpt : The loaded model checkpoint.
-        - config : The configuration object.
-        - indices: A dictionary with keys "train_indices" and "val_indices" with a list
-                   of integers indicating indices in the total dataset allocated to the
-                   train and validation set respectively.
-        - train_dataset: H5Dataset containing the training data.
-        - val_dataset: H5Dataset containing the validation data.
-
-    Raises
-    ------
-    FileNotFoundError
-        If any of the specified paths do not exist.
+         - The paths to the copied configuration file
+         - test-train split file
+         - the checkpoint folders for each fold
+        None is returned if the configuration file already exists in the directory but
+        the specified configuration path is different.
     """
-    config_path = config_path or os.path.join(ckpt_dir, "config.pkl")
-    indices_path = indices_path or os.path.join(ckpt_dir, "indices.pt")
-    model_path = model_path or os.path.join(ckpt_dir, "latest.ckpt")
-    with open(config_path, "rb") as f:
-        config = dill.load(f)
-    indices = torch.load(indices_path, weights_only=True)
-    train_dataset = H5Dataset(
-        os.path.join(config["staging_dir"], config["train_fname"]),
-        indices=indices["train_indices"],
-    )
-    val_dataset = H5Dataset(
-        os.path.join(config["staging_dir"], config["train_fname"]),
-        indices=indices["val_indices"],
-    )
-    model = UNet(config)
-    model = LitSegmentation.load_from_checkpoint(
-        model_path, model=model, config=config, save_hyperparams=False
-    ).model
-    return model, config, indices, train_dataset, val_dataset
+    train_dir = Path(train_dir)
+    train_dir.mkdir(exist_ok=True)
 
-
-def checkpoint_dir_type(
-    path,
-    required_files: list[str] | set[str] = ["latest.ckpt", "indices.pt", "config.pkl"],
-) -> Literal["single", "multiple", "invalid"]:
-    """
-    Return type of the checkpoint directory - "single", "multiple", or "invalid"
-
-    This function returns if the given directory contains a single model's checkpoint or
-    folders of model checkpoints. "single" is defined as a folder with at least the
-    required files while "multiple" is defined as a directory without the required files,
-    but have directories that **all** have the required files.
-
-    Parameters
-    ----------
-    path : str
-        The path to the checkpoint directory to be validated.
-
-    Returns
-    -------
-    Literal["single", "multiple", "invalid"]
-        'single' if all required files are found in the main directory,
-        'multiple' if required files are found in subdirectories,
-        and "invalid" if otherwise.
-    """
-    required_files = set(required_files)
-
-    if not os.path.isdir(path):
-        logger.critical(f"The path {path} is not a valid directory.")
-        return "invalid"
-
-    if required_files.issubset(os.listdir(path)):
-        return "single"
-
-    subdir_paths = [os.path.join(path, entry) for entry in os.listdir(path)]
-    bad_dirs = list(
-        filter(
-            lambda x: not (os.path.isdir(x) and required_files.issubset(os.listdir(x))),
-            subdir_paths,
+    # Copy configuration file to train_dir, fail if it already exists
+    config_copy_path = train_dir / "configuration.yaml"
+    if os.path.exists(config_copy_path) and config_path != config_copy_path:
+        logger.error(
+            f"configuration.yaml already exists in {train_dir} but specified different configuration path {config_path}. Please remove it or use the same configuration file."
         )
-    )
-    if not len(bad_dirs) == 0:
-        logger.critical(
-            f"Folders of checkpoint detected but the following folder have bad structure: {bad_dirs}"
-        )
-        return "invalid"
+        return
+    shutil.copy(config_path, config_copy_path)
 
-    return "multiple"
+    # Perform test-train split if not already done
+    if not os.path.exists(split_path := train_dir / "train-test-split.pkl"):
+        with open(split_path, "wb") as f:
+            pickle.dump(train_test_split(config_path, test_split), f)
+
+    # Perform k-fold split if not already done
+    if not os.path.exists(data_split_path := train_dir / "validation-fold-splits.pkl"):
+        fold_indices = split_into_folds(dataset, n_folds, return_indices=True)
+        write_training_fold_file(data_split_path, fold_indices)  # type: ignore
+
+    # Create checkpoint folders for each fold
+    fold_dirs = [train_dir / f"fold_{i}" for i in range(n_folds)]
+    [folder.mkdir(exist_ok=True) for folder in fold_dirs]
+    return config_copy_path, data_split_path, fold_dirs
+
+
+# def load_checkpoint(
+#     ckpt_dir: None | str = None,
+#     model_path: str | None = None,
+#     config_path: str | None = None,
+#     indices_path: str | None = None,
+# ) -> tuple[
+#     nn.Module,
+#     dict,
+#     dict[Literal["train_indices", "val_indices"], list[int]],
+#     H5Dataset,
+#     H5Dataset,
+# ]:
+#     """
+#     Load the model, configuration, and its dataset from a checkpoint folder.
+
+#     Parameters
+#     ----------
+#     ckpt_dir : str, optional
+#         Folder containing "latest.ckpt", "config.pkl", and "indices.pt" for
+#         the model weights, configuration object, and train-validation split
+#         indices respectively. If they are not named as those files, pass in
+#         `model_path`, `config_path`, and `indices_path` instead of this parameter.
+#     model_path : str, optional
+#         Path to the model checkpoint file. If not provided, defaults to
+#         "latest.ckpt" in the `ckpt_dir`.
+#     config_path : str, optional
+#         Path to the configuration file. If not provided, defaults to
+#         "config.pkl" in the `ckpt_dir`.
+#     indices_path : str, optional
+#         Path to the indices file. If not provided, defaults to
+#         "indices.pt" in the `ckpt_dir`.
+
+#     Returns
+#     -------
+#     tuple
+#         A tuple containing:
+#         - ckpt : The loaded model checkpoint.
+#         - config : The configuration object.
+#         - indices: A dictionary with keys "train_indices" and "val_indices" with a list
+#                    of integers indicating indices in the total dataset allocated to the
+#                    train and validation set respectively.
+#         - train_dataset: H5Dataset containing the training data.
+#         - val_dataset: H5Dataset containing the validation data.
+
+#     Raises
+#     ------
+#     FileNotFoundError
+#         If any of the specified paths do not exist.
+#     """
+#     config_path = config_path or os.path.join(ckpt_dir, "config.pkl")
+#     indices_path = indices_path or os.path.join(ckpt_dir, "indices.pt")
+#     model_path = model_path or os.path.join(ckpt_dir, "latest.ckpt")
+#     with open(config_path, "rb") as f:
+#         config = dill.load(f)
+#     indices = torch.load(indices_path, weights_only=True)
+#     train_dataset = H5Dataset(
+#         os.path.join(config["staging_dir"], config["train_fname"]),
+#         indices=indices["train_indices"],
+#     )
+#     val_dataset = H5Dataset(
+#         os.path.join(config["staging_dir"], config["train_fname"]),
+#         indices=indices["val_indices"],
+#     )
+#     model = UNet(config)
+#     model = LitSegmentation.load_from_checkpoint(
+#         model_path, model=model, config=config, save_hyperparams=False
+#     ).model
+#     return model, config, indices, train_dataset, val_dataset
+
+
+# def checkpoint_dir_type(
+#     path,
+#     required_files: list[str] | set[str] = ["latest.ckpt", "indices.pt", "config.pkl"],
+# ) -> Literal["single", "multiple", "invalid"]:
+#     """
+#     Return type of the checkpoint directory - "single", "multiple", or "invalid"
+
+#     This function returns if the given directory contains a single model's checkpoint or
+#     folders of model checkpoints. "single" is defined as a folder with at least the
+#     required files while "multiple" is defined as a directory without the required files,
+#     but have directories that **all** have the required files.
+
+#     Parameters
+#     ----------
+#     path : str
+#         The path to the checkpoint directory to be validated.
+
+#     Returns
+#     -------
+#     Literal["single", "multiple", "invalid"]
+#         'single' if all required files are found in the main directory,
+#         'multiple' if required files are found in subdirectories,
+#         and "invalid" if otherwise.
+#     """
+#     required_files = set(required_files)
+
+#     if not os.path.isdir(path):
+#         logger.critical(f"The path {path} is not a valid directory.")
+#         return "invalid"
+
+#     if required_files.issubset(os.listdir(path)):
+#         return "single"
+
+#     subdir_paths = [os.path.join(path, entry) for entry in os.listdir(path)]
+#     bad_dirs = list(
+#         filter(
+#             lambda x: not (os.path.isdir(x) and required_files.issubset(os.listdir(x))),
+#             subdir_paths,
+#         )
+#     )
+#     if not len(bad_dirs) == 0:
+#         logger.critical(
+#             f"Folders of checkpoint detected but the following folder have bad structure: {bad_dirs}"
+#         )
+#         return "invalid"
+
+#     return "multiple"

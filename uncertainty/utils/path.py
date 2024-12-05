@@ -5,6 +5,7 @@ Utility functions for working with file paths
 import os
 import re
 from functools import reduce
+from pathlib import Path
 from typing import Callable, Generator, Iterable
 
 import toolz as tz
@@ -106,15 +107,15 @@ def resolve_path_placeholders(path_pattern: str, placeholders: list[str]) -> lis
     )
 
 
-def next_available_path(path: str):
+def next_available_path(path: str | Path) -> Path:
     """
-    Appends an integer suffix to the given path if it already exists.
+    Appends an integer suffix "-<int>" to the given path if it already exists.
     """
     if not os.path.exists(path):
-        return path
+        return Path(path)
 
     base, ext = os.path.splitext(path)
     counter = iterate_while(
-        lambda count: count + 1, lambda count: os.path.exists(f"{base}-{count}{ext}"), 1
+        lambda count: count + 1, lambda count: os.path.exists(f"{base}-{count}{ext}"), 0
     )
-    return f"{base}-{counter}{ext}"
+    return Path(f"{base}-{counter}{ext}")

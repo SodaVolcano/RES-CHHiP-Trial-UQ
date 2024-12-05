@@ -63,21 +63,34 @@ ensemble:
   model: "UNet"
 
 training:
+  # List of models to train for EACH fold, any of "unet_<quantity>", "confidnet_<quantity>"
+  # Note that order matters - if a model (e.g. confidnet) uses a pretrained model (e.g. 
+  # unet), then the former should appear later in the list
+  models_to_train: ["unet_10", "confidnet"]
+
+  # ------------------ Trainer Settings ------------------
+  # Specifies the distributed training strategy, see https://lightning.ai/docs/pytorch/stable/extensions/strategy.html
+  strategy: "ddp"
+  # Which device to train on, "cpu", "gpu", "tpu", or "auto"
+  accelerator: "gpu"
+  # Precision of the floating point numbers
+  precision: "16-mixed"
+  # Whether to show progress bar during training
+  enable_progress_bar: true
+  # Whether to display model summary at the start of training
+  enable_model_summary: true
+
   # ------------------ Checkpoint Settings ------------------
   # Path to directory to save model checkpoints; model checkpoints are saved as
   #     "<model_checkpoint_path>/fold_<int>/<model_name_lowercase>_<int>.pth"
   # Configuration file, data splits and model checkpoints will be saved here
-  checkpoint_path: "./checkpoints/"
+  train_dir: "./training-output"
   # See https://lightning.ai/docs/pytorch/stable/api/lightning.pytorch.callbacks.ModelCheckpoint.html
   checkpoint_name: "{epoch:03d}-{val_loss:.4f}"
   # Save model checkpoint every n epochs
   checkpoint_every_n_epochs: 100
   # Whether to save the last checkpoint as "last.pth"
   save_last_checkpoint: true
-  # List of models to train for EACH fold, any of "unet", "confidnet", "ensemble_<int>"
-  # Note that order matters - if a model (e.g. confidnet) uses a pretrained model (e.g. 
-  # unet), then the former should appear later in the list
-  models_to_train: ["ensemble_10", "confidnet"]
 
   # ------------------ Data Settings ------------------
   # How many folds to split the data into for cross-validation (determines valiation split ratio)
@@ -104,7 +117,7 @@ training:
   # ------------------ Dataloader Settings ------------------
   # How many subprocesses for data loading (training and validation set)
   num_workers_train: 8
-  num_workers_val: 8
+  num_workers_val: 4
   # Number of batches loaded in advance across all workers
   # e.g. factor = 2 means total_batch = 2 * n_workers
   prefetch_factor_train: 1
@@ -117,7 +130,7 @@ training:
   pin_memory_val: true
 
   # ------------------ Hyperparameters ------------------
-  # Whether to train using deep supervision loss
+  # Loss will be weighted sum of losses from each level of the U-net decoder
   deep_supervision: true
   # Number of epochs to train for
   n_epochs: 750
