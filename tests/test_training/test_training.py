@@ -20,6 +20,49 @@ train_model = training.train_model
 train_models = training.train_models
 SegmentationData = training.SegmentationData
 save_scans_to_h5 = data.save_scans_to_h5
+train_test_split = training.train_test_split
+init_training_dir = training.init_training_dir
+
+
+def get_dataset(n: int = 2):
+    np.random.seed(42)
+    return [
+        {
+            "patient_id": i + 5,
+            "volume": np.random.rand(1, 20 + i, 15, 10 + i),
+            "dimension_original": (10, 10, 10),
+            "spacings": (1.0, 1.0, 1.0),
+            "modality": "CT",
+            "manufacturer": "GE",
+            "scanner": "Optima",
+            "study_date": date(2021, 1, 1),
+            # if not float32, kornia augmentation in dataset will fail
+            "masks": np.random.randint(0, 2, (3, 20 + i, 15, 10 + i)).astype(
+                np.float32
+            ),
+        }
+        for i in range(n)
+    ]
+
+
+class MockModel(LightningModule):
+    @auto_match_config(prefixes=["mock"])
+    def __init__(self, loss, val_loss):
+        super().__init__()
+        self.layer = nn.Conv3d(3, 1, 3)
+        self.loss = loss
+        self.val_loss = val_loss
+
+    def training_step(self, batch, batch_idx):
+        self.log("loss", torch.tensor(self.loss))
+        return {"loss": torch.tensor(self.loss, requires_grad=True)}
+
+    def validation_step(self, batch, batch_idx):
+        self.log("val_loss", torch.tensor(self.val_loss))
+        return {"val_loss": torch.tensor(self.val_loss, requires_grad=True)}
+
+    def configure_optimizers(self):
+        return torch.optim.Adam(self.parameters())
 
 
 class TestSplitIntoFolds:
@@ -91,47 +134,6 @@ class TestWriteTrainingFoldFile:
                 assert content[f"fold_{i}"]["val"] == fold_indices[i][1]
                 assert "seed" in content[f"fold_{i}"]
                 assert isinstance(content[f"fold_{i}"]["seed"], int)
-
-
-def get_dataset(n: int = 2):
-    np.random.seed(42)
-    return [
-        {
-            "patient_id": i + 5,
-            "volume": np.random.rand(1, 20 + i, 15, 10 + i),
-            "dimension_original": (10, 10, 10),
-            "spacings": (1.0, 1.0, 1.0),
-            "modality": "CT",
-            "manufacturer": "GE",
-            "scanner": "Optima",
-            "study_date": date(2021, 1, 1),
-            # if not float32, kornia augmentation in dataset will fail
-            "masks": np.random.randint(0, 2, (3, 20 + i, 15, 10 + i)).astype(
-                np.float32
-            ),
-        }
-        for i in range(n)
-    ]
-
-
-class MockModel(LightningModule):
-    @auto_match_config(prefixes=["mock"])
-    def __init__(self, loss, val_loss):
-        super().__init__()
-        self.layer = nn.Conv3d(3, 1, 3)
-        self.loss = loss
-        self.val_loss = val_loss
-
-    def training_step(self, batch, batch_idx):
-        self.log("loss", torch.tensor(self.loss))
-        return {"loss": torch.tensor(self.loss, requires_grad=True)}
-
-    def validation_step(self, batch, batch_idx):
-        self.log("val_loss", torch.tensor(self.val_loss))
-        return {"val_loss": torch.tensor(self.val_loss, requires_grad=True)}
-
-    def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters())
 
 
 class TestTrainModel:
@@ -388,3 +390,83 @@ class TestTrainModels:
             check_checkpoints(2, "notunet")
             check_checkpoints(1, "wow")
             check_checkpoints(1, "wow2")
+
+
+class TestTrainTestSplit:
+
+    # Split dataset with test_split=0.2 returns two sequences of correct proportions
+    def test_split_proportions(self):
+        # Create test dataset
+        dataset = list(range(100, 0, -1))
+        test_split = 0.2
+
+        # Split dataset
+        train_data, test_data = train_test_split(
+            dataset, test_split=test_split, seed=42
+        )
+
+        # Check proportions
+        assert len(train_data) == 80
+        assert len(test_data) == 20
+
+        # Check no data overlap
+        assert set(train_data).isdisjoint(set(test_data))
+
+        # Check all data preserved
+        assert set(train_data).union(set(test_data)) == set(dataset)
+
+
+class TestInitTrainingDir:
+
+    # Creates training directory and copies config file when directory doesn't exist
+    def test_creates_new_training_dir(self, tmp_path):
+        # Setup test data
+        config_path = tmp_path / "configuration.yaml"
+        config_path.write_text("test config")
+
+        train_dir = tmp_path / "training"
+        dataset = list(range(10))
+
+        # Call function
+        config_copy, split_path, fold_dirs = init_training_dir(
+            train_dir=train_dir,
+            config_path=config_path,
+            dataset=dataset,
+            n_folds=3,
+            test_split=0.2,
+        )  # type: ignore
+
+        # Verify directory and files created
+        assert train_dir.exists()
+        assert (train_dir / "configuration.yaml").exists()
+        assert (train_dir / "train-test-split.pkl").exists()
+        assert (train_dir / "validation-fold-splits.pkl").exists()
+        assert len(fold_dirs) == 3
+        assert all(d.exists() for d in fold_dirs)
+
+    # Handles existing training directory without overwriting
+    def test_handles_existing_dir(self, tmp_path):
+        # Setup existing training dir
+        train_dir = tmp_path / "training"
+        train_dir.mkdir()
+        config_path = tmp_path / "config.yaml"
+        config_path.write_text("test config")
+
+        # Create existing config file with different path
+        existing_config = train_dir / "configuration.yaml"
+        existing_config.write_text("existing config")
+
+        dataset = list(range(10))
+
+        # Call function with different config path
+        result = init_training_dir(
+            train_dir=train_dir,
+            config_path=config_path,
+            dataset=dataset,
+            n_folds=3,
+            test_split=0.2,
+        )
+
+        # Verify function returns None and doesn't overwrite
+        assert result is None
+        assert existing_config.read_text() == "existing config"

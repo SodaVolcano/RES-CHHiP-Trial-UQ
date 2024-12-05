@@ -416,7 +416,7 @@ def init_training_dir(
     # Perform test-train split if not already done
     if not os.path.exists(split_path := train_dir / "train-test-split.pkl"):
         with open(split_path, "wb") as f:
-            pickle.dump(train_test_split(config_path, test_split), f)
+            pickle.dump(train_test_split(dataset, test_split), f)
 
     # Perform k-fold split if not already done
     if not os.path.exists(data_split_path := train_dir / "validation-fold-splits.pkl"):
@@ -425,7 +425,8 @@ def init_training_dir(
 
     # Create checkpoint folders for each fold
     fold_dirs = [train_dir / f"fold_{i}" for i in range(n_folds)]
-    [folder.mkdir(exist_ok=True) for folder in fold_dirs]
+    for fold in fold_dirs:
+        fold.mkdir(exist_ok=True)
     return config_copy_path, data_split_path, fold_dirs
 
 
