@@ -2,6 +2,7 @@ import pickle
 import tempfile
 from datetime import date
 from pathlib import Path
+from unittest.mock import patch
 
 import numpy as np
 import pytest
@@ -9,11 +10,14 @@ import torch
 from lightning import LightningModule
 from torch import nn
 
+from uncertainty.config import auto_match_config
+
 from ..context import data, training
 
 split_into_folds = training.split_into_folds
 write_training_fold_file = training.write_training_fold_file
 train_model = training.train_model
+train_models = training.train_models
 SegmentationData = training.SegmentationData
 save_scans_to_h5 = data.save_scans_to_h5
 
@@ -110,40 +114,103 @@ def get_dataset(n: int = 2):
     ]
 
 
+class MockModel(LightningModule):
+    @auto_match_config(prefixes=["mock"])
+    def __init__(self, loss, val_loss):
+        super().__init__()
+        self.layer = nn.Conv3d(3, 1, 3)
+        self.loss = loss
+        self.val_loss = val_loss
+
+    def training_step(self, batch, batch_idx):
+        self.log("loss", torch.tensor(self.loss))
+        return {"loss": torch.tensor(self.loss, requires_grad=True)}
+
+    def validation_step(self, batch, batch_idx):
+        self.log("val_loss", torch.tensor(self.val_loss))
+        return {"val_loss": torch.tensor(self.val_loss, requires_grad=True)}
+
+    def configure_optimizers(self):
+        return torch.optim.Adam(self.parameters())
+
+
 class TestTrainModel:
 
     # Model trains successfully with default parameters and saves checkpoints
     def test_model_trains(self, tmp_path):
         with pytest.raises(SystemExit):
             # Create mock model and dataset
-            class MockModel(LightningModule):
-                def __init__(self):
-                    super().__init__()
-                    self.layer = nn.Conv3d(3, 1, 3)
+            model = MockModel(0.5, 0.3)
 
-                def training_step(self, batch, batch_idx):
-                    self.log("loss", torch.tensor(0.5))
-                    return {"loss": torch.tensor(0.5, requires_grad=True)}
+            test_file = tmp_path / "test.h5"
+            data = get_dataset(20)
+            save_scans_to_h5(data, test_file)
 
-                def validation_step(self, batch, batch_idx):
-                    self.log("val_loss", torch.tensor(0.3))
-                    return {"val_loss": torch.tensor(0.3, requires_grad=True)}
+            dataset = SegmentationData(
+                h5_path=test_file,
+                batch_size=2,
+                batch_size_eval=1,
+                patch_size=(5, 5, 5),
+                foreground_oversample_ratio=0.5,
+                num_workers_train=0,
+                num_workers_val=0,
+                prefetch_factor_train=None,
+                prefetch_factor_val=None,
+                # batch_augmentations=tz.identity,
+            )
+            log_dir = Path(tmp_path) / "logs"
+            checkpoint_dir = Path(tmp_path) / "checkpoints"
+            next(iter(dataset.train_dataloader()))
+            exit()
 
-                def configure_optimizers(self):
-                    return torch.optim.Adam(self.parameters())
+            # Train model
+            train_model(
+                model=model,
+                dataset=dataset,
+                log_dir=log_dir,
+                experiment_name="test_exp",
+                checkpoint_path=checkpoint_dir,
+                checkpoint_name="{epoch:03d}-{val_loss:.4f}",
+                checkpoint_every_n_epochs=1,
+                n_epochs=2,
+                n_batches_per_epoch=2,
+                n_batches_val=2,
+                check_val_every_n_epoch=1,
+                accelerator="cpu",
+                enable_progress_bar=True,
+                enable_model_summary=False,
+                precision="bf16-mixed",
+                strategy="ddp",
+                save_last_checkpoint=False,
+            )
 
-            model = MockModel()
+            assert checkpoint_dir.exists()
+            checkpoints = list(checkpoint_dir.glob("*.ckpt"))
+            assert [
+                i in checkpoints
+                for i in [
+                    "epoch=000-val_loss=0.3000.ckpt",
+                    "epoch=001-val_loss=0.3000.ckpt",
+                ]
+            ]
+            assert (log_dir / "test_exp").exists()
 
-            with (
-                tempfile.NamedTemporaryFile() as tmp,
-                tempfile.TemporaryDirectory() as tmp_dir,
-            ):
-                test_file = tmp.name
+
+class TestTrainModels:
+
+    # Train single model with valid model name and dataset
+    def test_train_single_valid_model(self, tmp_path):
+        def mock_get_model(_):
+            return MockModel
+
+        with patch("uncertainty.training.training.get_model", mock_get_model):
+            with tempfile.NamedTemporaryFile() as tmp_file:
+                # Create test dataset
                 data = get_dataset(20)
-                save_scans_to_h5(data, test_file)
+                save_scans_to_h5(data, tmp_file.name)
 
                 dataset = SegmentationData(
-                    h5_path=test_file,
+                    h5_path=tmp_file.name,
                     batch_size=2,
                     batch_size_eval=1,
                     patch_size=(5, 5, 5),
@@ -152,36 +219,32 @@ class TestTrainModel:
                     num_workers_val=0,
                     prefetch_factor_train=None,
                     prefetch_factor_val=None,
-                    # batch_augmentations=tz.identity,
                 )
-                log_dir = Path(tmp_dir) / "logs"
-                checkpoint_dir = Path(tmp_dir) / "checkpoints"
-                next(iter(dataset.train_dataloader()))
-                exit()
-
-                # Train model
-                train_model(
-                    model=model,
+                checkpoint_dir = Path(tmp_path) / "checkpoints"
+                # Train models
+                train_models(
+                    models=["unet"],
                     dataset=dataset,
-                    log_dir=log_dir,
+                    checkpoint_dir=checkpoint_dir,
                     experiment_name="test_exp",
-                    checkpoint_path=checkpoint_dir,
-                    checkpoint_name="{epoch:03d}-{val_loss:.4f}",
-                    checkpoint_every_n_epochs=1,
                     n_epochs=2,
                     n_batches_per_epoch=2,
                     n_batches_val=2,
                     check_val_every_n_epoch=1,
+                    checkpoint_every_n_epochs=1,
                     accelerator="cpu",
-                    enable_progress_bar=True,
-                    enable_model_summary=False,
-                    precision="bf16-mixed",
+                    precision="32",
                     strategy="ddp",
+                    log_dir=tmp_path / "logs",
+                    checkpoint_name="{epoch:03d}-{val_loss:.4f}",
                     save_last_checkpoint=False,
+                    mock__loss=0.5,
+                    mock__val_loss=0.3,
                 )
 
-                assert checkpoint_dir.exists()
-                checkpoints = list(checkpoint_dir.glob("*.ckpt"))
+                # Verify checkpoint directory exists
+                assert (checkpoint_dir / "unet").exists()
+                checkpoints = list((checkpoint_dir / "unet").glob("*.ckpt"))
                 assert [
                     i in checkpoints
                     for i in [
@@ -189,4 +252,139 @@ class TestTrainModel:
                         "epoch=001-val_loss=0.3000.ckpt",
                     ]
                 ]
-                assert (log_dir / "test_exp").exists()
+
+    # Train multiple models with quantity suffix (e.g. 'unet_3')
+    def test_train_multiple_models_with_quantity_suffix(self, tmp_path):
+        # Mock get_model to return MockModel
+        def mock_get_model(_):
+            return MockModel
+
+        # Patch get_model function
+        with patch("uncertainty.training.training.get_model", mock_get_model):
+            test_file = tmp_path / "test.h5"
+            data = get_dataset(20)
+            save_scans_to_h5(data, test_file)
+
+            dataset = SegmentationData(
+                h5_path=test_file,
+                batch_size=2,
+                batch_size_eval=1,
+                patch_size=(5, 5, 5),
+                foreground_oversample_ratio=0.5,
+                num_workers_train=0,
+                num_workers_val=0,
+                prefetch_factor_train=None,
+                prefetch_factor_val=None,
+            )
+            checkpoint_dir = Path(tmp_path) / "checkpoints"
+            experiment_name = "test_exp"
+
+            # Train multiple models
+            train_models(
+                models=["unet_3"],
+                dataset=dataset,
+                checkpoint_dir=checkpoint_dir,
+                experiment_name=experiment_name,
+                seed=42,
+                log_dir=Path(tmp_path) / "logs",
+                checkpoint_name="{epoch:03d}-{val_loss:.4f}",
+                checkpoint_every_n_epochs=1,
+                n_epochs=2,
+                n_batches_per_epoch=2,
+                n_batches_val=2,
+                check_val_every_n_epoch=1,
+                accelerator="cpu",
+                enable_progress_bar=True,
+                enable_model_summary=False,
+                precision="bf16-mixed",
+                strategy="ddp",
+                save_last_checkpoint=False,
+                mock__loss=0.5,
+                mock__val_loss=0.3,
+            )
+
+            # Check if checkpoints are created for each model
+            for i in range(3):
+                model_checkpoint_dir = checkpoint_dir / f"unet-{i}"
+                assert model_checkpoint_dir.exists()
+                checkpoints = list((checkpoint_dir / "unet-{i}").glob("*.ckpt"))
+                assert [
+                    i in checkpoints
+                    for i in [
+                        "epoch=000-val_loss=0.3000.ckpt",
+                        "epoch=001-val_loss=0.3000.ckpt",
+                    ]
+                ]
+
+    def test_train_different_model_type(self, tmp_path):
+        # Mock get_model to return MockModel
+        def mock_get_model(_):
+            return MockModel
+
+        # Patch get_model function
+        with patch("uncertainty.training.training.get_model", mock_get_model):
+            test_file = tmp_path / "test.h5"
+            data = get_dataset(20)
+            save_scans_to_h5(data, test_file)
+
+            dataset = SegmentationData(
+                h5_path=test_file,
+                batch_size=2,
+                batch_size_eval=1,
+                patch_size=(5, 5, 5),
+                foreground_oversample_ratio=0.5,
+                num_workers_train=0,
+                num_workers_val=0,
+                prefetch_factor_train=None,
+                prefetch_factor_val=None,
+            )
+            checkpoint_dir = Path(tmp_path) / "checkpoints"
+            experiment_name = "test_exp"
+
+            # Train multiple models
+            train_models(
+                models=["unet_3", "notunet_2", "wow", "wow2_1"],
+                dataset=dataset,
+                checkpoint_dir=checkpoint_dir,
+                experiment_name=experiment_name,
+                seed=42,
+                log_dir=Path(tmp_path) / "logs",
+                checkpoint_name="{epoch:03d}-{val_loss:.4f}",
+                checkpoint_every_n_epochs=1,
+                n_epochs=2,
+                n_batches_per_epoch=2,
+                n_batches_val=2,
+                check_val_every_n_epoch=1,
+                accelerator="cpu",
+                enable_progress_bar=True,
+                enable_model_summary=False,
+                precision="bf16-mixed",
+                strategy="ddp",
+                save_last_checkpoint=False,
+                mock__loss=0.5,
+                mock__val_loss=0.3,
+            )
+
+            def check_checkpoints(n_models, model_name):
+                # Check if checkpoints are created for each model
+                for i in range(n_models):
+                    model_checkpoint_dir = checkpoint_dir / f"{model_name}-{i}"
+                    if model_name == "wow":
+                        model_checkpoint_dir = checkpoint_dir / f"wow"
+
+                    assert model_checkpoint_dir.exists()
+                    checkpoints = list(
+                        (checkpoint_dir / "{model_name}-{i}").glob("*.ckpt")
+                    )
+                    assert [
+                        i in checkpoints
+                        for i in [
+                            "epoch=000-val_loss=0.3000.ckpt",
+                            "epoch=001-val_loss=0.3000.ckpt",
+                        ]
+                    ]
+
+            check_checkpoints(3, "unet")
+            check_checkpoints(2, "notunet")
+            check_checkpoints(1, "wow")
+            check_checkpoints(1, "wow2")

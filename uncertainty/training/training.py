@@ -54,10 +54,10 @@ def train_model(
     n_batches_per_epoch: int,
     n_batches_val: int,
     check_val_every_n_epoch: int,
-    save_last_checkpoint: bool = True,
+    precision: str,
+    save_last_checkpoint: bool,
     strategy: str = "ddp",
     accelerator: str = "auto",
-    precision: str = "16-mixed",
     enable_progress_bar: bool = True,
     enable_model_summary: bool = True,
 ):
@@ -189,7 +189,7 @@ def train_models(
             model.split("_"),
             unpack_args(
                 lambda name, quantity: [
-                    (get_model(name), checkpoint_dir / f"{name}_{i}")
+                    (get_model(name), checkpoint_dir / f"{name}-{i}")
                     for i in range(int(quantity))
                 ]
             ),
@@ -205,13 +205,14 @@ def train_models(
                     train_model(
                         model_fn(**kwargs),
                         dataset,
-                        checkpoint_path=model_path,
+                        checkpoint_path=checkpoint_dir / model_path,
                         experiment_name=experiment_name,
                         **kwargs,
                     )
                 )
             )
         ),
+        list,
     )
 
 
