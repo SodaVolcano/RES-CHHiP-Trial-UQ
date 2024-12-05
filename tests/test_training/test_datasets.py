@@ -1,3 +1,4 @@
+import random
 import tempfile
 from datetime import date
 
@@ -100,6 +101,7 @@ class TestRandomPatchDataset:
     def test_foreground_oversampling_ratio(self):
         np.random.seed(42)
         torch.manual_seed(42)
+        random.seed(42)
         with tempfile.NamedTemporaryFile() as tmp:
             test_file = tmp.name
             data = get_dataset(10)

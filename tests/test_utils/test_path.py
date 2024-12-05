@@ -1,6 +1,6 @@
+from pathlib import Path
 from typing import Generator
 from unittest import mock
-from pathlib import Path
 
 from ..context import PATCH_LIST_FILES, PATCH_OS_WALK, utils
 

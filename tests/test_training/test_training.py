@@ -4,6 +4,7 @@ from datetime import date
 from pathlib import Path
 
 import numpy as np
+import pytest
 import torch
 from lightning import LightningModule
 from torch import nn
@@ -109,82 +110,83 @@ def get_dataset(n: int = 2):
     ]
 
 
-# class TestTrainModel:
+class TestTrainModel:
 
-#     # Model trains successfully with default parameters and saves checkpoints
-#     def test_model_trains(self, tmp_path):
-#         # Create mock model and dataset
-#         class MockModel(LightningModule):
-#             def __init__(self):
-#                 super().__init__()
-#                 self.layer = nn.Conv3d(3, 1, 3)
+    # Model trains successfully with default parameters and saves checkpoints
+    def test_model_trains(self, tmp_path):
+        with pytest.raises(SystemExit):
+            # Create mock model and dataset
+            class MockModel(LightningModule):
+                def __init__(self):
+                    super().__init__()
+                    self.layer = nn.Conv3d(3, 1, 3)
 
-#             def training_step(self, batch, batch_idx):
-#                 self.log("loss", torch.tensor(0.5))
-#                 return {"loss": torch.tensor(0.5, requires_grad=True)}
+                def training_step(self, batch, batch_idx):
+                    self.log("loss", torch.tensor(0.5))
+                    return {"loss": torch.tensor(0.5, requires_grad=True)}
 
-#             def validation_step(self, batch, batch_idx):
-#                 self.log("val_loss", torch.tensor(0.3))
-#                 return {"val_loss": torch.tensor(0.3, requires_grad=True)}
+                def validation_step(self, batch, batch_idx):
+                    self.log("val_loss", torch.tensor(0.3))
+                    return {"val_loss": torch.tensor(0.3, requires_grad=True)}
 
-#             def configure_optimizers(self):
-#                 return torch.optim.Adam(self.parameters())
+                def configure_optimizers(self):
+                    return torch.optim.Adam(self.parameters())
 
-#         model = MockModel()
+            model = MockModel()
 
-#         with (
-#             tempfile.NamedTemporaryFile() as tmp,
-#             tempfile.TemporaryDirectory() as tmp_dir,
-#         ):
-#             test_file = tmp.name
-#             data = get_dataset(20)
-#             save_scans_to_h5(data, test_file)
+            with (
+                tempfile.NamedTemporaryFile() as tmp,
+                tempfile.TemporaryDirectory() as tmp_dir,
+            ):
+                test_file = tmp.name
+                data = get_dataset(20)
+                save_scans_to_h5(data, test_file)
 
-#             dataset = SegmentationData(
-#                 h5_path=test_file,
-#                 batch_size=2,
-#                 batch_size_eval=1,
-#                 patch_size=(5, 5, 5),
-#                 foreground_oversample_ratio=0.5,
-#                 num_workers_train=0,
-#                 num_workers_val=0,
-#                 prefetch_factor_train=None,
-#                 prefetch_factor_val=None,
-#                 # batch_augmentations=tz.identity,
-#             )
-#             log_dir = Path(tmp_dir) / "logs"
-#             checkpoint_dir = Path(tmp_dir) / "checkpoints"
-#             next(iter(dataset.train_dataloader()))
-#             exit()
+                dataset = SegmentationData(
+                    h5_path=test_file,
+                    batch_size=2,
+                    batch_size_eval=1,
+                    patch_size=(5, 5, 5),
+                    foreground_oversample_ratio=0.5,
+                    num_workers_train=0,
+                    num_workers_val=0,
+                    prefetch_factor_train=None,
+                    prefetch_factor_val=None,
+                    # batch_augmentations=tz.identity,
+                )
+                log_dir = Path(tmp_dir) / "logs"
+                checkpoint_dir = Path(tmp_dir) / "checkpoints"
+                next(iter(dataset.train_dataloader()))
+                exit()
 
-#             # Train model
-#             train_model(
-#                 model=model,
-#                 dataset=dataset,
-#                 log_dir=log_dir,
-#                 experiment_name="test_exp",
-#                 checkpoint_path=checkpoint_dir,
-#                 checkpoint_name="{epoch:03d}-{val_loss:.4f}",
-#                 checkpoint_every_n_epochs=1,
-#                 n_epochs=2,
-#                 n_batches_per_epoch=2,
-#                 n_batches_val=2,
-#                 check_val_every_n_epoch=1,
-#                 accelerator="cpu",
-#                 enable_progress_bar=True,
-#                 enable_model_summary=False,
-#                 precision="bf16-mixed",
-#                 strategy="ddp",
-#                 save_last_checkpoint=False,
-#             )
+                # Train model
+                train_model(
+                    model=model,
+                    dataset=dataset,
+                    log_dir=log_dir,
+                    experiment_name="test_exp",
+                    checkpoint_path=checkpoint_dir,
+                    checkpoint_name="{epoch:03d}-{val_loss:.4f}",
+                    checkpoint_every_n_epochs=1,
+                    n_epochs=2,
+                    n_batches_per_epoch=2,
+                    n_batches_val=2,
+                    check_val_every_n_epoch=1,
+                    accelerator="cpu",
+                    enable_progress_bar=True,
+                    enable_model_summary=False,
+                    precision="bf16-mixed",
+                    strategy="ddp",
+                    save_last_checkpoint=False,
+                )
 
-#             assert checkpoint_dir.exists()
-#             checkpoints = list(checkpoint_dir.glob("*.ckpt"))
-#             assert [
-#                 i in checkpoints
-#                 for i in [
-#                     "epoch=000-val_loss=0.3000.ckpt",
-#                     "epoch=001-val_loss=0.3000.ckpt",
-#                 ]
-#             ]
-#             assert (log_dir / "test_exp").exists()
+                assert checkpoint_dir.exists()
+                checkpoints = list(checkpoint_dir.glob("*.ckpt"))
+                assert [
+                    i in checkpoints
+                    for i in [
+                        "epoch=000-val_loss=0.3000.ckpt",
+                        "epoch=001-val_loss=0.3000.ckpt",
+                    ]
+                ]
+                assert (log_dir / "test_exp").exists()
