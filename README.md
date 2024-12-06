@@ -27,10 +27,10 @@ Code for performing uncertainty quantification on CT prostate cancer images.
 | `pyproject.toml`, `uv.lock`, `.python-version` | First installation option: file containing project list of dependencies and configurations; a version lock file for the dependencies; and a file with Python version used by the project. **If uv is installed**, running `uv run ...` will automatically sync uv to these files (or, run `uv sync` to sync manually) |
 | `flake.nix`, `shell.nix`, `flake.lock`         | Second installation option: Nix files for initialising development shell with project dependencies installed (including uv) and fixing Python dynamic library paths. **If Nix is installed**, start the shell with `nix --extra-experimental-features nix-command --extra-experimental-features flakes develop`       |
 | `.envrc`                                       | File used by Direnv to automatically start a Nix development shell defined in `flake.nix` upon `cd`-ing into the project directory. **If Direnv is installed**, [hook it into your shell](https://direnv.net/docs/hook.html) and then run `direnv allow`                                                              |
-| `devshell.nix`                                 | Nix development shell that installs VS Code with useful extensions (not updated in a while)                                                                                                                                                                                                                           |
-| `run-train.slurm`                              | SLURM script for sending model training jobs to Kaya - high performance computing system at UWA                                                                                                                                                                                                                       |
+| `devshell.nix`                                 | Nix development shell that installs VS Code with useful extensions (not updated in a while). Activate with `export NIXPKGS_ALLOW_UNFREE=1 && nix-shell ./devshell.nix`                                                                                                                                                                                                                          |
+| `run-train.slurm`                              | SLURM script for sending model training jobs to Kaya - high performance computing system at UWA (run `sbatch run-train.slurm`)                                                                                                                                                                                                                       |
 | `configuration.yaml`                           | Configuration file of the project containing settings for the data, training, and model hyperparameters                                                                                                                                                                                                               |
-| `uncertainty/`                                 | Folder containing project code, can be imported                                                                                                                                                                                                                                                                       |
+| `uncertainty/`                                 | Folder containing project code, can be imported in Python code as a library module                                                                                                                                                                                                                                                                      |
 | `tests/`                                       | Tests for `uncertainty/`, run with `uv run pytest ./tests`                                                                                                                                                                                                                                                            |
 | `scripts/`                                     | Set of Python scripts using functions from `uncertainty/`, e.g. for preparing the dataset, training model(s), evaluating trained model(s)                                                                                                                                                                             |
 
@@ -45,7 +45,7 @@ Instructions below assumes you are at the **top-level of the project directory**
 [uv](https://docs.astral.sh/uv/) manages and configures Python dependencies. First install it following the [installation guide](https://docs.astral.sh/uv/getting-started/installation/). Then, any Python commands can be run by appending `uv run` in front of your command which will automatically download project dependencies, e.g.
 
 ```bash
-uv run python ./scripts/dicom_to_h5.py   # equivalent to running `python /scripts/dicom_to_h5.py`
+uv run python ./scripts/prepare_dataset.py   # equivalent to running `python ./scripts/prepare_dataset.py`
 ```
 
 ### Nix
@@ -144,7 +144,7 @@ import toolz as tz
 from toolz import curried
 
 # Below is equivalent to
-# str(tz.get(5, tz.identity([3, 4] * 4)))
+# str(curried.get(5)(tz.identity([3, 4] * 4)))
 
 do_nothing = True
 tz.pipe(
@@ -160,7 +160,7 @@ tz.pipe(
 
 Yummy.
 
-A function can by "curried" if it's decorated by `@curry`. A "curried" function can be called with *only some of the required arguments* (i.e. partially initialised). This is a **new function** that can be called with the remaining arguments.
+A function can by "curried" if it's decorated with `@curry`. A "curried" function can be called with *only some of the required arguments* (i.e. partially initialised). This is a **new function** that can be called with the remaining arguments.
 
 ```python
 from uncertainty.utils import curry  # wrapper around toolz.curry
@@ -205,7 +205,7 @@ test(**config)  # OUTPUT: (69, "hello")
 
 
 # 2. Manually specified kwargs override config entries
-test(b="no hello >:(", **config)  # OUTPUT: (1, "no hello >:(")
+test(b="no hello >:(", **config)  # OUTPUT: (69, "no hello >:(")
 
 
 # 3. If param with same name appear in dictionary, later entries override earlier ones
