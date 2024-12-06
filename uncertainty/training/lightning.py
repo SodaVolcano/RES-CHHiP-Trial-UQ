@@ -3,13 +3,11 @@ Lightning modules for training models.
 """
 
 import os
-import time
 from typing import Optional
 
 import dill
 import lightning as lit
 import torch
-from pytorch_lightning import seed_everything
 from torch import nn
 from torchmetrics.aggregation import RunningMean
 from torchmetrics.classification import BinaryF1Score, MultilabelF1Score
