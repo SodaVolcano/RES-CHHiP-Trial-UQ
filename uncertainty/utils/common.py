@@ -3,7 +3,7 @@ Collection of common utility functions
 """
 
 from copy import deepcopy
-from typing import Callable
+from typing import Any, Callable, Iterable
 
 import toolz as tz
 
@@ -39,6 +39,16 @@ def unpack_args[T](func: Callable[..., T]) -> Callable[..., T]:
     Unpack args from a tuple and pass them to func
     """
     return lambda args: func(*args)
+
+
+@curry
+def unpacked_map[
+    T
+](f: Callable[..., T], iterable: Any,) -> Iterable[T]:
+    """
+    Unpack each element of the iterable and apply the function f to it
+    """
+    return map(unpack_args(f), iterable)
 
 
 @curry

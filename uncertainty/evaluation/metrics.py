@@ -18,9 +18,7 @@ from torchmetrics.classification import (
     MultilabelRecall,
 )
 
-from uncertainty.utils.common import unpack_args
-
-from ..utils import curry
+from ..utils import curry, unpack_args
 from .surface_dice import compute_surface_dice_at_tolerance, compute_surface_distances
 
 

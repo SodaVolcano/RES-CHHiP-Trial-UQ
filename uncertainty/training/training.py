@@ -8,13 +8,10 @@ import random
 import shutil
 from pathlib import Path
 from random import randint
-from struct import unpack
-from typing import Callable, Iterable, Literal, Sequence, TypedDict
+from typing import Callable, Iterable, Sequence, TypedDict
 
-import dill
 import lightning
 import toolz as tz
-import torch
 from lightning import Trainer, seed_everything
 from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch.loggers import TensorBoardLogger
@@ -26,11 +23,8 @@ from torch import nn
 
 from ..config import auto_match_config
 from ..models import get_model
-from ..models.unet import UNet
-from ..utils import curry, logger_wraps
-from ..utils.common import unpack_args
-from ..utils.path import next_available_path
-from .datasets import H5Dataset, SegmentationData
+from ..utils import logger_wraps, unpack_args, unpacked_map
+from .datasets import SegmentationData
 from .lightning import LitSegmentation
 
 DataSplitDict = TypedDict(
@@ -199,16 +193,14 @@ def train_models(
         models,
         curried.map(parse_model_str),
         tz.concat,
-        curried.map(
-            unpack_args(
-                lambda model_fn, model_path: (
-                    train_model(
-                        model_fn(**kwargs),
-                        dataset,
-                        checkpoint_path=checkpoint_dir / model_path,
-                        experiment_name=experiment_name,
-                        **kwargs,
-                    )
+        unpacked_map(
+            lambda model_fn, model_path: (
+                train_model(
+                    model_fn(**kwargs),
+                    dataset,
+                    checkpoint_path=checkpoint_dir / model_path,
+                    experiment_name=experiment_name,
+                    **kwargs,
                 )
             )
         ),
@@ -250,15 +242,11 @@ def split_into_folds[
     indices = KFold(n_splits=n_folds).split(dataset)  # type: ignore
     if return_indices:
         # cast from numpy array to list
-        return map(
-            unpack_args(lambda train, val: (train.tolist(), val.tolist())), indices
-        )
-    return map(
-        unpack_args(
-            lambda train_idx, val_idx: (
-                _get_with_indices(train_idx, dataset),
-                _get_with_indices(val_idx, dataset),
-            )
+        return unpacked_map(lambda train, val: (train.tolist(), val.tolist()), indices)
+    return unpacked_map(
+        lambda train_idx, val_idx: (
+            _get_with_indices(train_idx, dataset),
+            _get_with_indices(val_idx, dataset),
         ),
         indices,
     )

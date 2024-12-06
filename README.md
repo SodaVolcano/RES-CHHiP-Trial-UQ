@@ -2,7 +2,6 @@
 Code for performing uncertainty quantification on CT prostate cancer images.
 
 ## Content
-- [Overview](#overview)
 - [Setup](#setup)
     - [uv](#uv)
     - [Nix](#nix)
@@ -11,28 +10,14 @@ Code for performing uncertainty quantification on CT prostate cancer images.
     - [Configuring the Project](#configuring-the-project)
     - [Using `uncertainty` as a Library Module](#using-uncertainty-as-a-library-module)
         - [Logging](#logging)
-        - [Using the Scripts](#using-the-scripts)
+    - [Using the Scripts](#using-the-scripts)
     - [Tests](#tests)
 - [Code Overview](#code-overview)
+    - [File Overview](#file-overview)
     - [Coding Paradigm](#coding-paradigm)
         - [Pipe](#pipe)
         - [Curry](#curry)
     - [Auto-wiring of Configuration Dictionary](#auto-wiring-of-configuration-dictionary)
-
-
-## Overview
-
-| File(s)/Folder                                 | Description                                                                                                                                                                                                                                                                                                           |
-| ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pyproject.toml`, `uv.lock`, `.python-version` | First installation option: file containing project list of dependencies and configurations; a version lock file for the dependencies; and a file with Python version used by the project. **If uv is installed**, running `uv run ...` will automatically sync uv to these files (or, run `uv sync` to sync manually) |
-| `flake.nix`, `shell.nix`, `flake.lock`         | Second installation option: Nix files for initialising development shell with project dependencies installed (including uv) and fixing Python dynamic library paths. **If Nix is installed**, start the shell with `nix --extra-experimental-features nix-command --extra-experimental-features flakes develop`       |
-| `.envrc`                                       | File used by Direnv to automatically start a Nix development shell defined in `flake.nix` upon `cd`-ing into the project directory. **If Direnv is installed**, [hook it into your shell](https://direnv.net/docs/hook.html) and then run `direnv allow`                                                              |
-| `devshell.nix`                                 | Nix development shell that installs VS Code with useful extensions (not updated in a while). Activate with `export NIXPKGS_ALLOW_UNFREE=1 && nix-shell ./devshell.nix`                                                                                                                                                                                                                          |
-| `run-train.slurm`                              | SLURM script for sending model training jobs to Kaya - high performance computing system at UWA (run `sbatch run-train.slurm`)                                                                                                                                                                                                                       |
-| `configuration.yaml`                           | Configuration file of the project containing settings for the data, training, and model hyperparameters                                                                                                                                                                                                               |
-| `uncertainty/`                                 | Folder containing project code, can be imported in Python code as a library module                                                                                                                                                                                                                                                                      |
-| `tests/`                                       | Tests for `uncertainty/`, run with `uv run pytest ./tests`                                                                                                                                                                                                                                                            |
-| `scripts/`                                     | Set of Python scripts using functions from `uncertainty/`, e.g. for preparing the dataset, training model(s), evaluating trained model(s)                                                                                                                                                                             |
 
 
 ## Setup
@@ -130,6 +115,20 @@ uv run pytest .
 ## Code Overview
 
 This section is only relevant if you wish to use and maintain the codebase.
+
+### File Overview
+
+| File(s)/Folder                                 | Description                                                                                                                                                                                                                                                                                                           |
+| ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pyproject.toml`, `uv.lock`, `.python-version` | First installation option: file containing project list of dependencies and configurations; a version lock file for the dependencies; and a file with Python version used by the project. **If uv is installed**, running `uv run ...` will automatically sync uv to these files (or, run `uv sync` to sync manually) |
+| `flake.nix`, `shell.nix`, `flake.lock`         | Second installation option: Nix files for initialising development shell with project dependencies installed (including uv) and fixing Python dynamic library paths. **If Nix is installed**, start the shell with `nix --extra-experimental-features nix-command --extra-experimental-features flakes develop`       |
+| `.envrc`                                       | File used by Direnv to automatically start a Nix development shell defined in `flake.nix` upon `cd`-ing into the project directory. **If Direnv is installed**, [hook it into your shell](https://direnv.net/docs/hook.html) and then run `direnv allow`                                                              |
+| `devshell.nix`                                 | Nix development shell that installs VS Code with useful extensions (not updated in a while). Activate with `export NIXPKGS_ALLOW_UNFREE=1 && nix-shell ./devshell.nix`                                                                                                                                                                                                                          |
+| `run-train.slurm`                              | SLURM script for sending model training jobs to Kaya - high performance computing system at UWA (run `sbatch run-train.slurm`)                                                                                                                                                                                                                       |
+| `configuration.yaml`                           | Configuration file of the project containing settings for the data, training, and model hyperparameters                                                                                                                                                                                                               |
+| `uncertainty/`                                 | Folder containing project code, can be imported in Python code as a library module                                                                                                                                                                                                                                                                      |
+| `tests/`                                       | Tests for `uncertainty/`, run with `uv run pytest ./tests`                                                                                                                                                                                                                                                            |
+| `scripts/`                                     | Set of Python scripts using functions from `uncertainty/`, e.g. for preparing the dataset, training model(s), evaluating trained model(s)                                                                                                                                                                             |
 
 ### Coding Paradigm
 

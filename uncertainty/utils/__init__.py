@@ -9,7 +9,7 @@ from .wrappers import *
 __all__ = [
     "call_method",
     "call_method_impure",
-    "unpack_args",
+    "unpacked_map",
     "iterate_while",
     "config_logger",
     "logger_wraps",
