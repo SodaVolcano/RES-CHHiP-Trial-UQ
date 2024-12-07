@@ -19,13 +19,11 @@ from loguru import logger
 from sklearn.model_selection import KFold
 from sklearn.model_selection import train_test_split as sk_train_test_split
 from toolz import curried
-from torch import nn
 
 from ..config import auto_match_config
 from ..models import get_model
 from ..utils import logger_wraps, unpack_args, unpacked_map
 from .datasets import SegmentationData
-from .lightning import LitSegmentation
 
 DataSplitDict = TypedDict(
     "DataSplitDict", {"train": list[int], "val": list[int], "seed": int}

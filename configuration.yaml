@@ -67,6 +67,8 @@ training:
   # Note that order matters - if a model (e.g. confidnet) uses a pretrained model (e.g. 
   # unet), then the former should appear later in the list
   models_to_train: ["unet_10", "confidnet"]
+  # Window for running loss calculation, reduce noise in loss plot
+  running_loss_window: 10
 
   # ------------------ Trainer Settings ------------------
   # Specifies the distributed training strategy, see https://lightning.ai/docs/pytorch/stable/extensions/strategy.html

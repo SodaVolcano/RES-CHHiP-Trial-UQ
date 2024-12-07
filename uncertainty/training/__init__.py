@@ -1,5 +1,5 @@
 from .datasets import H5Dataset, RandomPatchDataset, SegmentationData
-from .lightning import LitSegmentation
+from .lightning import UNetLightning
 from .loss import ConfidNetMSELoss, DeepSupervisionLoss, DiceBCELoss, SmoothDiceLoss
 from .training import (
     init_training_dir,
@@ -12,7 +12,7 @@ from .training import (
 )
 
 __all__ = [
-    "LitSegmentation",
+    "UNetLightning",
     "SegmentationData",
     "H5Dataset",
     "RandomPatchDataset",

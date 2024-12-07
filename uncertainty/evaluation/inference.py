@@ -79,11 +79,10 @@ def _spline_window_3d(window_sizes: tuple[int, int, int], power: int = 2) -> np.
     """
     Create a 3d spline window of size `patch_size` with power `power`
     """
-    # Generate 1D windows for each dimension
-    window_xyz = list(map(_spline_window_1d(power=power), window_sizes))
+    window_1d = list(map(_spline_window_1d(power=power), window_sizes))
 
     # Compute the outer product to form a 3D window
-    window_3d = reduce(np.outer, window_xyz).reshape(window_sizes)
+    window_3d = reduce(np.outer, window_1d).reshape(window_sizes)
 
     return window_3d
 
@@ -118,7 +117,7 @@ def _reconstruct_image(
     for idx, patch in idx_patches:
         x_pos, y_pos, z_pos = np.multiply(idx[1:], stride)
         # patch is a view of the array, operating on it WILL change original!
-        # deep copy to prevent side effects
+        # deep copy to prevent side effects, do it here to maintain lazy evaluation
         patch = deepcopy(patch) * window
         reconstructed_arr[
             :,
@@ -190,7 +189,6 @@ def sliding_inference(
     # iterator yielding (idx, y_pred_patch) tuples
     y_pred_patches_it = tz.pipe(
         patch_indices,
-        # get the x_patch at each index
         curried.map(lambda idx: x_patches[idx]),
         # mvoe to cpu to prevent flooding GPU storage
         curried.map(lambda x_patch: torch.from_numpy(x_patch).to("cpu")),
@@ -279,7 +277,7 @@ def mc_dropout_inference(
         return mcdo_model(x)
 
     return tz.pipe(
-        # Generate seed to use for each inference
+        # Generate seeds to use for each inference
         [random.randint(0, 2**32 - 1) for _ in range(n_outputs)],
         curried.map(consistent_dropout_model),
         list,

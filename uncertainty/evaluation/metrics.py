@@ -13,6 +13,9 @@ from medpy.metric import asd, assd, hd, hd95
 from toolz import curried
 from torch.nn.functional import sigmoid
 from torchmetrics.classification import (
+    BinaryF1Score,
+    BinaryPrecision,
+    BinaryRecall,
     MultilabelF1Score,
     MultilabelPrecision,
     MultilabelRecall,
@@ -90,10 +93,14 @@ def dice(
         - "weighted": Weighted averaging of metrics.
         - "none": Return the metrics for each class separately.
     """
-
-    return MultilabelF1Score(
-        num_labels=label.shape[0], average=average, zero_division=1
-    )(prediction.unsqueeze(0), label.unsqueeze(0))
+    metric = (
+        BinaryF1Score(zero_division=1)
+        if label.shape[0] == 1
+        else MultilabelF1Score(
+            num_labels=label.shape[0], average=average, zero_division=1
+        )
+    )
+    return metric(prediction.unsqueeze(0), label.unsqueeze(0))
 
 
 @curry
@@ -250,9 +257,12 @@ def recall(
         - "weighted": Weighted averaging of metrics.
         - "none": Return the metrics for each class separately.
     """
-    return MultilabelRecall(num_labels=label.shape[0], average=average)(
-        prediction.unsqueeze(0), label.unsqueeze(0)
+    metric = (
+        BinaryRecall()
+        if label.shape[0] == 1
+        else MultilabelRecall(num_labels=label.shape[0], average=average)
     )
+    return metric(prediction.unsqueeze(0), label.unsqueeze(0))
 
 
 @curry
@@ -279,9 +289,12 @@ def precision(
         - "weighted": Weighted averaging of metrics.
         - "none": Return the metrics for each class separately.
     """
-    return MultilabelPrecision(num_labels=label.shape[0], average=average)(
-        prediction.unsqueeze(0), label.unsqueeze(0)
+    metric = (
+        BinaryPrecision()
+        if label.shape[0] == 1
+        else MultilabelPrecision(num_labels=label.shape[0], average=average)
     )
+    return metric(prediction.unsqueeze(0), label.unsqueeze(0))
 
 
 @curry

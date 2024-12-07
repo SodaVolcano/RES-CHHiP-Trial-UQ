@@ -33,7 +33,7 @@ def to_torchio_subject(volume_mask: tuple[np.ndarray, np.ndarray]) -> tio.Subjec
     return tio.Subject(
         volume=tio.ScalarImage(tensor=volume),
         mask=tio.LabelMap(
-            # ignore channel dimension from volume_mask[0]
+            # ignore channel dimension from volume
             tensor=tio.CropOrPad(volume.shape[1:], padding_mode="minimum")(  # type: ignore
                 mask
             ),
@@ -273,7 +273,7 @@ def crop_to_body(
         Threshold to use for body segmentation. After thresholding, 1 should represent
         the body region.
     """
-    # crop borders to avoid high pixel values along
+    # crop borders to avoid high pixel values along image border
     vol, mask = tuple(
         arr[
             :,

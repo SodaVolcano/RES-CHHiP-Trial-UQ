@@ -15,7 +15,7 @@ from torchmetrics.classification import BinaryF1Score, MultilabelF1Score
 from .loss import ConfidNetMSELoss, DeepSupervisionLoss, DiceBCELoss
 
 
-class LitSegmentation(lit.LightningModule):
+class UNetLightning(lit.LightningModule):
     """
     Wrapper class for PyTorch model to be used with PyTorch Lightning
 
@@ -43,20 +43,13 @@ class LitSegmentation(lit.LightningModule):
     def __init__(
         self,
         model: nn.Module,
-        config: dict,
         class_weights: Optional[torch.Tensor] = None,
         save_hyperparams: bool = True,
     ):
         super().__init__()
         if save_hyperparams:
             self.save_hyperparameters(ignore=["model"])
-            os.makedirs(config["model_checkpoint_path"], exist_ok=True)
-            with open(
-                os.path.join(config["model_checkpoint_path"], "config.pkl"), "wb"
-            ) as f:
-                dill.dump(config, f)
 
-        self.config = config
         self.class_weights = class_weights
         # Original dice, used for evaluation
         self.dice_eval = MultilabelF1Score(
@@ -193,11 +186,6 @@ class LitConfidNet(lit.LightningModule):
         super().__init__()
         if save_hyperparams:
             self.save_hyperparameters(ignore=["model"])
-            os.makedirs(config["model_checkpoint_path"], exist_ok=True)
-            with open(
-                os.path.join(config["model_checkpoint_path"], "config.pkl"), "wb"
-            ) as f:
-                dill.dump(config, f)
 
         self.config = config
         self.class_weights = class_weights

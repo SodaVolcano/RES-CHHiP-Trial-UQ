@@ -2,9 +2,21 @@
 Training loss functions for segmentation models.
 """
 
+from typing import Literal
+
 import torch
 from torch import nn
 from torch.nn.functional import sigmoid
+from torchmetrics.classification import BinaryF1Score, MultilabelF1Score
+
+LossName = Literal[
+    "dice_smooth",
+    "dice_multi",
+    "dice_binary",
+    "dice_bce",
+    "deep_supervision",
+    "confidnet_mse",
+]
 
 
 class SmoothDiceLoss(nn.Module):
