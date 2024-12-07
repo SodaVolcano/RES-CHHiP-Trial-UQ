@@ -8,9 +8,9 @@ import toolz as tz
 import torch
 from toolz import curried
 
+from ..metrics import get_classification_metric
+from ..metrics.uncertainties import get_uncertainty_metric, probability_map
 from ..utils import curry
-from .metrics import get_metric_func
-from .uncertainties import get_uncertainty_metric, probability_map
 
 
 @torch.no_grad()
@@ -62,7 +62,7 @@ def evaluate_prediction(
     """
 
     def _get_metric(name: str):
-        return get_metric_func(name) or (
+        return get_classification_metric(name) or (
             # change uncertainty function signature to take in pred and label (not used)
             lambda pred, _, average: get_uncertainty_metric(f"{name}_pixelwise")(pred, average=average)  # type: ignore
         )
@@ -142,7 +142,7 @@ def evaluate_predictions(
         [torch.Tensor, torch.Tensor, Literal["micro", "macro", "none"]], torch.Tensor
     ]:
         """Return (wrapped) spatial metric or uncertainty metric function"""
-        spatial_metric = get_metric_func(name)
+        spatial_metric = get_classification_metric(name)
         if spatial_metric is None:
             # change uncertainty function signature to take in pred and label (not used)
             return lambda pred, _, avg: get_uncertainty_metric(f"{name}")(pred, average=avg)  # type: ignore

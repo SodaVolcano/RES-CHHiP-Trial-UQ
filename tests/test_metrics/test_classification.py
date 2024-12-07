@@ -3,19 +3,15 @@ import torch
 from torch.nn.functional import sigmoid
 from torchmetrics.classification import MultilabelF1Score
 
-from uncertainty.evaluation.metrics import rc_curve_stats
+from ..context import metrics
 
-from ..context import evaluation
+_average_methods = metrics.classification._average_methods
+_prepare_tensors = metrics.classification._prepare_tensors
+dice = metrics.dice
+surface_dice = metrics.surface_dice
+hausdorff_distance = metrics.hausdorff_distance
+generalised_energy_distance = metrics.generalised_energy_distance
 
-_average_methods = evaluation.metrics._average_methods
-_prepare_tensors = evaluation.metrics._prepare_tensors
-dice = evaluation.dice
-surface_dice = evaluation.surface_dice
-hausdorff_distance = evaluation.hausdorff_distance
-generalised_energy_distance = evaluation.generalised_energy_distance
-rc_curve_stats = evaluation.rc_curve_stats
-aurc = evaluation.aurc
-eaurc = evaluation.eaurc
 
 PRED_2D = torch.tensor(
     [
@@ -329,80 +325,3 @@ class TestGeneralisedEnergyDistance:
         for avg_method, expected in expected_results.items():
             result = generalised_energy_distance(a, b, average=avg_method)  # type: ignore
             assert torch.allclose(result, expected, atol=1e-4)
-
-
-class TestRcCurveStats:
-
-    # Correctly computes coverage, selective risks, and weights for valid inputs
-    def test_valid_inputs(self):
-        risks = torch.tensor([0.1, 0.2, 0.3, 0.4, 0.5])
-        confids = torch.tensor([0.8, 0.4, 0.4, 0.6, 0.1])
-
-        expected_coverages = [1.0, 0.8, 0.6, 0.2]
-        expected_selective_risks = [
-            torch.tensor(0.3000),
-            torch.tensor(0.2500),
-            torch.tensor(0.2667),
-            torch.tensor(0.1000),
-        ]
-        expected_weights = [0.2, 0.2, 0.4]
-
-        coverages, selective_risks, weights = rc_curve_stats(risks, confids)
-
-        assert np.allclose(coverages, expected_coverages)
-        assert torch.allclose(
-            torch.tensor(selective_risks),
-            torch.tensor(expected_selective_risks),
-            atol=1e-3,
-        )
-        assert np.allclose(weights, expected_weights)
-
-
-class TestAURC:
-
-    # Computes AURC correctly for valid risk and confidence tensors
-    def test_aurc_computation_valid_tensors(self):
-        risks = torch.tensor([0.1, 0.2, 0.3, 0.4, 0.5])
-        confids = torch.tensor([0.8, 0.4, 0.4, 0.6, 0.1])
-
-        expected_aurc = torch.tensor(0.1800)
-        expected_coverage = [1.0, 0.8, 0.6, 0.2]
-        expected_selective_risks = [
-            torch.tensor(0.3000),
-            torch.tensor(0.2500),
-            torch.tensor(0.2667),
-            torch.tensor(0.1000),
-        ]
-        aurc_value, coverage, selective_risks = aurc(risks, confids)
-        assert torch.isclose(aurc_value, expected_aurc)
-        assert coverage == expected_coverage
-        assert torch.allclose(
-            torch.tensor(selective_risks),
-            torch.tensor(expected_selective_risks),
-            atol=1e-3,
-        )
-
-
-class TestEAURC:
-
-    # Computes EAURC correctly for valid risk and confidence tensors
-    def test_eaurc_computation_valid_tensors(self):
-        risks = torch.tensor([0.1, 0.2, 0.3, 0.4, 0.5])
-        confids = torch.tensor([0.8, 0.4, 0.4, 0.6, 0.1])
-
-        expected_eaurc = torch.tensor(-0.0200)
-        expected_coverage = [1.0, 0.8, 0.6, 0.2]
-        expected_selective_risks = [
-            torch.tensor(0.3000),
-            torch.tensor(0.2500),
-            torch.tensor(0.2667),
-            torch.tensor(0.1000),
-        ]
-        eaurc_value, coverage, selective_risks = eaurc(risks, confids)
-        assert torch.isclose(eaurc_value, expected_eaurc)
-        assert coverage == expected_coverage
-        assert torch.allclose(
-            torch.tensor(selective_risks),
-            torch.tensor(expected_selective_risks),
-            atol=1e-3,
-        )

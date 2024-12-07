@@ -16,7 +16,7 @@ unet:
   kernel_size: 3
   # Number of convolutional layers in each block
   n_convolutions_per_block: 2
-  # Activation function name from torch.nn for convolutional layers
+  # Activation class name from torch.nn for convolutional layers
   activation: "LeakyReLU"
   # Dropout rate applied after activation
   dropout_rate: 0.5
@@ -44,6 +44,24 @@ unet:
   # "Sigmoid" for binary classification or "Softmax" for multi-class classification
   final_layer_activation: "Sigmoid"
 
+  # ------------------ U-Net Training Settings ------------------
+  # Weight initialiser for model from torch.nn.init
+  initialiser: "kaiming_normal_"
+  # Optimiser for training from torch.optim
+  optimiser: "SGD"
+  # Optional arguments for optimiser
+  optimiser_kwargs:
+    momentum: 0.99
+    nesterov: true
+  # Learning rate scheduler from torch.optim.lr_scheduler
+  lr_scheduler: "PolynomialLR"
+  # Optional arguments for learning rate scheduler
+  lr_scheduler_kwargs:
+    total_iters: 750
+    power: 0.9
+  # Loss will be weighted sum of losses from each level of the U-net decoder
+  deep_supervision: true
+
 confidnet:
   # Dimension of the convolution layers
   # Number of convolution is specified by the length of this list
@@ -56,19 +74,17 @@ confidnet:
   # Path to pretrained U-Net model to use as encoder
   pretrained_unet_path: "./checkpoints/unet"
 
-ensemble:
-  # Number of members in the ensemble
-  n_members: 10
-  # Name of model class used to initialise each member
-  model: "UNet"
-
 training:
   # List of models to train for EACH fold, any of "unet_<quantity>", "confidnet_<quantity>"
   # Note that order matters - if a model (e.g. confidnet) uses a pretrained model (e.g. 
   # unet), then the former should appear later in the list
   models_to_train: ["unet_10", "confidnet"]
+  # Number of epochs to train for
+  n_epochs: 750
   # Window for running loss calculation, reduce noise in loss plot
   running_loss_window: 10
+  # Whether to dump x, y, and predictions from the model every n epochs
+  dump_tensors_every_n_epochs: 50
 
   # ------------------ Trainer Settings ------------------
   # Specifies the distributed training strategy, see https://lightning.ai/docs/pytorch/stable/extensions/strategy.html
@@ -118,6 +134,7 @@ training:
 
   # ------------------ Dataloader Settings ------------------
   # How many subprocesses for data loading (training and validation set)
+  # Set to 0 to load data in the main process (prefetch_factors must be None)
   num_workers_train: 8
   num_workers_val: 4
   # Number of batches loaded in advance across all workers
@@ -130,26 +147,6 @@ training:
   # copy Tensors into device/CUDA pinned memory before returning
   pin_memory_train: true
   pin_memory_val: true
-
-  # ------------------ Hyperparameters ------------------
-  # Loss will be weighted sum of losses from each level of the U-net decoder
-  deep_supervision: true
-  # Number of epochs to train for
-  n_epochs: 750
-  # Weight initialiser for model from torch.nn.init
-  initialiser: "kaiming_normal_"
-  # Optimiser for training from torch.optim
-  optimiser: "SGD"
-  # Optional arguments for optimiser
-  optimiser_kwargs:
-    momentum: 0.99
-    nesterov: true
-  # Learning rate scheduler from torch.optim.lr_scheduler
-  lr_scheduler: "PolynomialLR"
-  # Optional arguments for learning rate scheduler
-  lr_scheduler_kwargs:
-    total_iters: 750
-    power: 0.9
 
 logger:
   #  ------------ loguru settings -------------------

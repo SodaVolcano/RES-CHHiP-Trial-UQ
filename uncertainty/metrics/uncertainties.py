@@ -10,7 +10,7 @@ import torch
 from toolz import curried
 
 from ..utils import curry
-from .metrics import dice, surface_dice
+from .classification import dice, surface_dice
 
 
 def _stack_if_sequence(

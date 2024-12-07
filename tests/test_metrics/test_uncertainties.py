@@ -1,10 +1,10 @@
 import torch
 
-from ..context import evaluation
+from ..context import metrics
 
-_aggregate_map_metric = evaluation.uncertainties._aggregate_map_metric
-_pairwise_metric = evaluation.uncertainties._pairwise_metric
-dice = evaluation.dice
+_aggregate_map_metric = metrics.uncertainties._aggregate_map_metric
+_pairwise_metric = metrics.uncertainties._pairwise_metric
+dice = metrics.dice
 
 
 class Test_AggregateMapMetric:

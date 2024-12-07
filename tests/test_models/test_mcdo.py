@@ -28,6 +28,12 @@ config = {
     "unet__output_channels": 1,
     "unet__n_kernels_last": 1,
     "unet__final_layer_activation": nn.Sigmoid,
+    "unet__deep_supervision": False,
+    "unet__optimiser": torch.optim.SGD,
+    "unet__optimiser_kwargs": {"momentum": 0.9},
+    "unet__lr_scheduler": torch.optim.lr_scheduler.PolynomialLR,
+    "unet__lr_scheduler_kwargs": {"total_iters": 750},
+    "unet__initialiser": torch.nn.init.kaiming_normal_,
 }
 
 

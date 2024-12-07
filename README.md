@@ -185,7 +185,7 @@ When `configuration.yaml` is parsed into a Python dictionary, the keys are trans
 A function decorated with `uncertainty.utils.auto_match_config` can accept unpacked configuration dictionary even if the dictionary contained extra keyword arguments not needed by the function.
 
 ```python
-from uncertainty.utils import auto_match_config
+from uncertainty import auto_match_config
 
 config = {
     "test__a": 69,  # hehe

@@ -9,6 +9,7 @@ import inspect
 import re
 import sys
 from functools import cache, reduce, wraps
+from typing import Callable
 
 import toolz as tz
 import yaml
@@ -16,6 +17,65 @@ from toolz import curried
 from torch import nn, optim
 
 _with_prefix = lambda prefix, dict_: tz.keymap(lambda k: f"{prefix}__{k}", dict_)
+
+
+def _strs_to_torch_modules(config: dict, prefix: str) -> dict:
+    """
+    Convert strings to torch modules
+    """
+
+    def apply_if_exists_pipe(value, transformations: list[tuple[str, Callable]]):
+        """
+        Pipe value through list of transformations, each only applied if the key exists
+        """
+        return tz.pipe(
+            value,
+            *[
+                transformation
+                for key, transformation in transformations
+                if key in config[prefix]
+            ],
+        )
+
+    transforms = [
+        (
+            "activation",
+            curried.assoc_in(
+                keys=[prefix, "activation"],
+                value=getattr(nn, config[prefix]["activation"]),
+            ),
+        ),
+        (
+            "final_layer_activation",
+            curried.assoc_in(
+                keys=[prefix, "final_layer_activation"],
+                value=getattr(nn, config[prefix]["activation"]),
+            ),
+        ),
+        (
+            "initialiser",
+            curried.assoc_in(
+                keys=[prefix, "initialiser"],
+                value=getattr(nn.init, config[prefix]["initialiser"]),
+            ),
+        ),
+        (
+            "optimiser",
+            curried.assoc_in(
+                keys=[prefix, "optimiser"],
+                value=getattr(optim, config[prefix]["optimiser"]),
+            ),
+        ),
+        (
+            "lr_scheduler",
+            curried.assoc_in(
+                keys=[prefix, "lr_scheduler"],
+                value=getattr(optim.lr_scheduler, config[prefix]["lr_scheduler"]),
+            ),
+        ),
+    ]
+
+    return apply_if_exists_pipe(config, transforms)  # type: ignore
 
 
 @cache
@@ -29,11 +89,8 @@ def data_config(config_path: str = "configuration.yaml") -> dict:
 def unet_config(config_path: str = "configuration.yaml") -> dict:
     with open(config_path, "r") as file:
         config = yaml.safe_load(file)
-    # Convert from string to function
-    config["unet"]["activation"] = getattr(nn, config["unet"]["activation"])
-    config["unet"]["final_layer_activation"] = getattr(
-        nn, config["unet"]["final_layer_activation"]
-    )
+
+    config = _strs_to_torch_modules(config, "unet")
 
     return _with_prefix("unet", config["unet"])
 
@@ -41,10 +98,7 @@ def unet_config(config_path: str = "configuration.yaml") -> dict:
 def confidnet_config(config_path: str = "configuration.yaml") -> dict:
     with open(config_path, "r") as file:
         config = yaml.safe_load(file)
-    config["confidnet"]["activation"] = getattr(nn, config["unet"]["activation"])
-    config["confidnet"]["final_layer_activation"] = getattr(
-        nn, config["unet"]["final_layer_activation"]
-    )
+    config = _strs_to_torch_modules(config, "confidnet")
     return _with_prefix("confidnet", config["confidnet"])
 
 
@@ -68,17 +122,6 @@ def logger_config(config_path: str = "configuration.yaml") -> dict:
 def training_config(config_path: str = "configuration.yaml") -> dict:
     with open(config_path, "r") as file:
         config = yaml.safe_load(file)
-    # Convert from string to function
-    config["training"]["initialiser"] = getattr(
-        nn.init, config["training"]["initialiser"]
-    )
-    config["training"]["optimiser"] = getattr(optim, config["training"]["optimiser"])
-
-    # Convert from string to function that pass in the optimiser
-    lr_scheduler = getattr(optim.lr_scheduler, config["training"]["lr_scheduler"])
-    config["training"]["lr_scheduler"] = lambda optimiser: lr_scheduler(
-        optimiser, **config["training"]["lr_scheduler_kwargs"]
-    )
 
     return _with_prefix("training", config["training"])
 

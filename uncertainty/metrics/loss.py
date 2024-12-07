@@ -9,19 +9,42 @@ from torch import nn
 from torch.nn.functional import sigmoid
 from torchmetrics.classification import BinaryF1Score, MultilabelF1Score
 
-LossName = Literal[
-    "dice_smooth",
-    "dice_multi",
-    "dice_binary",
-    "dice_bce",
-    "deep_supervision",
-    "confidnet_mse",
-]
+
+class DiceLoss(nn.Module):
+    """
+    Dice loss defined as 1 - Dice, wrapper for MultiLabelF1Score and BinaryF1Score
+
+    Parameters
+    ----------
+    num_labels : int
+        Number of classes in the segmentation task
+    average : str
+        Averaging strategy for F1 score, one of "macro", "micro", "weighted", "none".
+        Ignored if num_labels is 1
+    """
+
+    def __init__(
+        self,
+        num_labels: int,
+        average: Literal["macro", "micro", "weighted", "none"] = "macro",
+    ):
+        super().__init__()
+        self.loss = (
+            MultilabelF1Score(num_labels=num_labels, zero_division=1, average=average)
+            if num_labels > 1
+            else BinaryF1Score(zero_division=1)
+        )
+
+    def forward(self, y_pred: torch.Tensor, y: torch.Tensor):
+        """
+        Compute Dice loss between predicted and actual class probability/confidence
+        """
+        return 1 - self.loss(y_pred, y)
 
 
 class SmoothDiceLoss(nn.Module):
     """
-    Differentiable Dice loss, defined as 1 - Dice
+    Differentiable Dice loss, defined as 1 - smooth Dice
 
     Parameters
     ----------

@@ -13,8 +13,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from uncertainty.config import auto_match_config
-
+from ..config import auto_match_config
 from ..utils.sequence import growby_accum
 from ..utils.wrappers import curry
 

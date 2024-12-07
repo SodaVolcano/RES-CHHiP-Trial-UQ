@@ -13,6 +13,7 @@ import torch
 from torch import nn
 
 from ..config import auto_match_config
+from ..metrics import ConfidNetMSELoss
 from .unet import UNet
 from .unet_modules import _calc_n_kernels, _concat_with_skip
 
@@ -66,6 +67,45 @@ class UNetConfidNetEncoder(nn.Module):
 
 
 class UNetConfidNet(nn.Module):
+    """
+    An auxiliary network for predicting true class probability of a U-Net
+
+    The architecture uses layers from a U-Net as the encoder and adds a series of
+    convolutional layers to predict the confidence of the segmentation model.
+
+    Parameters
+    ----------
+    unet : UNet
+        U-Net model to use as the encoder.
+    n_kernels_init : int
+        Number of kernels in the first layer of the auxiliary network.
+    n_kernels_max : int
+        Maximum number of kernels in the auxiliary network.
+    output_channels : int
+        Number of output channels in the segmentation model.
+    initialiser : Callable
+        Initialiser to be used for the weights of the convolutional layers. A
+        function from `torch.nn.init`.
+    optimiser : Callable[..., torch.optim.Optimizer]
+        Optimiser constructor to be used for training from `torch.optim`.
+    optimiser_kwargs : dict
+        Keyword arguments to be passed to the optimiser constructor.
+    lr_scheduler : Callable[..., torch.optim.lr_scheduler._LRScheduler]
+        Learning rate scheduler constructor to be used for training from
+        `torch.optim.lr_scheduler`.
+    lr_scheduler_kwargs : dict
+        Keyword arguments to be passed to the lr_scheduler constructor.
+    loss : Callable[[], nn.Module]
+        Loss function to be used for training. Default is `ConfidNetMSELoss`.
+    hidden_conv_dims : list[int]
+        Number of kernels in each hidden convolutional layer. Length of the list
+        determines the number of hidden layers.
+    activation : Callable[[], nn.Module]
+        Activation function to be used in the hidden layers. Default is `nn.LeakyReLU`.
+    last_activation : Callable[[], nn.Module]
+        Activation function to be used in the final layer. Default is `nn.Sigmoid`.
+    """
+
     @auto_match_config(prefixes=["confidnet", "unet"])
     def __init__(
         self,
@@ -73,17 +113,17 @@ class UNetConfidNet(nn.Module):
         n_kernels_init: int,
         n_kernels_max: int,
         output_channels: int,
+        initialiser: Callable,
+        optimiser: Callable[..., torch.optim.Optimizer],
+        optimiser_kwargs: dict,
+        lr_scheduler: Callable[..., torch.optim.lr_scheduler._LRScheduler],
+        lr_scheduler_kwargs: dict,
+        loss: Callable[[], nn.Module] = ConfidNetMSELoss,
         hidden_conv_dims: list[int] = [128, 128, 64, 64],
         activation: Callable[[], nn.Module] = nn.LeakyReLU,
         last_activation: Callable[[], nn.Module] = nn.Sigmoid,
     ):
-        """
-        n_convs: excludes final convolution
-        conv_dims: dimension
-        """
         super().__init__()
-        self.unet = unet
-        self.encoder = UNetConfidNetEncoder(unet)
 
         input_dim = _calc_n_kernels(n_kernels_init, 1, n_kernels_max)
         dims = [input_dim] + hidden_conv_dims + [output_channels]
@@ -109,9 +149,25 @@ class UNetConfidNet(nn.Module):
             ]
         )
 
+        self.loss = loss()
+
+        # Stored to be used by Lightning module
+        self.optimiser = optimiser(self.parameters(), **optimiser_kwargs)
+        self.lr_scheduler = lr_scheduler(self.optimiser, **lr_scheduler_kwargs)
+
+        # Initialise weights before setting U-Net to avoid overwriting
+        self.initialiser = initialiser
+        self.apply(self._init_weights)
+
+        self.unet = unet
+        self.encoder = UNetConfidNetEncoder(unet)
         # Freeze U-Net parameters to only train the ConfidNet
         for param in self.unet.parameters():
             param.requires_grad = False
+
+    def _init_weights(self, module: nn.Module):
+        if isinstance(module, nn.Conv3d):
+            self.initialiser(module.weight)
 
     def forward(self, x: torch.Tensor, logits: bool = False):
         """

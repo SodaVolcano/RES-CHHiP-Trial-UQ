@@ -1,12 +1,12 @@
 import torch
 from torch import nn
 
-from ..context import training
+from ..context import metrics
 
-ConfidNetMSELoss = training.ConfidNetMSELoss
-DeepSupervisionLoss = training.DeepSupervisionLoss
-DiceBCELoss = training.DiceBCELoss
-SmoothDiceLoss = training.SmoothDiceLoss
+ConfidNetMSELoss = metrics.ConfidNetMSELoss
+DeepSupervisionLoss = metrics.DeepSupervisionLoss
+DiceBCELoss = metrics.DiceBCELoss
+SmoothDiceLoss = metrics.SmoothDiceLoss
 
 
 class TestConfidNetMSELoss:

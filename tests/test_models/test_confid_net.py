@@ -4,7 +4,7 @@ from torch import nn
 from ..context import models
 
 UNet = models.UNet
-UNetConfidNetEncoder = models.confid_net.UNetConfidNetEncoder
+UNetConfidNetEncoder = models.confidnet.UNetConfidNetEncoder
 UNetConfidNet = models.UNetConfidNet
 
 config = {
@@ -21,7 +21,12 @@ config = {
     "unet__n_levels": 3,
     "unet__output_channels": 1,
     "unet__final_layer_activation": nn.Sigmoid,
-    "training__deep_supervision": True,
+    "unet__deep_supervision": True,
+    "unet__optimiser": torch.optim.SGD,
+    "unet__optimiser_kwargs": {"momentum": 0.9},
+    "unet__lr_scheduler": torch.optim.lr_scheduler.PolynomialLR,
+    "unet__lr_scheduler_kwargs": {"total_iters": 750},
+    "unet__initialiser": torch.nn.init.kaiming_normal_,
 }
 
 

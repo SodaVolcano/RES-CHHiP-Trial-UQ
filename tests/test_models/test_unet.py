@@ -311,6 +311,12 @@ class TestUNet:
             "unet__input_height": 128,
             "unet__input_width": 128,
             "unet__input_depth": 128,
+            "unet__deep_supervision": True,
+            "unet__optimiser": torch.optim.SGD,
+            "unet__optimiser_kwargs": {"momentum": 0.9},
+            "unet__lr_scheduler": torch.optim.lr_scheduler.PolynomialLR,
+            "unet__lr_scheduler_kwargs": {"total_iters": 750},
+            "unet__initialiser": torch.nn.init.kaiming_normal_,
         }
 
         # Initialize UNet
@@ -354,6 +360,12 @@ class TestUNet:
             "unet__input_height": 128,
             "unet__input_width": 128,
             "unet__input_depth": 128,
+            "unet__deep_supervision": True,
+            "unet__optimiser": torch.optim.SGD,
+            "unet__optimiser_kwargs": {"momentum": 0.9},
+            "unet__lr_scheduler": torch.optim.lr_scheduler.PolynomialLR,
+            "unet__lr_scheduler_kwargs": {"total_iters": 750},
+            "unet__initialiser": torch.nn.init.kaiming_normal_,
         }
 
         # Initialize UNet
@@ -395,6 +407,12 @@ class TestUNet:
             "unet__input_height": 97,
             "unet__input_width": 89,
             "unet__input_depth": 79,
+            "unet__deep_supervision": False,
+            "unet__optimiser": torch.optim.SGD,
+            "unet__optimiser_kwargs": {"momentum": 0.9},
+            "unet__lr_scheduler": torch.optim.lr_scheduler.PolynomialLR,
+            "unet__lr_scheduler_kwargs": {"total_iters": 750},
+            "unet__initialiser": torch.nn.init.kaiming_normal_,
         }
 
         model = UNet(**config, deep_supervision=False)

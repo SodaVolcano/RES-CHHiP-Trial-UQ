@@ -22,6 +22,7 @@ models = uncertainty.models
 evaluation = uncertainty.evaluation
 data = uncertainty.data
 config = uncertainty.config
+metrics = uncertainty.metrics
 
 # Patch paths
 PATCH_OS_WALK = "os.walk"

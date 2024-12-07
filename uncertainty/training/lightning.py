@@ -1,30 +1,43 @@
 """
-Lightning modules for training models.
+Lightning modules for training models, defining training and evaluation steps.
 """
 
 import os
-from typing import Optional
+from pathlib import Path
 
-import dill
 import lightning as lit
 import torch
 from torch import nn
 from torchmetrics.aggregation import RunningMean
-from torchmetrics.classification import BinaryF1Score, MultilabelF1Score
 
-from .loss import ConfidNetMSELoss, DeepSupervisionLoss, DiceBCELoss
+from uncertainty.config import auto_match_config
+
+from .. import constants as c
+from ..metrics.classification import dice
+
+"""
+TODO: 
+- testcase for lightning.py, and add test for dumping tensors
+"""
 
 
-class UNetLightning(lit.LightningModule):
+def _dump_tensors(
+    path: str,
+    x: torch.Tensor,
+    y: torch.Tensor,
+    y_pred: torch.Tensor,
+    dice: torch.Tensor,
+    loss: torch.Tensor,
+    epoch: int,
+):
+    name = Path(path) / f"epoch-{epoch}-dice-{dice:.4f}-loss{loss:.4f}.pt"
+    if not name.exists():
+        torch.save({"x": x, "y": y, "y_pred": y_pred, "dice": dice, "loss": loss}, name)
+
+
+class LitModel(lit.LightningModule):
     """
-    Wrapper class for PyTorch model to be used with PyTorch Lightning
-
-    If deep supervision is enabled, then for a U-Net with n levels, a loss is calculated
-    for each level and summed as
-        L = w1 * L1 + w2 * L2 + ... + wn * Ln
-    Where the weights halve for each level and are normalised to sum to 1.
-    Output from the two levels in the lowest resolution are not used.
-    SEE https://arxiv.org/abs/1809.10486
+    Wrapper class for PyTorch models defining training and evaluation steps.
 
     Parameters
     ----------
@@ -32,43 +45,41 @@ class UNetLightning(lit.LightningModule):
         PyTorch model to be trained. If training an ensemble, the ensemble
         members are created using the same model class and the same constructor
         arguments.
-    config : dict
-        Configuration dictionary
-    class_weights : Optional[list[float]]
-        Weights for each class in the loss function. Default is None.
-        Weights are typically calculated using the number of pixels as
-            n_background / n_foreground
+    class_names : list[str]
+        List of names for each class in the dataset used to log classwise dice scores.
+    running_loss_window : int
+        Size of the window for the running mean of the loss.
+    save_hyperparams : bool
+        Whether to save the hyperparameters as `hparams` attribute.
+    dump_tensors_every_n_epochs : int
+        If greater than 0, dump x, y, and predictions to disk every n epochs.
     """
 
+    @auto_match_config(prefixes=["training"])
     def __init__(
         self,
         model: nn.Module,
-        class_weights: Optional[torch.Tensor] = None,
+        class_names: list[str] = list(c.ORGAN_MATCHES.keys()),
+        running_loss_window: int = 10,
         save_hyperparams: bool = True,
+        dump_tensors_every_n_epochs: int = 0,
+        dump_tensors_dir: str = "tensor_dump",
     ):
         super().__init__()
         if save_hyperparams:
             self.save_hyperparameters(ignore=["model"])
-
-        self.class_weights = class_weights
-        # Original dice, used for evaluation
-        self.dice_eval = MultilabelF1Score(
-            num_labels=config["n_kernels_last"], zero_division=1
-        )
-        self.dice_eval_single = BinaryF1Score(zero_division=1)
-        self.running_loss = RunningMean(window=10)
-        self.running_dice = RunningMean(window=10)
-        self.val_counter = 0
-        self.val_batch_num = 0
+        if dump_tensors_every_n_epochs > 0:
+            os.makedirs(dump_tensors_dir, exist_ok=True)
 
         self.model = model
-        self.deep_supervision = (
-            hasattr(model, "deep_supervision") and model.deep_supervision
-        )
-        if self.deep_supervision:
-            self.loss = DeepSupervisionLoss(DiceBCELoss(class_weights))
-        else:
-            self.loss = DiceBCELoss(class_weights)
+        self.class_names = class_names
+        self.dump_tensors_every_n_epochs = dump_tensors_every_n_epochs
+        self.dump_tensors_dir = dump_tensors_dir
+
+        self.dice = dice
+        self.dice_classwise = dice(average="none")
+        self.running_loss = RunningMean(window=running_loss_window)
+        self.running_dice = RunningMean(window=running_loss_window)
 
     def forward(self, x, logits: bool = False):
         return self.model(x, logits)
@@ -76,26 +87,30 @@ class UNetLightning(lit.LightningModule):
     def training_step(self, batch: torch.Tensor):
         x, y = batch
         y_pred = self.model(x, logits=True)
-        loss = self.loss(y_pred, y, logits=True)
+        loss = self.model.loss(y_pred, y, logits=True)
 
         if self.deep_supervision:
             y_pred = y_pred[-1]
-        dice = self.dice_eval(y_pred, y)
+
+        dice = self.dice(y_pred, y)
 
         self.running_dice(dice.detach())
         self.running_loss(loss.detach())
         self.log(
-            "train_dice",
-            self.running_dice.compute(),
-            sync_dist=True,
-            prog_bar=True,
+            "train_dice", self.running_dice.compute(), sync_dist=True, prog_bar=True
         )
         self.log(
-            "train_loss",
-            self.running_loss.compute(),
-            sync_dist=True,
-            prog_bar=True,
+            "train_loss", self.running_loss.compute(), sync_dist=True, prog_bar=True
         )
+
+        if (
+            self.dump_tensors_every_n_epochs > 0
+            and self.current_epoch % self.dump_tensors_every_n_epochs == 0
+        ):
+            _dump_tensors(
+                self.dump_tensors_dir, x, y, y_pred, dice, loss, self.current_epoch
+            )
+
         return loss
 
     @torch.no_grad()
@@ -103,163 +118,39 @@ class UNetLightning(lit.LightningModule):
         x, y = batch
 
         y_pred = self.model(x, logits=True)
-        loss = self.loss(y_pred, y, logits=True)
+        loss = self.model.loss(y_pred, y, logits=True)
+
         if self.deep_supervision:
             y_pred = y_pred[-1]
-        dice = self.dice_eval(y_pred, y)
 
-        # Get dice of each organ
-        for channel, organ_name in zip(range(y_pred.shape[1]), ORGAN_MATCHES.keys()):
-            with torch.no_grad():
-                organ_dice = self.dice_eval_single(
-                    y_pred[:, channel, ...],
-                    y[:, channel, ...],
-                )
-                self.log(
-                    f"val_dice_{organ_name}",
-                    organ_dice,
-                    sync_dist=True,
-                    prog_bar=False,
-                )
+        dice = self.dice(y_pred, y)
+        dice_classwise = self.dice_classwise(y_pred, y)
 
-        if self.val_counter == 4:
-            _dump_tensors(
-                self.config["model_checkpoint_path"],
-                x,
-                y,
-                y_pred,
-                dice,
-                loss,
-                self.val_batch_num,
-            )
-            self.val_batch_num += 1
-            self.val_counter = 0
+        for name, class_dice in zip(self.class_names, dice_classwise):
+            self.log(f"val_dice_{name}", class_dice, sync_dist=True, prog_bar=False)
 
-        self.log(
-            "val_loss",
-            loss,
-            sync_dist=True,
-            prog_bar=True,
-        )
-        self.log(
-            "val_dice",
-            dice,
-            sync_dist=True,
-            prog_bar=True,
-        )
+        self.log("val_loss", loss, sync_dist=True, prog_bar=True)
+        self.log("val_dice", dice, sync_dist=True, prog_bar=True)
+
         return loss
-
-    def on_validation_epoch_end(self):
-        self.val_counter += 1
 
     @torch.no_grad()
     def test_step(self, batch: torch.Tensor):
         x, y = batch
         y_pred = self.model(x, logits=False)
-        loss = self.loss(y_pred, y, logits=False)
+        loss = self.model.loss(y_pred, y, logits=False)
         if self.deep_supervision:
             y_pred = y_pred[-1]
-        dice = self.dice_eval(y_pred, y)
+
+        dice = self.dice(y_pred, y)
 
         self.log("test_loss", loss, sync_dist=True, prog_bar=True)
         self.log("test_dice", dice, sync_dist=True, prog_bar=True)
+
         return loss
 
     def configure_optimizers(self):  # type: ignore
-        optimiser = self.config["optimiser"](
-            self.model.parameters(), **self.config["optimiser_kwargs"]
-        )
-        lr_scheduler = self.config["lr_scheduler"](optimiser)  # type: ignore
-        return {"optimizer": optimiser, "lr_scheduler": lr_scheduler}
-
-
-class LitConfidNet(lit.LightningModule):
-    """ """
-
-    def __init__(
-        self,
-        model: nn.Module,
-        config: dict,
-        class_weights: Optional[torch.Tensor] = None,
-        save_hyperparams: bool = True,
-    ):
-        super().__init__()
-        if save_hyperparams:
-            self.save_hyperparameters(ignore=["model"])
-
-        self.config = config
-        self.class_weights = class_weights
-        self.running_loss = RunningMean(window=10)
-        self.val_counter = 0
-        self.val_batch_num = 0
-
-        self.model = model
-        self.loss = ConfidNetMSELoss()
-
-    def forward(self, x, logits: bool = False):
-        return self.model(x, logits)
-
-    def training_step(self, batch: torch.Tensor):
-        x, y = batch
-        y_pred = self.model(x, logits=True)
-        loss = self.loss(y_pred, y, logits=True)
-
-        self.running_loss(loss.detach())
-        self.log(
-            "train_loss",
-            self.running_loss.compute(),
-            sync_dist=True,
-            prog_bar=True,
-        )
-        return loss
-
-    @torch.no_grad()
-    def validation_step(self, batch: torch.Tensor):
-        x, y = batch
-
-        y_pred = self.model(x, logits=True)
-        loss = self.loss(y_pred, y, logits=True)
-
-        if self.val_counter == 4:
-            _dump_tensors(
-                self.config["model_checkpoint_path"],
-                x,
-                y,
-                y_pred,
-                0,
-                loss,
-                self.val_batch_num,
-            )
-            self.val_batch_num += 1
-            self.val_counter = 0
-
-        self.log(
-            "val_loss",
-            loss,
-            sync_dist=True,
-            prog_bar=True,
-        )
-        return loss
-
-    def on_validation_epoch_end(self):
-        self.val_counter += 1
-
-    @torch.no_grad()
-    def test_step(self, batch: torch.Tensor):
-        x, y = batch
-        y_pred = self.model(x, logits=False)
-        loss = self.loss(y_pred, y, logits=False)
-        if self.deep_supervision:
-            y_pred = y_pred[-1]
-        dice = self.dice_eval(y_pred, y)
-
-        self.log("test_loss", loss, sync_dist=True, prog_bar=True)
-        self.log("test_dice", dice, sync_dist=True, prog_bar=True)
-        return loss
-
-    def configure_optimizers(self):  # type: ignore
-        optimiser = torch.optim.SGD(
-            self.model.parameters(), **self.config["optimiser_kwargs"]
-        )
-        lr_scheduler = self.config["lr_scheduler"](optimiser)  # type: ignore
-        return {"optimizer": optimiser, "lr_scheduler": lr_scheduler}
+        return {
+            "optimizer": self.model.optimiser,
+            "lr_scheduler": self.model.lr_scheduler,
+        }
