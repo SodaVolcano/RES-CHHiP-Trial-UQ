@@ -13,7 +13,7 @@ from torchmetrics.aggregation import RunningMean
 from uncertainty.config import auto_match_config
 
 from .. import constants as c
-from ..metrics.classification import dice
+from ..metrics.classification import dice_batched
 
 """
 TODO: 
@@ -76,8 +76,8 @@ class LitModel(lit.LightningModule):
         self.dump_tensors_every_n_epochs = dump_tensors_every_n_epochs
         self.dump_tensors_dir = dump_tensors_dir
 
-        self.dice = dice
-        self.dice_classwise = dice(average="none")
+        self.dice = dice_batched
+        self.dice_classwise = dice_batched(average="none")
         self.running_loss = RunningMean(window=running_loss_window)
         self.running_dice = RunningMean(window=running_loss_window)
 
@@ -89,7 +89,7 @@ class LitModel(lit.LightningModule):
         y_pred = self.model(x, logits=True)
         loss = self.model.loss(y_pred, y, logits=True)
 
-        if self.deep_supervision:
+        if self.model.deep_supervision:
             y_pred = y_pred[-1]
 
         dice = self.dice(y_pred, y)
@@ -119,9 +119,6 @@ class LitModel(lit.LightningModule):
 
         y_pred = self.model(x, logits=True)
         loss = self.model.loss(y_pred, y, logits=True)
-
-        if self.deep_supervision:
-            y_pred = y_pred[-1]
 
         dice = self.dice(y_pred, y)
         dice_classwise = self.dice_classwise(y_pred, y)

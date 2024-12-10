@@ -10,6 +10,7 @@ _prepare_tensors = metrics.classification._prepare_tensors
 dice = metrics.dice
 surface_dice = metrics.surface_dice
 hausdorff_distance = metrics.hausdorff_distance
+hausdorff_distance_batched = metrics.hausdorff_distance_batched
 generalised_energy_distance = metrics.generalised_energy_distance
 
 
@@ -302,6 +303,25 @@ class TestHausdorffDistance:
         # Test the hausdorff_distance function with different averaging methods
         for avg_method, expected in expected_results.items():
             result = hausdorff_distance(prediction, label, average=avg_method)  # type: ignore
+            assert torch.allclose(result, expected, atol=1e-4)
+
+
+class TestHausdorffDistanceBatched:
+    # Supports "micro", "macro", and "none" averaging methods
+    def test_hausdorff_distance_batched_with_various_averaging_methods(self):
+        torch.manual_seed(20)
+        prediction = torch.rand(5, 3, 4, 6, 3)
+        label = torch.randint(0, 2, (5, 3, 4, 6, 3))
+        # Define expected results for different averaging methods
+        expected_results = {
+            "micro": torch.tensor(1.3314, dtype=torch.float64),
+            "macro": torch.tensor(1.3980, dtype=torch.float64),
+            "none": torch.tensor([1.3314, 1.4142, 1.4485], dtype=torch.float64),
+        }
+
+        # Test the hausdorff_distance function with different averaging methods
+        for avg_method, expected in expected_results.items():
+            result = hausdorff_distance_batched(prediction, label, average=avg_method)  # type: ignore
             assert torch.allclose(result, expected, atol=1e-4)
 
 

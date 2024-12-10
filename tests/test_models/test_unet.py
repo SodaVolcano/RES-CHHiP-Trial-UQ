@@ -387,6 +387,14 @@ class TestUNet:
         assert output is not None
         assert isinstance(output, list)
         assert all(isinstance(out, torch.Tensor) for out in output)
+        for out, expected in zip(output, [64, 128, 256]):
+            assert out.shape == (1, 1, *(expected,) * 3)
+
+        # Test that the last output is the same as the last output from the non-deep supervision mode
+        model.eval()
+        output_no_deep_supervision = model(input_tensor)
+        # NOTE: can't compare if last output is same because dropout is disabled in eval mode
+        assert output_no_deep_supervision.shape == output[-1].shape
 
     def test_prime_input_shape(self, mocker):
         config = {

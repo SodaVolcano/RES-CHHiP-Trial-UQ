@@ -21,7 +21,7 @@ from torchmetrics.classification import (
     MultilabelRecall,
 )
 
-from ..utils import curry, unpack_args
+from ..utils import curry, unpack_args, unpacked_map
 from .surface_dice import compute_surface_dice_at_tolerance, compute_surface_distances
 
 
@@ -71,6 +71,76 @@ def _prepare_tensors(
     )  # type: ignore
 
 
+def _medpy_wrapper(
+    metric: Callable[..., torch.Tensor]
+) -> Callable[
+    [torch.Tensor, torch.Tensor, Literal["micro", "macro", "none"]], torch.Tensor
+]:
+    """
+    Wrapper around medpy hd, hd95 etc: prepare tensor, apply metric, and return tensor
+    """
+    return lambda prediction, label, average: tz.pipe(
+        _prepare_tensors(prediction, label),
+        unpack_args(
+            lambda pred, label: _average_methods(average)(
+                pred, label, _distance_with_default(metric)
+            )
+        ),
+        lambda arr: torch.tensor(arr) if not isinstance(arr, torch.Tensor) else arr,
+    )  # type: ignore
+
+
+def _torchmetric_wrapper(
+    binary_metric: Callable[..., torch.Tensor],
+    multilabel_metric: Callable[..., Callable[..., torch.Tensor]],
+    prediction: torch.Tensor,
+    label: torch.Tensor,
+    average: Literal["micro", "macro", "weighted", "none"],
+) -> torch.Tensor:
+    """
+    Wrapper around torchmetrics: select binary or multilabel metric, apply metric, and return tensor
+    """
+    metric = (
+        binary_metric
+        if label.shape[0] == 1
+        else multilabel_metric(num_labels=label.shape[0], average=average)
+    )
+    return metric(prediction.unsqueeze(0), label.unsqueeze(0))
+
+
+def _torchmetric_wrapper_batched(
+    binary_metric: Callable[..., torch.Tensor],
+    multilabel_metric: Callable[..., Callable[..., torch.Tensor]],
+    prediction: torch.Tensor,
+    label: torch.Tensor,
+    average: Literal["micro", "macro", "weighted", "none"],
+) -> torch.Tensor:
+    """
+    Wrapper around torchmetricsfor batched inputs: select binary or multilabel metric,
+    """
+    metric = (
+        binary_metric
+        if label.shape[1] == 1
+        else multilabel_metric(num_labels=label.shape[1], average=average)
+    )
+    return metric(prediction, label)
+
+
+def _batched_eval(
+    prediction: torch.Tensor, label: torch.Tensor, metric: Callable[..., torch.Tensor]
+) -> torch.Tensor:
+    """
+    Apply metric to batched inputs
+    """
+    return tz.pipe(
+        zip(prediction, label),
+        unpacked_map(metric),
+        list,
+        torch.stack,
+        curry(torch.mean)(dim=0),
+    )  # type: ignore
+
+
 @curry
 def dice(
     prediction: torch.Tensor,
@@ -78,7 +148,7 @@ def dice(
     average: Literal["micro", "macro", "weighted", "none"] = "macro",
 ) -> torch.Tensor:
     """
-    Compute the Dice coefficient between two tensors of shape (C, ...).
+    Compute the Dice coefficient between two tensors of shape (B, C, ...).
 
     Parameters
     ----------
@@ -93,14 +163,44 @@ def dice(
         - "weighted": Weighted averaging of metrics.
         - "none": Return the metrics for each class separately.
     """
-    metric = (
-        BinaryF1Score(zero_division=1)
-        if label.shape[0] == 1
-        else MultilabelF1Score(
-            num_labels=label.shape[0], average=average, zero_division=1
-        )
+    return _torchmetric_wrapper(
+        BinaryF1Score(zero_division=1),
+        curry(MultilabelF1Score)(zero_division=1),
+        prediction,
+        label,
+        average,
     )
-    return metric(prediction.unsqueeze(0), label.unsqueeze(0))
+
+
+@curry
+def dice_batched(
+    prediction: torch.Tensor,
+    label: torch.Tensor,
+    average: Literal["micro", "macro", "weighted", "none"] = "macro",
+) -> torch.Tensor:
+    """
+    Compute the Dice coefficient between two tensors of shape (B, C, ...).
+
+    Parameters
+    ----------
+    prediction : torch.Tensor
+        The predicted tensor of shape (B, C, ...).
+    label : torch.Tensor
+        The ground truth tensor of shape (B, C, ...).
+    average : Literal["micro", "macro", "weighted", "none"]
+        Averaging method for the class channels.
+        - "micro": Calculate metrics globally across all classes.
+        - "macro": Calculate metrics for each class and average
+        - "weighted": Weighted averaging of metrics.
+        - "none": Return the metrics for each class separately.
+    """
+    return _torchmetric_wrapper_batched(
+        BinaryF1Score(zero_division=1),
+        curry(MultilabelF1Score)(zero_division=1),
+        prediction,
+        label,
+        average,
+    )
 
 
 @curry
@@ -160,23 +260,42 @@ def surface_dice(
     )  # type: ignore
 
 
-def _medpy_wrapper(
-    metric: Callable[..., torch.Tensor]
-) -> Callable[
-    [torch.Tensor, torch.Tensor, Literal["micro", "macro", "none"]], torch.Tensor
-]:
+@curry
+def surface_dice_batched(
+    prediction: torch.Tensor,
+    label: torch.Tensor,
+    average: Literal["macro", "none"] = "macro",
+    tolerance: float = 1.0,
+) -> torch.Tensor:
     """
-    Wrapper around medpy hd, hd95 etc: prepare tensor, apply metric, and return tensor
+    Compute the Surface Dice between two tensors of shape (B, C, ...) at specified tolerance.
+
+    The surface DICE measures the overlap of two surfaces instead of two volumes.
+    A surface element is counted as overlapping (or touching), when the closest
+    distance to the other surface is less or equal to the specified tolerance.
+
+    Parameters
+    ----------
+    prediction : torch.Tensor
+        The predicted tensor of shape (B, C, ...).
+    label : torch.Tensor
+        The ground truth tensor of shape (B, C, ...).
+    tolerance : float
+        Tolerance in mm.
+    average : Literal["macro", "none"]
+        Averaging method for the class channels.
+        - "macro": Calculate metrics for each class and average
+        - "none": Return the metrics for each class separately.
     """
-    return lambda prediction, label, average: tz.pipe(
-        _prepare_tensors(prediction, label),
-        unpack_args(
-            lambda pred, label: _average_methods(average)(
-                pred, label, _distance_with_default(metric)
-            )
-        ),
-        lambda arr: torch.tensor(arr) if not isinstance(arr, torch.Tensor) else arr,
-    )  # type: ignore
+    if average == "micro":
+        logger.error(
+            "Micro averaging is not supported for surface dice, nan tensor returned"
+        )
+        return torch.tensor(torch.nan)
+
+    return _batched_eval(
+        prediction, label, surface_dice(average=average, tolerance=tolerance)
+    )
 
 
 @curry
@@ -207,6 +326,33 @@ def hausdorff_distance(
 
 
 @curry
+def hausdorff_distance_batched(
+    prediction: torch.Tensor,
+    label: torch.Tensor,
+    average: Literal["micro", "macro", "none"] = "macro",
+) -> torch.Tensor:
+    """
+    Compute the Hausdorff distance between two tensors of shape (B, C, ...).
+
+    If `prediction` is not in the range [0, 1], it is assumed to be logits and
+    a sigmoid activation is applied.
+
+    Parameters
+    ----------
+    prediction : torch.Tensor
+        The predicted tensor of shape (B, C, ...).
+    label : torch.Tensor
+        The ground truth tensor of shape (B, C, ...).
+    average : Literal["micro", "macro", "none"]
+        Averaging method for the class channels.
+        - "micro": Calculate metrics globally across all classes.
+        - "macro": Calculate metrics for each class and average them.
+        - "none": Return the metrics for each class separately.
+    """
+    return _batched_eval(prediction, label, hausdorff_distance(average=average))
+
+
+@curry
 def hausdorff_distance_95(
     prediction: torch.Tensor,
     label: torch.Tensor,
@@ -233,6 +379,32 @@ def hausdorff_distance_95(
     return _medpy_wrapper(hd95)(prediction, label, average)  # type: ignore
 
 
+def hausdorff_distance_95_batched(
+    prediction: torch.Tensor,
+    label: torch.Tensor,
+    average: Literal["micro", "macro", "none"] = "macro",
+) -> torch.Tensor:
+    """
+    Compute the 95th percentile Hausdorff distance between two tensors of shape (B, C, ...).
+
+    If `prediction` is not in the range [0, 1], it is assumed to be logits and
+    a sigmoid activation is applied.
+
+    Parameters
+    ----------
+    prediction : torch.Tensor
+        The predicted tensor of shape (B, C, ...).
+    label : torch.Tensor
+        The ground truth tensor of shape (B, C, ...).
+    average : Literal["micro", "macro", "none"]
+        Averaging method for the class channels.
+        - "micro": Calculate metrics globally across all classes.
+        - "macro": Calculate metrics for each class and average them.
+        - "none": Return the metrics for each class separately.
+    """
+    return _batched_eval(prediction, label, hausdorff_distance_95(average=average))
+
+
 @curry
 def recall(
     prediction: torch.Tensor,
@@ -257,12 +429,38 @@ def recall(
         - "weighted": Weighted averaging of metrics.
         - "none": Return the metrics for each class separately.
     """
-    metric = (
-        BinaryRecall()
-        if label.shape[0] == 1
-        else MultilabelRecall(num_labels=label.shape[0], average=average)
+    return _torchmetric_wrapper(
+        BinaryRecall(), MultilabelRecall, prediction, label, average
     )
-    return metric(prediction.unsqueeze(0), label.unsqueeze(0))
+
+
+@curry
+def recall_batched(
+    prediction: torch.Tensor,
+    label: torch.Tensor,
+    average: Literal["micro", "macro", "weighted", "none"] = "macro",
+) -> torch.Tensor:
+    """
+    Compute the recal between two tensors of shape (B, C, ...).
+
+    AKA sensitivity, or true positive rate (TPR).
+
+    Parameters
+    ----------
+    prediction : torch.Tensor
+        The predicted tensor of shape (B, C, ...).
+    label : torch.Tensor
+        The ground truth tensor of shape (B, C, ...).
+    average : Literal["micro", "macro", "weighted", "none"]
+        Averaging method for the class channels.
+        - "micro": Calculate metrics globally across all classes.
+        - "macro": Calculate metrics for each class and average them.
+        - "weighted": Weighted averaging of metrics.
+        - "none": Return the metrics for each class separately.
+    """
+    return _torchmetric_wrapper_batched(
+        BinaryRecall(), MultilabelRecall, prediction, label, average
+    )
 
 
 @curry
@@ -289,12 +487,38 @@ def precision(
         - "weighted": Weighted averaging of metrics.
         - "none": Return the metrics for each class separately.
     """
-    metric = (
-        BinaryPrecision()
-        if label.shape[0] == 1
-        else MultilabelPrecision(num_labels=label.shape[0], average=average)
+    return _torchmetric_wrapper(
+        BinaryPrecision(), MultilabelPrecision, prediction, label, average
     )
-    return metric(prediction.unsqueeze(0), label.unsqueeze(0))
+
+
+@curry
+def precision_batched(
+    prediction: torch.Tensor,
+    label: torch.Tensor,
+    average: Literal["micro", "macro", "weighted", "none"] = "macro",
+) -> torch.Tensor:
+    """
+    Compute the precision between two tensors of shape (B, C, ...).
+
+    AKA positive predictive value (PPV).
+
+    Parameters
+    ----------
+    prediction : torch.Tensor
+        The predicted tensor of shape (B, C, ...).
+    label : torch.Tensor
+        The ground truth tensor of shape (B, C, ...).
+    average : Literal["micro", "macro", "weighted", "none"]
+        Averaging method for the class channels.
+        - "micro": Calculate metrics globally across all classes.
+        - "macro": Calculate metrics for each class and average
+        - "weighted": Weighted averaging of metrics.
+        - "none": Return the metrics for each class separately.
+    """
+    return _torchmetric_wrapper_batched(
+        BinaryPrecision(), MultilabelPrecision, prediction, label, average
+    )
 
 
 @curry
@@ -322,6 +546,30 @@ def average_surface_distance(
 
 
 @curry
+def average_surface_distance_batched(
+    prediction: torch.Tensor,
+    label: torch.Tensor,
+    average: Literal["micro", "macro", "none"] = "macro",
+) -> torch.Tensor:
+    """
+    Compute the Average Surface Distance between two tensors of shape (B, C, ...).
+
+    Parameters
+    ----------
+    prediction : torch.Tensor
+        The predicted tensor of shape (B, C, ...).
+    label : torch.Tensor
+        The ground truth tensor of shape (B, C, ...).
+    average : Literal["micro", "macro", "none"]
+        Averaging method for the class channels.
+        - "micro": Calculate metrics globally across all classes.
+        - "macro": Calculate metrics for each class and average them.
+        - "none": Return the metrics for each class separately.
+    """
+    return _batched_eval(prediction, label, average_surface_distance(average=average))
+
+
+@curry
 def average_symmetric_surface_distance(
     prediction: torch.Tensor,
     label: torch.Tensor,
@@ -343,6 +591,32 @@ def average_symmetric_surface_distance(
         - "none": Return the metrics for each class separately.
     """
     return _medpy_wrapper(assd)(prediction, label, average)
+
+
+@curry
+def average_symmetric_surface_distance_batched(
+    prediction: torch.Tensor,
+    label: torch.Tensor,
+    average: Literal["micro", "macro", "none"] = "macro",
+) -> torch.Tensor:
+    """
+    Compute the Average Symmetric Surface Distance between two tensors of shape (B, C, ...).
+
+    Parameters
+    ----------
+    prediction : torch.Tensor
+        The predicted tensor of shape (B, C, ...).
+    label : torch.Tensor
+        The ground truth tensor of shape (B, C, ...).
+    average : Literal["micro", "macro", "none"]
+        Averaging method for the class channels.
+        - "micro": Calculate metrics globally across all classes.
+        - "macro": Calculate metrics for each class and average them.
+        - "none": Return the metrics for each class separately.
+    """
+    return _batched_eval(
+        prediction, label, average_symmetric_surface_distance(average=average)
+    )
 
 
 @curry
@@ -423,7 +697,11 @@ def get_classification_metric(name: str) -> Optional[Callable]:
     Return the metric function given the name, or None if not found.
     """
     if "surface_dice" in name:
-        return surface_dice(tolerance=float(name.split("_")[-1]))
+        return (
+            surface_dice_batched(tolerance=float(name.split("_")[-1]))
+            if "batched" in name
+            else surface_dice(tolerance=float(name.split("_")[-1]))
+        )
 
     return {
         "hd": hausdorff_distance,
@@ -435,4 +713,13 @@ def get_classification_metric(name: str) -> Optional[Callable]:
         "sen": recall,
         "precision": precision,
         "ppv": precision,
+        "hd_batched": hausdorff_distance_batched,
+        "hd95_batched": hausdorff_distance_95_batched,
+        "asd_batched": average_surface_distance_batched,
+        "assd_batched": average_symmetric_surface_distance_batched,
+        "dice_batched": dice_batched,
+        "recall_batched": recall_batched,
+        "sen_batched": recall_batched,
+        "precision_batched": precision_batched,
+        "ppv_batched": precision_batched,
     }.get(name, None)

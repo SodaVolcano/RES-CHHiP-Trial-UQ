@@ -169,7 +169,7 @@ class DeepSupervisionLoss(nn.Module):
             List of outputs from the U-Net ordered from the lowest resolution
             to the highest resolution
         y : torch.Tensor
-            Ground truth target
+            Ground truth target of shape (N, C, H, W, D)
         loss_kwargs : dict
             Additional keyword arguments to pass to the loss
         """

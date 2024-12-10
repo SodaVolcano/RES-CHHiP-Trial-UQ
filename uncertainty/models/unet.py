@@ -35,8 +35,9 @@ class UNet(nn.Module):
     loss is calculated for each level and summed as
         L = w1 * L1 + w2 * L2 + ... + wn * Ln
     Where the weights halve for each level and are normalised to sum to 1.
-    Output from the two levels in the lowest resolution are not used.
-    SEE https://arxiv.org/abs/1809.10486
+    Output from the two levels in the lowest resolution are not used. Deep
+    supervision output (i.e. a list of predictions) is only produced if
+    the model is in training mode. SEE https://arxiv.org/abs/1809.10486
 
     Parameters
     ----------
@@ -79,11 +80,19 @@ class UNet(nn.Module):
         self.apply(self._init_weights)
 
         self.deep_supervision = deep_supervision
-        self.loss = loss() if not deep_supervision else DeepSupervisionLoss(loss())
+        self._loss = loss()
 
         # Stored to be used by Lightning module
         self.optimiser = optimiser(self.parameters(), **optimiser_kwargs)
         self.lr_scheduler = lr_scheduler(self.optimiser, **lr_scheduler_kwargs)
+
+    @property
+    def loss(self) -> nn.Module:
+        return (
+            DeepSupervisionLoss(self._loss)
+            if self.deep_supervision and self.training
+            else self._loss
+        )
 
     def _init_weights(self, module: nn.Module):
         if isinstance(module, nn.Conv3d):

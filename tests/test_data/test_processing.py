@@ -307,7 +307,9 @@ class TestPreprocessPatientScan:
         assert isinstance(result, dict)
         assert result["patient_id"] == 1
         assert result["volume"].shape == (1, 100, 143, 120)
+        assert result["volume"].dtype == np.float32
         assert result["masks"].shape == (3, 100, 143, 120)
+        assert result["masks"].dtype == np.float32
         assert all(
             dim >= min_dim for dim, min_dim in zip(result["volume"].shape[1:], min_size)
         )

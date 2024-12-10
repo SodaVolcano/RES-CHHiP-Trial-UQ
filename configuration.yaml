@@ -63,7 +63,7 @@ unet:
   deep_supervision: true
 
 confidnet:
-  # Dimension of the convolution layers
+  # Dimensions (channels) of the convolution layers
   # Number of convolution is specified by the length of this list
   hidden_conv_dims: [128, 128, 128, 64, 64]
   # Activation function name from torch.nn for convolutional layers

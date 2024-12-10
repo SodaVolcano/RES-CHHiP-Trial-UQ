@@ -402,6 +402,8 @@ def preprocess_patient_scan(
         (scan["volume"], scan["masks"]),
         crop_to_body,
         ensure_min_size(min_size=min_size),
+        curried.map(lambda arr: arr.astype(np.float32)),
+        tuple,
     )
     return scan  # type: ignore
 
