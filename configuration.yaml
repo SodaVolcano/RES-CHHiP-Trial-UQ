@@ -73,12 +73,23 @@ confidnet:
   last_activation: "Sigmoid"
   # Path to pretrained U-Net model to use as encoder
   pretrained_unet_path: "./checkpoints/unet"
+  # ------------------ ConfidNet Training Settings ------------------
+  # Weight initialiser for model from torch.nn.init
+  initialiser: "kaiming_normal_"
+  # Optimiser for training from torch.optim
+  optimiser: "SGD"
+  # Optional arguments for optimiser
+  optimiser_kwargs:
+    momentum: 0.99
+    nesterov: true
+  # Learning rate scheduler from torch.optim.lr_scheduler
+  lr_scheduler: "PolynomialLR"
+  # Optional arguments for learning rate scheduler
+  lr_scheduler_kwargs:
+    total_iters: 750
+    power: 0.9
 
 training:
-  # List of models to train for EACH fold, any of "unet_<quantity>", "confidnet_<quantity>"
-  # Note that order matters - if a model (e.g. confidnet) uses a pretrained model (e.g. 
-  # unet), then the former should appear later in the list
-  models_to_train: ["unet_10", "confidnet"]
   # Number of epochs to train for
   n_epochs: 750
   # Window for running loss calculation, reduce noise in loss plot
