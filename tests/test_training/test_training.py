@@ -5,7 +5,6 @@ from pathlib import Path
 from unittest.mock import patch
 
 import numpy as np
-import pytest
 import torch
 from lightning import LightningModule
 from torch import nn
@@ -45,21 +44,40 @@ def get_dataset(n: int = 2):
     ]
 
 
-class MockModel(LightningModule):
+class MockLoss(nn.Module):
+    def forward(self, x, y, logits):
+        return torch.tensor(0.5, requires_grad=True)
+
+
+class MockTorchModel(nn.Module):
     @auto_match_config(prefixes=["mock"])
     def __init__(self, loss, val_loss):
         super().__init__()
         self.layer = nn.Conv3d(3, 1, 3)
-        self.loss = loss
+        self.loss = MockLoss()
+        self.train_loss = loss
         self.val_loss = val_loss
+        self.deep_supervision = False
+        self.optimiser = torch.optim.Adam(self.parameters())
+        self.lr_scheduler = torch.optim.lr_scheduler.StepLR(self.optimiser, 1)
+
+    def forward(self, x, logits):
+        return torch.rand((2, 3, 5, 5, 5), requires_grad=True)
+
+
+class MockModel(LightningModule):
+    @auto_match_config(prefixes=["mock"])
+    def __init__(self, model):
+        super().__init__()
+        self.model = model
 
     def training_step(self, batch, batch_idx):
-        self.log("loss", torch.tensor(self.loss))
-        return {"loss": torch.tensor(self.loss, requires_grad=True)}
+        self.log("loss", torch.tensor(self.model.train_loss))
+        return {"loss": torch.tensor(self.model.train_loss, requires_grad=True)}
 
     def validation_step(self, batch, batch_idx):
-        self.log("val_loss", torch.tensor(self.val_loss))
-        return {"val_loss": torch.tensor(self.val_loss, requires_grad=True)}
+        self.log("val_loss", torch.tensor(self.model.val_loss))
+        return {"val_loss": torch.tensor(self.model.val_loss, requires_grad=True)}
 
     def configure_optimizers(self):
         return torch.optim.Adam(self.parameters())
@@ -141,7 +159,8 @@ class TestTrainModel:
     # Model trains successfully with default parameters and saves checkpoints
     def test_model_trains(self, tmp_path):
         # Create mock model and dataset
-        model = MockModel(0.5, 0.3)
+        model_torch = MockTorchModel(0.5, 0.3)
+        model = MockModel(model_torch)
 
         test_file = tmp_path / "test.h5"
         data = get_dataset(20)
@@ -150,7 +169,7 @@ class TestTrainModel:
         dataset = SegmentationData(
             h5_path=test_file,
             batch_size=2,
-            batch_size_eval=1,
+            batch_size_eval=2,
             patch_size=(5, 5, 5),
             foreground_oversample_ratio=0.5,
             num_workers_train=0,
@@ -181,9 +200,11 @@ class TestTrainModel:
             precision="bf16-mixed",
             strategy="ddp",
             save_last_checkpoint=False,
+            num_sanity_val_steps=0,
         )
 
         assert checkpoint_dir.exists()
+        assert (checkpoint_dir / "torch-module.pt").exists()
         checkpoints = list(checkpoint_dir.glob("*.ckpt"))
         assert [
             i in checkpoints
@@ -197,7 +218,8 @@ class TestTrainModel:
     # Model trains successfully with default parameters and saves checkpoints
     def test_multiple_call_produces_different_model_checkpoints(self, tmp_path):
         # Create mock model and dataset
-        model = MockModel(0.5, 0.3)
+        model_torch = MockTorchModel(0.5, 0.3)
+        model = MockModel(model_torch)
 
         test_file = tmp_path / "test.h5"
         data = get_dataset(20)
@@ -206,7 +228,7 @@ class TestTrainModel:
         dataset = SegmentationData(
             h5_path=test_file,
             batch_size=2,
-            batch_size_eval=1,
+            batch_size_eval=2,
             patch_size=(5, 5, 5),
             foreground_oversample_ratio=0.5,
             num_workers_train=0,
@@ -238,12 +260,14 @@ class TestTrainModel:
                 precision="bf16-mixed",
                 strategy="ddp",
                 save_last_checkpoint=False,  # throws an error for multiple callbacks if true...
+                num_sanity_val_steps=2,
             )
 
         assert (log_dir / "test_exp").exists()
         for i in range(3):
             path = Path(f"{str(checkpoint_dir)}-{i}") if i > 0 else checkpoint_dir
             assert path.exists()
+            assert (path / "torch-module.pt").exists()
             checkpoints = list(path.glob("*.ckpt"))
             assert [
                 i in checkpoints
@@ -259,7 +283,7 @@ class TestTrainModels:
     # Train single model with valid model name and dataset
     def test_train_single_valid_model(self, tmp_path):
         def mock_get_model(_):
-            return MockModel
+            return MockTorchModel
 
         with patch("uncertainty.training.training.get_model", mock_get_model):
             with tempfile.NamedTemporaryFile() as tmp_file:
@@ -270,7 +294,7 @@ class TestTrainModels:
                 dataset = SegmentationData(
                     h5_path=tmp_file.name,
                     batch_size=2,
-                    batch_size_eval=1,
+                    batch_size_eval=2,
                     patch_size=(5, 5, 5),
                     foreground_oversample_ratio=0.5,
                     num_workers_train=0,
@@ -298,6 +322,7 @@ class TestTrainModels:
                     save_last_checkpoint=False,
                     mock__loss=0.5,
                     mock__val_loss=0.3,
+                    num_sanity_val_steps=2,
                 )
 
                 # Verify checkpoint directory exists
@@ -315,7 +340,7 @@ class TestTrainModels:
     def test_train_multiple_models_with_quantity_suffix(self, tmp_path):
         # Mock get_model to return MockModel
         def mock_get_model(_):
-            return MockModel
+            return MockTorchModel
 
         # Patch get_model function
         with patch("uncertainty.training.training.get_model", mock_get_model):
@@ -326,7 +351,7 @@ class TestTrainModels:
             dataset = SegmentationData(
                 h5_path=test_file,
                 batch_size=2,
-                batch_size_eval=1,
+                batch_size_eval=2,
                 patch_size=(5, 5, 5),
                 foreground_oversample_ratio=0.5,
                 num_workers_train=0,
@@ -359,6 +384,7 @@ class TestTrainModels:
                 save_last_checkpoint=False,
                 mock__loss=0.5,
                 mock__val_loss=0.3,
+                num_sanity_val_steps=2,
             )
 
             # Check if checkpoints are created for each model
@@ -377,7 +403,7 @@ class TestTrainModels:
     def test_train_different_model_type(self, tmp_path):
         # Mock get_model to return MockModel
         def mock_get_model(_):
-            return MockModel
+            return MockTorchModel
 
         # Patch get_model function
         with patch("uncertainty.training.training.get_model", mock_get_model):
@@ -388,7 +414,7 @@ class TestTrainModels:
             dataset = SegmentationData(
                 h5_path=test_file,
                 batch_size=2,
-                batch_size_eval=1,
+                batch_size_eval=2,
                 patch_size=(5, 5, 5),
                 foreground_oversample_ratio=0.5,
                 num_workers_train=0,
@@ -421,6 +447,7 @@ class TestTrainModels:
                 save_last_checkpoint=False,
                 mock__loss=0.5,
                 mock__val_loss=0.3,
+                num_sanity_val_steps=2,
             )
 
             def check_checkpoints(n_models, model_name):

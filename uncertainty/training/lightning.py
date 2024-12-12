@@ -39,6 +39,16 @@ class LitModel(lit.LightningModule):
     """
     Wrapper class for PyTorch models defining training and evaluation steps.
 
+    The PyTorch model must have the following attributes:
+    - `loss`: a loss function that takes `y_pred` and `y` as arguments.
+    - `optimiser`: a PyTorch optimiser.
+    - `lr_scheduler`: a PyTorch learning rate scheduler.
+    - `deep_supervision`: a boolean indicating whether the model uses deep supervision.
+
+    Additionally, the model must have a `forward` method that takes an input tensor `x`
+    and an optional argument `logits` that determines whether the output should be
+    logits or probabilities.
+
     Parameters
     ----------
     model : nn.Module

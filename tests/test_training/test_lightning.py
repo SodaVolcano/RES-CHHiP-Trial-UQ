@@ -136,6 +136,7 @@ class TestLitModel:
             precision="bf16-mixed",
             strategy="ddp",
             save_last_checkpoint=False,
+            num_sanity_val_steps=2,
         )
 
         assert checkpoint_dir.exists()

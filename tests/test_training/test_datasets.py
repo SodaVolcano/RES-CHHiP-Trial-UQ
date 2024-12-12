@@ -92,7 +92,7 @@ class TestRandomPatchDataset:
                 assert x.shape == (1, 4, 4, 4)
                 assert y.shape == (3, 4, 4, 4)
 
-            # Check that the same patch is not repeated
+            # Check that the same patch is not repeated (sometimes fail???)
             for i in range(len(buffer)):
                 for j in range(i + 1, len(buffer)):
                     assert not torch.all(buffer[i][0] == buffer[j][0])

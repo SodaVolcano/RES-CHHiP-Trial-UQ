@@ -96,6 +96,10 @@ training:
   running_loss_window: 10
   # Whether to dump x, y, and predictions from the model every n epochs
   dump_tensors_every_n_epochs: 50
+  # Perform validation check every n epochs, 0 to disable validation
+  check_val_every_n_epochs: 50
+  # Number of validation steps to run before starting training, 0 to disable.
+  num_sanity_val_steps: 2
 
   # ------------------ Trainer Settings ------------------
   # Specifies the distributed training strategy, see https://lightning.ai/docs/pytorch/stable/extensions/strategy.html

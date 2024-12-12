@@ -21,6 +21,7 @@ from sklearn.model_selection import KFold
 from sklearn.model_selection import train_test_split as sk_train_test_split
 from toolz import curried
 
+from uncertainty.training.lightning import LitModel
 from uncertainty.utils.path import next_available_path
 
 from ..config import auto_match_config
@@ -49,6 +50,7 @@ def train_model(
     n_batches_per_epoch: int,
     n_batches_val: int,
     check_val_every_n_epoch: int,
+    num_sanity_val_steps: int,
     precision: str,
     save_last_checkpoint: bool,
     strategy: str = "ddp",
@@ -58,6 +60,10 @@ def train_model(
 ):
     """
     Train a model and save checkpoints in `checkpoint_path`.
+
+    Model checkpoints are saved in the specified `checkpoint_path` directory. The `torch.nn.Module`
+    model is saved as `torch-module.pt` in the same directory. A checkpoint called `last.ckpt` is
+    saved at the end of training Logs are saved in `log_dir` under the `experiment_name` directory.
 
     If the checkpoint directory already exists, an integer is appended to the directory name.
 
@@ -85,6 +91,8 @@ def train_model(
         Number of batches to use during validation. Limits the validation set size for efficiency.
     check_val_every_n_epoch : int
         Frequency (in epochs) at which validation is performed. A value of 0 disables validation.
+    num_sanity_val_steps : int
+        Number of validation steps to run before training starts. 0 disables the sanity check.
     save_last : bool, optional
         Whether to save the final model checkpoint at the end of training, even if it's not the best-performing one. Default is `True`.
     strategy : str, optional
@@ -105,6 +113,9 @@ def train_model(
             f"Checkpoint path {checkpoint_path} already exists. Saving to {next_path} instead."
         )
         checkpoint_path = next_path
+
+    os.makedirs(checkpoint_path)
+    torch.save(model.model, Path(checkpoint_path) / "torch-module.pt")
 
     tb_logger = TensorBoardLogger(save_dir=log_dir, name=experiment_name)
 
@@ -130,7 +141,7 @@ def train_model(
         max_epochs=n_epochs,
         limit_train_batches=n_batches_per_epoch,
         limit_val_batches=n_batches_val if run_validation else 0,
-        num_sanity_val_steps=0 if not run_validation else 2,
+        num_sanity_val_steps=num_sanity_val_steps,
         callbacks=(
             [checkpoint, checkpoint_last] if save_last_checkpoint else [checkpoint]
         ),
@@ -205,7 +216,7 @@ def train_models(
         unpacked_map(
             lambda model_fn, model_path: (
                 train_model(
-                    model_fn(**kwargs),
+                    LitModel(model=model_fn(**kwargs), **kwargs),
                     dataset,
                     checkpoint_path=checkpoint_dir / model_path,
                     experiment_name=experiment_name,
