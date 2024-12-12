@@ -12,6 +12,7 @@ from typing import Callable, Iterable, Sequence, TypedDict
 
 import lightning
 import toolz as tz
+import torch
 from lightning import Trainer, seed_everything
 from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch.loggers import TensorBoardLogger
@@ -19,6 +20,8 @@ from loguru import logger
 from sklearn.model_selection import KFold
 from sklearn.model_selection import train_test_split as sk_train_test_split
 from toolz import curried
+
+from uncertainty.utils.path import next_available_path
 
 from ..config import auto_match_config
 from ..models import get_model
@@ -54,7 +57,9 @@ def train_model(
     enable_model_summary: bool = True,
 ):
     """
-    Train a model and save checkpoints in `<checkpoint_path>/<experiment_name>/<model_classname_lowercase>[-<int>]`.
+    Train a model and save checkpoints in `checkpoint_path`.
+
+    If the checkpoint directory already exists, an integer is appended to the directory name.
 
     Parameters
     ----------
@@ -94,6 +99,12 @@ def train_model(
         Whether to print a model summary before training starts.
     """
     run_validation = check_val_every_n_epoch > 0
+
+    if (next_path := next_available_path(checkpoint_path)) != checkpoint_path:
+        logger.warning(
+            f"Checkpoint path {checkpoint_path} already exists. Saving to {next_path} instead."
+        )
+        checkpoint_path = next_path
 
     tb_logger = TensorBoardLogger(save_dir=log_dir, name=experiment_name)
 
@@ -251,7 +262,7 @@ def split_into_folds[
 
 
 @logger_wraps(level="INFO")
-def write_training_fold_file(
+def write_fold_splits_file(
     path: str | Path,
     fold_indices: Iterable[tuple[list[int], list[int]]],
     seed: bool = True,
@@ -291,7 +302,7 @@ def write_training_fold_file(
         pickle.dump(content, f)
 
 
-def read_training_fold_file(
+def read_fold_splits_file(
     path: str | Path,
     fold: int | None = None,
 ) -> (
@@ -412,13 +423,19 @@ def init_training_dir(
     # Perform k-fold split if not already done
     if not os.path.exists(data_split_path := train_dir / "validation-fold-splits.pkl"):
         fold_indices = split_into_folds(dataset_indices, n_folds)
-        write_training_fold_file(data_split_path, fold_indices)  # type: ignore
+        write_fold_splits_file(data_split_path, fold_indices)  # type: ignore
 
     # Create checkpoint folders for each fold
     fold_dirs = [train_dir / f"fold_{i}" for i in range(n_folds)]
     for fold in fold_dirs:
         fold.mkdir(exist_ok=True)
     return config_copy_path, data_split_path, fold_dirs
+
+
+def load_checkpoint(
+    ckpt_dir: str,
+):
+    pass
 
 
 # def load_checkpoint(

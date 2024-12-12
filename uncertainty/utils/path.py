@@ -109,13 +109,13 @@ def resolve_path_placeholders(path_pattern: str, placeholders: list[str]) -> lis
 
 def next_available_path(path: str | Path) -> Path:
     """
-    Appends an integer suffix "-<int>" to the given path if it already exists.
+    Appends an integer suffix "-<int>" to the given path if it already exists, starting at 1.
     """
     if not os.path.exists(path):
         return Path(path)
 
     base, ext = os.path.splitext(path)
     counter = iterate_while(
-        lambda count: count + 1, lambda count: os.path.exists(f"{base}-{count}{ext}"), 0
+        lambda count: count + 1, lambda count: os.path.exists(f"{base}-{count}{ext}"), 1
     )
     return Path(f"{base}-{counter}{ext}")

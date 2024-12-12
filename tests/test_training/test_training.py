@@ -15,7 +15,7 @@ from uncertainty.config import auto_match_config
 from ..context import data, training
 
 split_into_folds = training.split_into_folds
-write_training_fold_file = training.write_training_fold_file
+write_training_fold_file = training.write_fold_splits_file
 train_model = training.train_model
 train_models = training.train_models
 SegmentationData = training.SegmentationData
@@ -193,6 +193,65 @@ class TestTrainModel:
             ]
         ]
         assert (log_dir / "test_exp").exists()
+
+    # Model trains successfully with default parameters and saves checkpoints
+    def test_multiple_call_produces_different_model_checkpoints(self, tmp_path):
+        # Create mock model and dataset
+        model = MockModel(0.5, 0.3)
+
+        test_file = tmp_path / "test.h5"
+        data = get_dataset(20)
+        save_scans_to_h5(data, test_file)
+
+        dataset = SegmentationData(
+            h5_path=test_file,
+            batch_size=2,
+            batch_size_eval=1,
+            patch_size=(5, 5, 5),
+            foreground_oversample_ratio=0.5,
+            num_workers_train=0,
+            num_workers_val=0,
+            prefetch_factor_train=None,
+            prefetch_factor_val=None,
+            # batch_augmentations=tz.identity,
+        )
+        log_dir = Path(tmp_path) / "logs"
+        checkpoint_dir = Path(tmp_path) / "checkpoints"
+
+        # Train models
+        for _ in range(3):
+            train_model(
+                model=model,
+                dataset=dataset,
+                log_dir=log_dir,
+                experiment_name="test_exp",
+                checkpoint_path=checkpoint_dir,
+                checkpoint_name="{epoch:03d}-{val_loss:.4f}",
+                checkpoint_every_n_epochs=1,
+                n_epochs=2,
+                n_batches_per_epoch=2,
+                n_batches_val=2,
+                check_val_every_n_epoch=1,
+                accelerator="cpu",
+                enable_progress_bar=True,
+                enable_model_summary=False,
+                precision="bf16-mixed",
+                strategy="ddp",
+                save_last_checkpoint=False,  # throws an error for multiple callbacks if true...
+            )
+
+        assert (log_dir / "test_exp").exists()
+        for i in range(3):
+            path = Path(f"{str(checkpoint_dir)}-{i}") if i > 0 else checkpoint_dir
+            assert path.exists()
+            checkpoints = list(path.glob("*.ckpt"))
+            assert [
+                i in checkpoints
+                for i in [
+                    "epoch=000-val_loss=0.3000.ckpt",
+                    "epoch=001-val_loss=0.3000.ckpt",
+                ]
+            ]
 
 
 class TestTrainModels:

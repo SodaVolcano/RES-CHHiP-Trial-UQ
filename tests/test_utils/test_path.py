@@ -257,7 +257,7 @@ class TestNextAvailablePath:
 
         result = next_available_path(test_path)
 
-        assert result == Path("/test/path/file-0")
+        assert result == Path("/test/path/file-1")
 
     # Returns path with incremented suffix when previous suffixed paths exist
     def test_incremented_suffix_for_existing_paths(self, mocker):
@@ -278,10 +278,10 @@ class TestNextAvailablePath:
         # Mock os.path.exists to simulate existing files
         with mock.patch("os.path.exists") as mock_exists:
             # Simulate that 'file.txt' and 'file-1.txt' exist
-            mock_exists.side_effect = lambda path: path in ["file", "file-0"]
+            mock_exists.side_effect = lambda path: path in ["file", "file-1"]
 
             # Call the function with a path that has an extension
             result = next_available_path("file")
 
             # Assert that the function returns the next available path with the correct extension
-            assert result == Path("file-1")
+            assert result == Path("file-2")

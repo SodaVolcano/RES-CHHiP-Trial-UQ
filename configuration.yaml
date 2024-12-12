@@ -147,7 +147,7 @@ training:
   # How many subprocesses for data loading (training and validation set)
   # Set to 0 to load data in the main process (prefetch_factors must be None)
   num_workers_train: 8
-  num_workers_val: 4
+  num_workers_val: 8
   # Number of batches loaded in advance across all workers
   # e.g. factor = 2 means total_batch = 2 * n_workers
   prefetch_factor_train: 1

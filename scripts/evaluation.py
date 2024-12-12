@@ -15,7 +15,6 @@ import h5py
 import torch
 from kornia.augmentation import RandomAffine3D
 from loguru import logger
-from tqdm import tqdm
 
 from scripts.__helpful_parser import HelpfulParser
 from uncertainty.data.h5 import load_xy_from_h5

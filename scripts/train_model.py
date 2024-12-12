@@ -1,5 +1,5 @@
 """
-Train model(s) on a dataset h5 files.
+Train model(s) on a h5 dataset.
 
 usage - training a single unet model on fold 0:
     uv run python3 path/to/train_model.py --fold 0 unet
@@ -9,26 +9,25 @@ usage - training 3 unet models and 1 confidnet on all folds:
     uv run python3 path/to/train_model.py unet_3 confidnet
 """
 
-from pathlib import Path
 import sys
+from pathlib import Path
 
 import torch
-from loguru import logger
-
 from __helpful_parser import HelpfulParser
+from loguru import logger
 
 sys.path.append("..")
 sys.path.append(".")
 
 from uncertainty import configuration
-from uncertainty.utils import config_logger
 from uncertainty.training import (
     H5Dataset,
     SegmentationData,
     init_training_dir,
-    read_training_fold_file,
+    read_fold_splits_file,
     train_models,
 )
+from uncertainty.utils import config_logger
 
 
 def train_one_fold(
@@ -39,9 +38,7 @@ def train_one_fold(
     fold_split_path: str | Path,
     ckpt_path: str | Path,
 ):
-    train_indices, val_indices, seed = read_training_fold_file(
-        fold_split_path, fold_idx
-    )
+    train_indices, val_indices, seed = read_fold_splits_file(fold_split_path, fold_idx)
     dataset = SegmentationData(
         h5_path,
         train_indices=train_indices,  # type: ignore
