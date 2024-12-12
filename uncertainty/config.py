@@ -6,6 +6,7 @@ A configuration object is a dictionary where each key has the format <prefix>__<
 """
 
 import inspect
+from pathlib import Path
 import re
 import sys
 from functools import cache, reduce, wraps
@@ -79,14 +80,14 @@ def _strs_to_torch_modules(config: dict, prefix: str) -> dict:
 
 
 @cache
-def data_config(config_path: str = "configuration.yaml") -> dict:
+def data_config(config_path: str | Path = "configuration.yaml") -> dict:
     with open(config_path, "r") as file:
         config = yaml.safe_load(file)
     return _with_prefix("data", config["data"])
 
 
 @cache
-def unet_config(config_path: str = "configuration.yaml") -> dict:
+def unet_config(config_path: str | Path = "configuration.yaml") -> dict:
     with open(config_path, "r") as file:
         config = yaml.safe_load(file)
 
@@ -95,7 +96,7 @@ def unet_config(config_path: str = "configuration.yaml") -> dict:
     return _with_prefix("unet", config["unet"])
 
 
-def confidnet_config(config_path: str = "configuration.yaml") -> dict:
+def confidnet_config(config_path: str | Path = "configuration.yaml") -> dict:
     with open(config_path, "r") as file:
         config = yaml.safe_load(file)
     config = _strs_to_torch_modules(config, "confidnet")
@@ -103,7 +104,7 @@ def confidnet_config(config_path: str = "configuration.yaml") -> dict:
 
 
 @cache
-def logger_config(config_path: str = "configuration.yaml") -> dict:
+def logger_config(config_path: str | Path = "configuration.yaml") -> dict:
     with open(config_path, "r") as file:
         config = yaml.safe_load(file)
     config = config["logger"]
@@ -119,14 +120,14 @@ def logger_config(config_path: str = "configuration.yaml") -> dict:
 
 
 @cache
-def training_config(config_path: str = "configuration.yaml") -> dict:
+def training_config(config_path: str | Path = "configuration.yaml") -> dict:
     with open(config_path, "r") as file:
         config = yaml.safe_load(file)
 
     return _with_prefix("training", config["training"])
 
 
-def configuration(config_path: str = "configuration.yaml") -> dict:
+def configuration(config_path: str | Path = "configuration.yaml") -> dict:
     """
     The entire configuration for the project
     """

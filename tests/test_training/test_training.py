@@ -14,7 +14,8 @@ from uncertainty.config import auto_match_config
 from ..context import data, training
 
 split_into_folds = training.split_into_folds
-write_training_fold_file = training.write_fold_splits_file
+write_fold_splits_file = training.write_fold_splits_file
+read_fold_splits_file = training.read_fold_splits_file
 train_model = training.train_model
 train_models = training.train_models
 SegmentationData = training.SegmentationData
@@ -132,26 +133,22 @@ class TestSplitIntoFolds:
         assert splits[0] == expected
 
 
-class TestWriteTrainingFoldFile:
+class TestWriteFoldSplitsFile:
 
-    # Function successfully writes fold indices to file with default seed=True
-    def test_write_fold_indices_with_seed(self):
+    # Function successfully writes fold indices to file
+    def test_write_fold_indices(self):
         fold_indices = list(split_into_folds(range(5, 15), 5, return_indices=True))
         with tempfile.NamedTemporaryFile() as tmp:
             path = tmp.name
 
-            write_training_fold_file(path, fold_indices, force=True)  # type: ignore
-
-            with open(path, "rb") as f:
-                content = pickle.load(f)
+            write_fold_splits_file(path, fold_indices, force=True)  # type: ignore
+            content = read_fold_splits_file(path)
 
             assert len(content) == 5
             for i in range(5):
                 assert f"fold_{i}" in content
                 assert content[f"fold_{i}"]["train"] == fold_indices[i][0]
                 assert content[f"fold_{i}"]["val"] == fold_indices[i][1]
-                assert "seed" in content[f"fold_{i}"]
-                assert isinstance(content[f"fold_{i}"]["seed"], int)
 
 
 class TestTrainModel:
@@ -508,10 +505,10 @@ class TestInitTrainingDir:
         config_path.write_text("test config")
 
         train_dir = tmp_path / "training"
-        dataset = list(range(10))
+        dataset = list(range(40))
 
         # Call function
-        config_copy, split_path, fold_dirs = init_training_dir(
+        config_copy, train_test_path, folds_path, fold_dirs = init_training_dir(
             train_dir=train_dir,
             config_path=config_path,
             dataset_indices=dataset,
@@ -526,6 +523,22 @@ class TestInitTrainingDir:
         assert (train_dir / "validation-fold-splits.pkl").exists()
         assert len(fold_dirs) == 3
         assert all(d.exists() for d in fold_dirs)
+
+        # test that training indices do not overlap with validation indices
+        split_dict = read_fold_splits_file(folds_path)
+        assert isinstance(split_dict, dict)
+        with open(train_test_path, "rb") as f:
+            train_indices, test_indices = pickle.load(f)
+
+        assert set(train_indices).isdisjoint(set(test_indices))
+
+        for fold in split_dict.values():
+            assert set(fold["train"]).isdisjoint(set(fold["val"]))
+            assert set(fold["train"]).isdisjoint(set(test_indices))
+            assert set(fold["val"]).isdisjoint(set(test_indices))
+
+            # check that indices are from original train_indices
+            assert set(fold["train"]).union(set(fold["val"])) == set(train_indices)
 
     # Handles existing training directory without overwriting
     def test_handles_existing_dir(self, tmp_path):

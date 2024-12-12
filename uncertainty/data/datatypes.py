@@ -1,9 +1,9 @@
 """
-Datatype definitions for masks and patient scans
+Datatype definitions for patient scans and masks.
 """
 
 from datetime import date
-from typing import Annotated, TypedDict
+from typing import Annotated, Iterable, TypedDict
 
 import numpy as np
 

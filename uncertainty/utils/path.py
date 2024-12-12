@@ -19,7 +19,7 @@ from .wrappers import curry
 @curry
 def list_files(path: str, list_hidden: bool = False) -> list[str]:
     """
-    Return list of files in a given path
+    Return list of files in a given path, searching through subdirectories
 
     Parameters
     ----------
