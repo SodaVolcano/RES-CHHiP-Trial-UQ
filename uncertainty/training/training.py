@@ -2,10 +2,10 @@
 Functions for managing training, such as checkpointing and data splitting.
 """
 
-import re
 import os
 import pickle
 import random
+import re
 import shutil
 from pathlib import Path
 from typing import Callable, Iterable, Sequence, TypedDict
@@ -21,14 +21,17 @@ from sklearn.model_selection import KFold
 from sklearn.model_selection import train_test_split as sk_train_test_split
 from toolz import curried
 
-from ..training import LitModel
-from ..utils import list_files, next_available_path
-
 from ..config import auto_match_config, configuration
 from ..models import get_model
-from ..utils import logger_wraps, unpack_args, unpacked_map
+from ..training import LitModel
+from ..utils import (
+    list_files,
+    logger_wraps,
+    next_available_path,
+    unpack_args,
+    unpacked_map,
+)
 from .datasets import SegmentationData
-
 
 DataSplitDict = TypedDict("DataSplitDict", {"train": list[int], "val": list[int]})
 FoldSplitsDict = dict[str, DataSplitDict]
@@ -449,8 +452,8 @@ def load_model(checkpoint_path: Path | str) -> LitModel:
 
 
 def load_models(
-    checkpoint_dir: str, name_regex: str = "last.ckpt"
-) -> Iterable[LitModel]:
+    checkpoint_dir: str, checkpoint_regex: str = "last.ckpt"
+) -> dict[str, LitModel]:
     """
     Load multiple `LitModel` from a directory containing multiple checkpoints.
 
@@ -459,81 +462,106 @@ def load_models(
     checkpoint_dir : str
         The path to the directory containing the model checkpoints. The checkpoints
         can be in subdirectories.
-    name_regex : str, optional
+    checkpoint_regex : str, optional
         The regex pattern to match the checkpoint filenames. Defaults to "last.ckpt".
+
+    Returns
+    -------
+    dict[str, LitModel]
+        A dictionary containing the folder name and the corresponding `LitModel`
+        loaded from the checkpoint in the folder.
     """
     return tz.pipe(
         checkpoint_dir,
         list_files,
-        curried.filter(lambda fname: re.match(name_regex, os.path.basename(fname))),
-        curried.map(load_model),
+        curried.filter(
+            lambda fname: re.match(checkpoint_regex, os.path.basename(fname))
+        ),
+        lambda ckpt_file_paths: {
+            os.path.dirname(f): load_model(f) for f in ckpt_file_paths
+        },
     )  # type: ignore
 
 
 def load_training_dir(
     train_dir: str | Path,
-):
+    checkpoint_regex: str = "last.ckpt",
+) -> tuple[dict, FoldSplitsDict, tuple[list[int], list[int]], TrainDirDict]:
+    """
+    Load the configuration, data splits, train and test indices, and model checkpoints from training directory.
+
+    The training directory is created by `init_training_dir` and contains:
+    - `configuration.yaml`: the configuration file used for training
+    - `train-test-split.pkl`: the indices for the training and test sets, produced
+        using `uncertainty.trianing.train_test_split()`
+    - `validation-fold-splits.pkl`: the indices for the training and validation sets for each fold,
+        produced using `uncertainty.training.split_into_folds()`
+    - `fold_<int>`: directories for each validation fold, each containing model directories named in
+        the format `<model_name>-<int>`, which contain the model checkpoints.
+
+    Parameters
+    ----------
+    train_dir : str | Path
+        The path to the training directory.
+    checkpoint_regex : str, optional
+        The regex pattern to match and identify which checkpoint file to load
+        from the checkpoint directories. Defaults to "last.ckpt".
+
+    Returns
+    -------
+    tuple[dict, FoldSplitsDict, tuple[list[int], list[int]], TrainDirDict]
+        A tuple containing:
+        - the configuration dictionary
+        - the fold splits dictionary containing train and validation indices
+          for each fold of the form `{'fold_0': {'train': [...], 'val': [...]}, ...}`
+        - the training and test set indices, where the traning indices are used to
+          form the folds in the fold splits dictionary (and hence may not be needed)
+        - a dictionary containing the model names and the corresponding list of `LitModel`
+          with same length as the number of folds, where the i-th model in the list is the
+          model trained in the i-th fold. The dictionary is in the format
+            `{'model1': [LitModel1, LitModel1, ...], 'model2': [LitModel2, LitModel2, ...], ...}`
+    """
+
+    def _collect_models_fold_wise(folds_dict: dict[str, dict[str, LitModel]]):
+        """
+        Given dict with list of models per fold in format
+            {'fold_0': {'model1': LitModel1, 'model2': LitModel2}, 'fold_1': {...}},
+        product dict in format
+            {'model1': [LitModel1, LitModel1, ...], 'model2': [LitModel2, LitModel2, ...], ...}
+        where model names are keys, and list of models (with that name) across folds are values
+        and i-th model in the list is the model in the i-th fold.
+        """
+        return tz.merge_with(
+            unpack_args(
+                lambda head, model2: (
+                    [head] + [model2] if not isinstance(head, list) else head + [model2]
+                )
+            ),
+            folds_dict.values(),
+        )
+
     train_dir = Path(train_dir)
     config = configuration(train_dir / "configuration.yaml")
     data_split = read_fold_splits_file(train_dir / "validation-fold-splits.pkl")
+    assert isinstance(data_split, dict)
 
     with open(train_dir / "train-test-split.pkl", "rb") as f:
         train_indices, test_indices = pickle.load(f)
 
-    # Load configuration file
-    # Load test-train split file
-    # Load fold splits file
-    # Load checkpoint folders
-    #   {
-    #      model_name: Iterable[LitModel]   (across each fold)
-    #      ...
-    # }
-
-
-# def checkpoint_dir_type(
-#     path,
-#     required_files: list[str] | set[str] = ["latest.ckpt", "indices.pt", "config.pkl"],
-# ) -> Literal["single", "multiple", "invalid"]:
-#     """
-#     Return type of the checkpoint directory - "single", "multiple", or "invalid"
-
-#     This function returns if the given directory contains a single model's checkpoint or
-#     folders of model checkpoints. "single" is defined as a folder with at least the
-#     required files while "multiple" is defined as a directory without the required files,
-#     but have directories that **all** have the required files.
-
-#     Parameters
-#     ----------
-#     path : str
-#         The path to the checkpoint directory to be validated.
-
-#     Returns
-#     -------
-#     Literal["single", "multiple", "invalid"]
-#         'single' if all required files are found in the main directory,
-#         'multiple' if required files are found in subdirectories,
-#         and "invalid" if otherwise.
-#     """
-#     required_files = set(required_files)
-
-#     if not os.path.isdir(path):
-#         logger.critical(f"The path {path} is not a valid directory.")
-#         return "invalid"
-
-#     if required_files.issubset(os.listdir(path)):
-#         return "single"
-
-#     subdir_paths = [os.path.join(path, entry) for entry in os.listdir(path)]
-#     bad_dirs = list(
-#         filter(
-#             lambda x: not (os.path.isdir(x) and required_files.issubset(os.listdir(x))),
-#             subdir_paths,
-#         )
-#     )
-#     if not len(bad_dirs) == 0:
-#         logger.critical(
-#             f"Folders of checkpoint detected but the following folder have bad structure: {bad_dirs}"
-#         )
-#         return "invalid"
-
-#     return "multiple"
+    checkpoints = tz.pipe(
+        train_dir,
+        os.listdir,
+        curried.filter(
+            lambda fname: re.match(r"fold_\d+", fname) and os.path.isdir(fname)
+        ),
+        curried.sorted(key=lambda x: int(x.split("-")[1])),  # sort by fold number
+        lambda fold_dirs: {
+            fold: load_models(train_dir / fold, checkpoint_regex) for fold in fold_dirs
+        },
+        # strip the "-<int>" prefix from model names
+        curried.valmap(
+            lambda models_dict: tz.keymap(lambda k: k.split("-")[0], models_dict)
+        ),
+        _collect_models_fold_wise,
+    )
+    return config, data_split, (train_indices, test_indices), checkpoints

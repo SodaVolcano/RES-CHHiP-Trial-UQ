@@ -6,10 +6,10 @@ A configuration object is a dictionary where each key has the format <prefix>__<
 """
 
 import inspect
-from pathlib import Path
 import re
 import sys
 from functools import cache, reduce, wraps
+from pathlib import Path
 from typing import Callable
 
 import toolz as tz

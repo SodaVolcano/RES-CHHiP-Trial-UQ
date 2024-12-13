@@ -2,6 +2,9 @@ from .datasets import H5Dataset, RandomPatchDataset, SegmentationData
 from .lightning import LitModel
 from .training import (
     init_training_dir,
+    load_model,
+    load_models,
+    load_training_dir,
     read_fold_splits_file,
     split_into_folds,
     train_model,

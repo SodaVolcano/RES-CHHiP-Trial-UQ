@@ -4,6 +4,7 @@ from .augmentations import (
     inverse_affine_transform,
     torchio_augmentations,
 )
+from .datatypes import MaskDict, PatientScan, PatientScanPreprocessed
 from .dicom import (
     load_all_masks,
     load_all_patient_scans,
@@ -13,7 +14,6 @@ from .dicom import (
     load_volume,
 )
 from .h5 import load_scans_from_h5, save_scans_to_h5
-from .datatypes import PatientScan, PatientScanPreprocessed, MaskDict
 from .processing import (
     crop_to_body,
     ensure_min_size,

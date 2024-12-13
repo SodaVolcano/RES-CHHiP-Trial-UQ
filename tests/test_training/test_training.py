@@ -22,6 +22,10 @@ SegmentationData = training.SegmentationData
 save_scans_to_h5 = data.save_scans_to_h5
 train_test_split = training.train_test_split
 init_training_dir = training.init_training_dir
+LitModel = training.LitModel
+load_model = training.load_model
+load_models = training.load_models
+load_training_dir = training.load_training_dir
 
 
 def get_dataset(n: int = 2):
@@ -566,3 +570,118 @@ class TestInitTrainingDir:
         # Verify function returns None and doesn't overwrite
         assert result is None
         assert existing_config.read_text() == "existing config"
+
+
+# class TestLoadModel:
+
+#     # Successfully loads LitModel from valid checkpoint path with corresponding torch-module.pt
+#     def test_load_model_valid_checkpoint(self, tmp_path):
+#         # Create mock checkpoint files
+#         checkpoint_dir = Path(tmp_path)
+#         checkpoint_path = checkpoint_dir / "model.ckpt"
+#         torch_module_path = checkpoint_dir / "torch-module.pt"
+
+#         # Create mock model and save
+#         base_model = MockTorchModel(loss=0.5, val_loss=0.3)
+#         torch.save(base_model, torch_module_path)
+
+#         # Create mock checkpoint
+#         lit_model = LitModel(model=base_model)
+#         lit_model.save_checkpoint(checkpoint_path)
+
+#         # Load model
+#         loaded_model = load_model(checkpoint_path)
+
+#         # Verify loaded model
+#         assert isinstance(loaded_model, LitModel)
+#         assert isinstance(loaded_model.model, MockTorchModel)
+
+
+# class TestLoadModels:
+
+#     # Successfully loads multiple LitModels from checkpoints matching default regex pattern
+#     def test_load_multiple_models_default_pattern(self, tmp_path):
+#         # Create mock checkpoints
+#         checkpoint_dir = tmp_path / "checkpoints"
+#         checkpoint_dir.mkdir()
+
+#         model_dirs = ["model1", "model2"]
+#         for model_dir in model_dirs:
+#             model_path = checkpoint_dir / model_dir
+#             model_path.mkdir()
+
+#             # Create mock torch module
+#             torch_module = MockTorchModel(0.5, 0.3)
+#             torch.save(torch_module, model_path / "torch-module.pt")
+
+#             # Create mock checkpoint
+#             checkpoint = {"state_dict": {}}
+#             torch.save(checkpoint, model_path / "last.ckpt")
+
+#         # Test loading models
+#         loaded_models = load_models(str(checkpoint_dir))
+
+#         assert len(loaded_models) == 2
+#         assert all(model_dir in loaded_models for model_dir in model_dirs)
+
+
+# class TestLoadTrainingDir:
+
+#     # Successfully loads configuration, data splits, indices and checkpoints from valid training directory
+#     def test_load_valid_training_dir(self, tmp_path):
+#         # Setup test data
+#         config_path = tmp_path / "configuration.yaml"
+#         config_path.write_text("test config")
+
+#         train_dir = tmp_path / "training"
+#         dataset = list(range(40))
+
+#         # Call function
+#         config_copy, train_test_path, folds_path, fold_dirs = init_training_dir(
+#             train_dir=train_dir,
+#             config_path=config_path,
+#             dataset_indices=dataset,
+#             n_folds=3,
+#             test_split=0.2,
+#         )  # type: ignore
+
+
+#         # Create temporary training directory structure
+#         train_dir = Path(tmp_path) / "train_dir"
+#         train_dir.mkdir()
+
+#         # Create config file
+#         shutil.copy("configuration.yaml", train_dir / "configuration.yaml")
+
+#         # Create validation fold splits
+#         fold_splits = {
+#             "fold_0": {"train": [0,1,2], "val": [3,4]},
+#             "fold_1": {"train": [0,1,3], "val": [2,4]}
+#         }
+#         with open(train_dir / "validation-fold-splits.pkl", "wb") as f:
+#             pickle.dump(fold_splits, f)
+
+#         # Create train-test split
+#         train_test = ([0,1,2,3,4], [5,6,7,8,9])
+#         with open(train_dir / "train-test-split.pkl", "wb") as f:
+#             pickle.dump(train_test, f)
+
+#         # Create fold directories with checkpoints
+#         for fold in ["fold_0", "fold_1"]:
+#             fold_dir = train_dir / fold
+#             fold_dir.mkdir()
+#             for model in ["unet-0", "unet-1"]:
+#                 model_dir = fold_dir / model
+#                 model_dir.mkdir()
+#                 # Create dummy checkpoint
+#                 Path(model_dir / "last.ckpt").touch()
+
+#         # Load training directory
+#         config, splits, indices, models = load_training_dir(train_dir)
+
+#         # Verify outputs
+#         assert isinstance(config, dict)
+#         assert splits == fold_splits
+#         assert indices == train_test
+#         assert list(models.keys()) == ["unet"]
+#         assert len(models["unet"]) == 2

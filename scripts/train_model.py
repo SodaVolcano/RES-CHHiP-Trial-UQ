@@ -66,7 +66,7 @@ def setup(h5_path: str, train_dir: str, config_path: str, config: dict):
     assert (
         res != None
     ), f"Failed to initialise training directory, specified configuration file at {config_path} already exist in training directory!"
-    _, fold_split_path, checkpoint_paths = res
+    _, train_test_path, fold_split_path, fold_dirs = res
     return fold_split_path, checkpoint_paths
 
 
