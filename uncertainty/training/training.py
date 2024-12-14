@@ -36,7 +36,7 @@ from .datasets import SegmentationData
 
 DataSplitDict = TypedDict("DataSplitDict", {"train": list[int], "val": list[int]})
 FoldSplitsDict = dict[str, DataSplitDict]
-TrainDirDict = dict[str, Iterable[LitModel]]
+TrainDirDict = dict[str, dict[str, Iterable[LitModel]]]
 
 
 @auto_match_config(prefixes=["training", "data"])
@@ -516,30 +516,10 @@ def load_training_dir(
           for each fold of the form `{'fold_0': {'train': [...], 'val': [...]}, ...}`
         - the training and test set indices, where the traning indices are used to
           form the folds in the fold splits dictionary (and hence may not be needed)
-        - a dictionary containing the model names and the corresponding list of `LitModel`
-          with same length as the number of folds, where the i-th model in the list is the
-          model trained in the i-th fold. The dictionary is in the format
-            `{'model1': [LitModel1, LitModel1, ...], 'model2': [LitModel2, LitModel2, ...], ...}`
+        - a dictionary containing fold names as the keys and a dictionary of
+          `(model_names, LitModel)` pairs as the values. The dictionary is in the format
+            `{'fold_0': {'model1': LitModel, 'model2': LitModel, ...}, 'fold_1': {...}, ...}`
     """
-
-    def _collect_models_fold_wise(folds_dict: dict[str, dict[str, LitModel]]):
-        """
-        Given dict with list of models per fold in format
-            {'fold_0': {'model1': LitModel1, 'model2': LitModel2}, 'fold_1': {...}},
-        product dict in format
-            {'model1': [LitModel1, LitModel1, ...], 'model2': [LitModel2, LitModel2, ...], ...}
-        where model names are keys, and list of models (with that name) across folds are values
-        and i-th model in the list is the model in the i-th fold.
-        """
-        merge_dicts = lambda dict1, dict2: tz.merge_with(
-            unpack_args(
-                lambda head, model2: (
-                    [head] + [model2] if not isinstance(head, list) else head + [model2]
-                )
-            ),
-            [dict1, dict2],
-        )
-        return reduce(merge_dicts, folds_dict.values())
 
     train_dir = Path(train_dir)
     config = configuration(train_dir / "configuration.yaml")
@@ -560,6 +540,5 @@ def load_training_dir(
         lambda fold_dirs: {
             fold: load_models(train_dir / fold, checkpoint_regex) for fold in fold_dirs
         },
-        _collect_models_fold_wise,
     )
     return config, data_split, (train_indices, test_indices), checkpoints  # type: ignore

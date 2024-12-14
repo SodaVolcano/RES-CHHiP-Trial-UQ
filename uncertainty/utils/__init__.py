@@ -1,4 +1,5 @@
 from .common import *
+from .dict import *
 from .logging import *
 from .parallel import *
 from .path import *
@@ -23,4 +24,5 @@ __all__ = [
     "curry",
     "pmap",
     "next_available_path",
+    "merge_with_reduce",
 ]
