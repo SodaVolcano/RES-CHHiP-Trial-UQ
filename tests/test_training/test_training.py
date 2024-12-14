@@ -773,7 +773,7 @@ class TestLoadTrainingDir:
         assert len(train_test[0]) == 16
         assert len(train_test[1]) == 4
 
-        assert set(checkpoints.keys()) == set(["unet", "notunet"])
+        assert set(checkpoints.keys()) == set(["unet", "notunet-1", "notunet-0"])
         assert all(len(list(v)) == 3 for v in checkpoints.values())
         assert all(
             all(isinstance(m, LitModel) for m in v) for v in checkpoints.values()

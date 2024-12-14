@@ -497,8 +497,7 @@ def load_training_dir(
         using `uncertainty.trianing.train_test_split()`
     - `validation-fold-splits.pkl`: the indices for the training and validation sets for each fold,
         produced using `uncertainty.training.split_into_folds()`
-    - `fold_<int>`: directories for each validation fold, each containing model directories named in
-        the format `<model_name>-<int>`, which contain the model checkpoints.
+    - `fold_<int>`: directories for each validation fold, each containing directories with model checkpoints.
 
     Parameters
     ----------
@@ -561,10 +560,6 @@ def load_training_dir(
         lambda fold_dirs: {
             fold: load_models(train_dir / fold, checkpoint_regex) for fold in fold_dirs
         },
-        # strip the "-<int>" prefix from model names
-        curried.valmap(
-            lambda models_dict: tz.keymap(lambda k: k.split("-")[0], models_dict)
-        ),
         _collect_models_fold_wise,
     )
-    return config, data_split, (train_indices, test_indices), checkpoints
+    return config, data_split, (train_indices, test_indices), checkpoints  # type: ignore
