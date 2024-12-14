@@ -83,7 +83,7 @@ def _strs_to_torch_modules(config: dict, prefix: str) -> dict:
 def data_config(config_path: str | Path = "configuration.yaml") -> dict:
     with open(config_path, "r") as file:
         config = yaml.safe_load(file)
-    return _with_prefix("data", config["data"])
+    return _with_prefix("data", config["data"]) if "data" in config else {}
 
 
 @cache
@@ -93,30 +93,33 @@ def unet_config(config_path: str | Path = "configuration.yaml") -> dict:
 
     config = _strs_to_torch_modules(config, "unet")
 
-    return _with_prefix("unet", config["unet"])
+    return _with_prefix("unet", config["unet"]) if "unet" in config else {}
 
 
 def confidnet_config(config_path: str | Path = "configuration.yaml") -> dict:
     with open(config_path, "r") as file:
         config = yaml.safe_load(file)
     config = _strs_to_torch_modules(config, "confidnet")
-    return _with_prefix("confidnet", config["confidnet"])
+    return (
+        _with_prefix("confidnet", config["confidnet"]) if "confidnet" in config else {}
+    )
 
 
 @cache
 def logger_config(config_path: str | Path = "configuration.yaml") -> dict:
     with open(config_path, "r") as file:
         config = yaml.safe_load(file)
-    config = config["logger"]
 
     # Replace string with corresponding file object if present
     mapping = {"stdout": sys.stdout, "stderr": sys.stderr}
-    config["sink"] = mapping.get(config["sink"], config["sink"])
+    config["logger"]["sink"] = mapping.get(
+        config["logger"]["sink"], config["logger"]["sink"]
+    )
 
     # No retention for stdout and stderr
-    if config["sink"] in [sys.stdout, sys.stderr]:
-        config["retention"] = config.get("retention", None)
-    return _with_prefix("logger", config)
+    if config["logger"]["sink"] in [sys.stdout, sys.stderr]:
+        config["logger"]["retention"] = config["logger"].get("retention", None)
+    return _with_prefix("logger", config["logger"]) if "logger" in config else {}
 
 
 @cache
@@ -124,7 +127,7 @@ def training_config(config_path: str | Path = "configuration.yaml") -> dict:
     with open(config_path, "r") as file:
         config = yaml.safe_load(file)
 
-    return _with_prefix("training", config["training"])
+    return _with_prefix("training", config["training"]) if "training" in config else {}
 
 
 def configuration(config_path: str | Path = "configuration.yaml") -> dict:

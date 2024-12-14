@@ -38,7 +38,10 @@ def train_one_fold(
     fold_split_path: str | Path,
     ckpt_path: str | Path,
 ):
-    train_indices, val_indices, seed = read_fold_splits_file(fold_split_path, fold_idx)
+    res = read_fold_splits_file(fold_split_path, fold_idx)
+    assert not isinstance(res, dict)
+    train_indices, val_indices = res
+
     dataset = SegmentationData(
         h5_path,
         train_indices=train_indices,  # type: ignore
@@ -50,7 +53,6 @@ def train_one_fold(
         dataset=dataset,
         checkpoint_dir=ckpt_path,
         experiment_name=f"fold_{fold_idx}",
-        seed=seed,  # type: ignore
         **config,
     )
 
@@ -67,7 +69,7 @@ def setup(h5_path: str, train_dir: str, config_path: str, config: dict):
         res != None
     ), f"Failed to initialise training directory, specified configuration file at {config_path} already exist in training directory!"
     _, train_test_path, fold_split_path, fold_dirs = res
-    return fold_split_path, checkpoint_paths
+    return train_test_path, fold_split_path, fold_dirs
 
 
 def train_models_for_one_fold(
@@ -78,9 +80,11 @@ def train_models_for_one_fold(
     fold_idx: int,
     models: list[str],
 ):
-    fold_split_path, checkpoint_paths = setup(h5_path, train_dir, config_path, config)
+    train_test_path, fold_split_path, fold_dirs = setup(
+        h5_path, train_dir, config_path, config
+    )
     train_one_fold(
-        fold_idx, h5_path, config, models, fold_split_path, checkpoint_paths[fold_idx]
+        fold_idx, h5_path, config, models, fold_split_path, fold_dirs[fold_idx]
     )
 
 
@@ -91,9 +95,11 @@ def train_models_for_all_folds(
     train_dir: str,
     models: list[str],
 ):
-    fold_split_path, checkpoint_paths = setup(h5_path, train_dir, config_path, config)
+    train_test_path, fold_split_path, fold_dirs = setup(
+        h5_path, train_dir, config_path, config
+    )
 
-    for fold_idx, ckpt_path in enumerate(checkpoint_paths):
+    for fold_idx, ckpt_path in enumerate(fold_dirs):
         train_one_fold(fold_idx, h5_path, config, models, fold_split_path, ckpt_path)
 
 

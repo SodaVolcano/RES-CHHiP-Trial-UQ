@@ -7,6 +7,7 @@ import pickle
 import random
 import re
 import shutil
+from functools import reduce
 from pathlib import Path
 from typing import Callable, Iterable, Sequence, TypedDict
 
@@ -324,7 +325,7 @@ def read_fold_splits_file(
         content = pickle.load(f)
     if fold is None:
         return content
-    return content[f"fold_{fold}"]
+    return content[f"fold_{fold}"]["train"], content[f"fold_{fold}"]["val"]
 
 
 def train_test_split(
@@ -452,14 +453,14 @@ def load_model(checkpoint_path: Path | str) -> LitModel:
 
 
 def load_models(
-    checkpoint_dir: str, checkpoint_regex: str = "last.ckpt"
+    checkpoint_dir: str | Path, checkpoint_regex: str = "last.ckpt"
 ) -> dict[str, LitModel]:
     """
     Load multiple `LitModel` from a directory containing multiple checkpoints.
 
     Parameters
     ----------
-    checkpoint_dir : str
+    checkpoint_dir : str | Path
         The path to the directory containing the model checkpoints. The checkpoints
         can be in subdirectories.
     checkpoint_regex : str, optional
@@ -468,8 +469,8 @@ def load_models(
     Returns
     -------
     dict[str, LitModel]
-        A dictionary containing the folder name and the corresponding `LitModel`
-        loaded from the checkpoint in the folder.
+        A dictionary containing the folder name (not full path) and the
+        corresponding `LitModel` loaded from the checkpoint in the folder.
     """
     return tz.pipe(
         checkpoint_dir,
@@ -478,7 +479,7 @@ def load_models(
             lambda fname: re.match(checkpoint_regex, os.path.basename(fname))
         ),
         lambda ckpt_file_paths: {
-            os.path.dirname(f): load_model(f) for f in ckpt_file_paths
+            os.path.basename(os.path.dirname(f)): load_model(f) for f in ckpt_file_paths
         },
     )  # type: ignore
 
@@ -531,14 +532,15 @@ def load_training_dir(
         where model names are keys, and list of models (with that name) across folds are values
         and i-th model in the list is the model in the i-th fold.
         """
-        return tz.merge_with(
+        merge_dicts = lambda dict1, dict2: tz.merge_with(
             unpack_args(
                 lambda head, model2: (
                     [head] + [model2] if not isinstance(head, list) else head + [model2]
                 )
             ),
-            folds_dict.values(),
+            [dict1, dict2],
         )
+        return reduce(merge_dicts, folds_dict.values())
 
     train_dir = Path(train_dir)
     config = configuration(train_dir / "configuration.yaml")
@@ -552,9 +554,10 @@ def load_training_dir(
         train_dir,
         os.listdir,
         curried.filter(
-            lambda fname: re.match(r"fold_\d+", fname) and os.path.isdir(fname)
+            lambda fname: re.match(r"fold_\d+", fname)
+            and os.path.isdir(train_dir / fname)
         ),
-        curried.sorted(key=lambda x: int(x.split("-")[1])),  # sort by fold number
+        curried.sorted(key=lambda x: int(x.split("_")[1])),  # sort by fold number
         lambda fold_dirs: {
             fold: load_models(train_dir / fold, checkpoint_regex) for fold in fold_dirs
         },

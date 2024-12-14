@@ -9,10 +9,10 @@ import torch
 from lightning import LightningModule
 from torch import nn
 
-from uncertainty.config import auto_match_config
+from ..context import data, training, uncertainty
 
-from ..context import data, training
-
+auto_match_config = uncertainty.auto_match_config
+H5Dataset = training.H5Dataset
 split_into_folds = training.split_into_folds
 write_fold_splits_file = training.write_fold_splits_file
 read_fold_splits_file = training.read_fold_splits_file
@@ -402,6 +402,23 @@ class TestTrainModels:
                 ]
 
     def test_train_different_model_type(self, tmp_path):
+        def check_checkpoints(n_models, model_name):
+            # Check if checkpoints are created for each model
+            for i in range(n_models):
+                model_checkpoint_dir = checkpoint_dir / f"{model_name}-{i}"
+                if model_name == "wow":
+                    model_checkpoint_dir = checkpoint_dir / f"wow"
+
+                assert model_checkpoint_dir.exists()
+                checkpoints = list((checkpoint_dir / "{model_name}-{i}").glob("*.ckpt"))
+                assert [
+                    i in checkpoints
+                    for i in [
+                        "epoch=000-val_loss=0.3000.ckpt",
+                        "epoch=001-val_loss=0.3000.ckpt",
+                    ]
+                ]
+
         # Mock get_model to return MockModel
         def mock_get_model(_):
             return MockTorchModel
@@ -450,25 +467,6 @@ class TestTrainModels:
                 mock__val_loss=0.3,
                 num_sanity_val_steps=2,
             )
-
-            def check_checkpoints(n_models, model_name):
-                # Check if checkpoints are created for each model
-                for i in range(n_models):
-                    model_checkpoint_dir = checkpoint_dir / f"{model_name}-{i}"
-                    if model_name == "wow":
-                        model_checkpoint_dir = checkpoint_dir / f"wow"
-
-                    assert model_checkpoint_dir.exists()
-                    checkpoints = list(
-                        (checkpoint_dir / "{model_name}-{i}").glob("*.ckpt")
-                    )
-                    assert [
-                        i in checkpoints
-                        for i in [
-                            "epoch=000-val_loss=0.3000.ckpt",
-                            "epoch=001-val_loss=0.3000.ckpt",
-                        ]
-                    ]
 
             check_checkpoints(3, "unet")
             check_checkpoints(2, "notunet")
@@ -572,116 +570,211 @@ class TestInitTrainingDir:
         assert existing_config.read_text() == "existing config"
 
 
-# class TestLoadModel:
+class TestLoadModel:
 
-#     # Successfully loads LitModel from valid checkpoint path with corresponding torch-module.pt
-#     def test_load_model_valid_checkpoint(self, tmp_path):
-#         # Create mock checkpoint files
-#         checkpoint_dir = Path(tmp_path)
-#         checkpoint_path = checkpoint_dir / "model.ckpt"
-#         torch_module_path = checkpoint_dir / "torch-module.pt"
+    # Successfully loads LitModel from valid checkpoint path with corresponding torch-module.pt
+    def test_load_model_valid_checkpoint(self, tmp_path):
+        # Create mock model and dataset
+        model_torch = MockTorchModel(0.5, 0.3)
+        model = LitModel(model_torch)
 
-#         # Create mock model and save
-#         base_model = MockTorchModel(loss=0.5, val_loss=0.3)
-#         torch.save(base_model, torch_module_path)
+        test_file = tmp_path / "test.h5"
+        data = get_dataset(20)
+        save_scans_to_h5(data, test_file)
 
-#         # Create mock checkpoint
-#         lit_model = LitModel(model=base_model)
-#         lit_model.save_checkpoint(checkpoint_path)
+        dataset = SegmentationData(
+            h5_path=test_file,
+            batch_size=2,
+            batch_size_eval=2,
+            patch_size=(5, 5, 5),
+            foreground_oversample_ratio=0.5,
+            num_workers_train=0,
+            num_workers_val=0,
+            prefetch_factor_train=None,
+            prefetch_factor_val=None,
+        )
+        log_dir = Path(tmp_path) / "logs"
+        checkpoint_dir = Path(tmp_path) / "checkpoints"
 
-#         # Load model
-#         loaded_model = load_model(checkpoint_path)
+        # Train model
+        train_model(
+            model=model,
+            dataset=dataset,
+            log_dir=log_dir,
+            experiment_name="test_exp",
+            checkpoint_path=checkpoint_dir,
+            checkpoint_name="{epoch:03d}-{val_loss:.4f}",
+            checkpoint_every_n_epochs=1,
+            n_epochs=2,
+            n_batches_per_epoch=2,
+            n_batches_val=2,
+            check_val_every_n_epoch=1,
+            accelerator="cpu",
+            enable_progress_bar=True,
+            enable_model_summary=False,
+            precision="bf16-mixed",
+            strategy="ddp",
+            save_last_checkpoint=False,
+            num_sanity_val_steps=0,
+        )
 
-#         # Verify loaded model
-#         assert isinstance(loaded_model, LitModel)
-#         assert isinstance(loaded_model.model, MockTorchModel)
+        # Load model
+        loaded_model = load_model(checkpoint_dir / "epoch=001-val_loss=0.5000.ckpt")
 
-
-# class TestLoadModels:
-
-#     # Successfully loads multiple LitModels from checkpoints matching default regex pattern
-#     def test_load_multiple_models_default_pattern(self, tmp_path):
-#         # Create mock checkpoints
-#         checkpoint_dir = tmp_path / "checkpoints"
-#         checkpoint_dir.mkdir()
-
-#         model_dirs = ["model1", "model2"]
-#         for model_dir in model_dirs:
-#             model_path = checkpoint_dir / model_dir
-#             model_path.mkdir()
-
-#             # Create mock torch module
-#             torch_module = MockTorchModel(0.5, 0.3)
-#             torch.save(torch_module, model_path / "torch-module.pt")
-
-#             # Create mock checkpoint
-#             checkpoint = {"state_dict": {}}
-#             torch.save(checkpoint, model_path / "last.ckpt")
-
-#         # Test loading models
-#         loaded_models = load_models(str(checkpoint_dir))
-
-#         assert len(loaded_models) == 2
-#         assert all(model_dir in loaded_models for model_dir in model_dirs)
-
-
-# class TestLoadTrainingDir:
-
-#     # Successfully loads configuration, data splits, indices and checkpoints from valid training directory
-#     def test_load_valid_training_dir(self, tmp_path):
-#         # Setup test data
-#         config_path = tmp_path / "configuration.yaml"
-#         config_path.write_text("test config")
-
-#         train_dir = tmp_path / "training"
-#         dataset = list(range(40))
-
-#         # Call function
-#         config_copy, train_test_path, folds_path, fold_dirs = init_training_dir(
-#             train_dir=train_dir,
-#             config_path=config_path,
-#             dataset_indices=dataset,
-#             n_folds=3,
-#             test_split=0.2,
-#         )  # type: ignore
+        # Verify loaded model
+        assert isinstance(loaded_model, LitModel)
+        assert isinstance(loaded_model.model, MockTorchModel)
+        assert loaded_model.model.train_loss == 0.5
+        assert loaded_model.model.val_loss == 0.3
 
 
-#         # Create temporary training directory structure
-#         train_dir = Path(tmp_path) / "train_dir"
-#         train_dir.mkdir()
+class TestLoadModels:
 
-#         # Create config file
-#         shutil.copy("configuration.yaml", train_dir / "configuration.yaml")
+    # Successfully loads multiple LitModels from checkpoints
+    def test_load_multiple_models(self, tmp_path):
+        # Mock get_model to return MockModel
+        def mock_get_model(_):
+            return MockTorchModel
 
-#         # Create validation fold splits
-#         fold_splits = {
-#             "fold_0": {"train": [0,1,2], "val": [3,4]},
-#             "fold_1": {"train": [0,1,3], "val": [2,4]}
-#         }
-#         with open(train_dir / "validation-fold-splits.pkl", "wb") as f:
-#             pickle.dump(fold_splits, f)
+        # Patch get_model function
+        with patch("uncertainty.training.training.get_model", mock_get_model):
+            test_file = tmp_path / "test.h5"
+            data = get_dataset(20)
+            save_scans_to_h5(data, test_file)
 
-#         # Create train-test split
-#         train_test = ([0,1,2,3,4], [5,6,7,8,9])
-#         with open(train_dir / "train-test-split.pkl", "wb") as f:
-#             pickle.dump(train_test, f)
+            dataset = SegmentationData(
+                h5_path=test_file,
+                batch_size=2,
+                batch_size_eval=2,
+                patch_size=(5, 5, 5),
+                foreground_oversample_ratio=0.5,
+                num_workers_train=0,
+                num_workers_val=0,
+                prefetch_factor_train=None,
+                prefetch_factor_val=None,
+            )
+            checkpoint_dir = Path(tmp_path) / "checkpoints"
+            experiment_name = "test_exp"
 
-#         # Create fold directories with checkpoints
-#         for fold in ["fold_0", "fold_1"]:
-#             fold_dir = train_dir / fold
-#             fold_dir.mkdir()
-#             for model in ["unet-0", "unet-1"]:
-#                 model_dir = fold_dir / model
-#                 model_dir.mkdir()
-#                 # Create dummy checkpoint
-#                 Path(model_dir / "last.ckpt").touch()
+            # Train multiple models
+            train_models(
+                models=["unet_2", "notunet", "wow2"],
+                dataset=dataset,
+                checkpoint_dir=checkpoint_dir,
+                experiment_name=experiment_name,
+                seed=42,
+                log_dir=Path(tmp_path) / "logs",
+                checkpoint_name="{epoch:03d}-{val_loss:.4f}",
+                checkpoint_every_n_epochs=1,
+                n_epochs=2,
+                n_batches_per_epoch=2,
+                n_batches_val=2,
+                check_val_every_n_epoch=1,
+                accelerator="cpu",
+                enable_progress_bar=True,
+                enable_model_summary=False,
+                precision="bf16-mixed",
+                strategy="ddp",
+                save_last_checkpoint=False,
+                mock__loss=0.5,
+                mock__val_loss=0.3,
+                num_sanity_val_steps=2,
+            )
 
-#         # Load training directory
-#         config, splits, indices, models = load_training_dir(train_dir)
+        # Load models
+        loaded_models = load_models(checkpoint_dir, "epoch=001-val_loss=0.5000.ckpt")
 
-#         # Verify outputs
-#         assert isinstance(config, dict)
-#         assert splits == fold_splits
-#         assert indices == train_test
-#         assert list(models.keys()) == ["unet"]
-#         assert len(models["unet"]) == 2
+        assert set(loaded_models.keys()) == set(["unet-0", "unet-1", "notunet", "wow2"])
+        for litmodel in loaded_models.values():
+            assert isinstance(litmodel, LitModel)
+            assert isinstance(litmodel.model, MockTorchModel)
+            assert litmodel.model.train_loss == 0.5
+            assert litmodel.model.val_loss == 0.3
+
+
+class TestLoadTrainingDir:
+
+    # Successfully loads configuration, data splits, indices and checkpoints from valid training directory
+    def test_load_valid_training_dir(self, tmp_path):
+        mock_get_model = lambda _: MockTorchModel
+        mock_get_config = lambda _: {}
+        # Setup test data
+        config_path = tmp_path / "configuration.yaml"
+        config_path.write_text("test config")
+
+        train_dir = tmp_path / "training"
+        test_file = tmp_path / "test.h5"
+        data = get_dataset(20)
+        save_scans_to_h5(data, test_file)
+
+        dataset_h5 = H5Dataset(test_file)
+
+        config_copy, train_test_path, folds_path, fold_dirs = init_training_dir(
+            train_dir=train_dir,
+            config_path=config_path,
+            dataset_indices=dataset_h5.indices,
+            n_folds=3,
+            test_split=0.2,
+        )  # type: ignore
+
+        # Patch get_model function
+        with patch("uncertainty.training.training.get_model", mock_get_model):
+            for fold_idx, ckpt_path in enumerate(fold_dirs):
+                res = read_fold_splits_file(folds_path, fold_idx)
+                assert not isinstance(res, dict)
+                train_indices, val_indices = res
+
+                dataset = SegmentationData(
+                    h5_path=test_file,
+                    train_indices=train_indices,  # type: ignore
+                    val_indices=val_indices,  # type: ignore
+                    batch_size=2,
+                    batch_size_eval=2,
+                    patch_size=(5, 5, 5),
+                    foreground_oversample_ratio=0.5,
+                    num_workers_train=0,
+                    num_workers_val=0,
+                    prefetch_factor_train=None,
+                    prefetch_factor_val=None,
+                )
+                train_models(
+                    models=["unet", "notunet_2"],
+                    dataset=dataset,
+                    checkpoint_dir=ckpt_path,
+                    experiment_name=f"fold_{fold_idx}",
+                    log_dir=Path(tmp_path) / "logs",
+                    checkpoint_name="{epoch:03d}-{val_loss:.4f}",
+                    checkpoint_every_n_epochs=1,
+                    n_epochs=2,
+                    n_batches_per_epoch=2,
+                    n_batches_val=2,
+                    check_val_every_n_epoch=1,
+                    accelerator="cpu",
+                    enable_progress_bar=True,
+                    enable_model_summary=False,
+                    precision="bf16-mixed",
+                    strategy="ddp",
+                    save_last_checkpoint=False,
+                    mock__loss=0.5,
+                    mock__val_loss=0.3,
+                    num_sanity_val_steps=2,
+                )
+
+        # Load training directory
+        with patch("uncertainty.training.training.configuration", mock_get_config):
+            config, fold_splits, train_test, checkpoints = load_training_dir(
+                train_dir, "epoch=001-val_loss=0.5000.ckpt"
+            )
+
+        # Verify loaded data
+        assert config == {}
+        # just output from read_fold_split_file so no need to test anymore
+        assert set(fold_splits.keys()) == set([f"fold_{i}" for i in range(3)])
+        assert len(train_test[0]) == 16
+        assert len(train_test[1]) == 4
+
+        assert set(checkpoints.keys()) == set(["unet", "notunet"])
+        assert all(len(list(v)) == 3 for v in checkpoints.values())
+        assert all(
+            all(isinstance(m, LitModel) for m in v) for v in checkpoints.values()
+        )
