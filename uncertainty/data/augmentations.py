@@ -17,8 +17,7 @@ from torchio.transforms import (
     RandomGamma,
 )
 
-from ..utils import unpack
-from ..utils.logging import logger_wraps
+from ..utils import logger_wraps, star
 from .processing import from_torchio_subject, to_torchio_subject
 
 
@@ -142,4 +141,4 @@ def batch_augmentations(
         y_augmented = affine_mask(y, affine._params)
         return x_augmented, y_augmented
 
-    return unpack(_affine)
+    return star(_affine)

@@ -35,7 +35,7 @@ def call_method(method_name: str, /, *args, **kwargs) -> Callable:
     return lambda obj: call_method_impure(method_name, *args, **kwargs)(deepcopy(obj))
 
 
-def unpack[T](func: Callable[..., T]) -> Callable[..., T]:
+def star[T](func: Callable[..., T]) -> Callable[..., T]:
     """
     Unpack args from a tuple and pass them to func, i.e. compute `func(*args)`
     """
@@ -52,6 +52,16 @@ def starmap[T](f: Callable[..., T], iterable: Iterable[Iterable[Any]]) -> Iterab
     Used instead of map() when argument parameters have already been “pre-zipped” into tuples.
     """
     return _starmap(f, iterable)
+
+
+@curry
+def starfilter(
+    f: Callable[..., bool], iterable: Iterable[Iterable[Any]]
+) -> Iterable[Any]:
+    """
+    Filter elements from an iterable using a function f(a, b, ...) that takes a tuple of arguments (a, b, ...).
+    """
+    return filter(star(f), iterable)
 
 
 @curry

@@ -3,7 +3,7 @@ from typing import Callable
 
 import toolz as tz
 
-from .common import unpack
+from .common import star
 
 
 def merge_with_reduce[
@@ -29,5 +29,5 @@ def merge_with_reduce[
     >>> merge_with_reduce(dicts, lambda x, y: x ** y)
     {'b': 1, 'c': 16777216}
     """
-    merge_dicts = lambda dict1, dict2: tz.merge_with(unpack(func), dict1, dict2)
+    merge_dicts = lambda dict1, dict2: tz.merge_with(star(func), dict1, dict2)
     return reduce(merge_dicts, dicts)

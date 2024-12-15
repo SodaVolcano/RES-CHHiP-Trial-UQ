@@ -26,7 +26,7 @@ from tqdm import tqdm
 
 from ..data import inverse_affine_transform
 from ..models import MCDropout
-from ..utils import curry, logger_wraps
+from ..utils import curry, logger_wraps, starmap
 
 
 def _calc_pad_amount(
@@ -451,7 +451,7 @@ def tta_inference(
         curried.map(lambda subj: subj["volume"].data),
         curried.map(augment_infer_then_unaugment),
         lambda y_preds: zip(augmented_x_subjs, y_preds),
-        curried.map(lambda subj_pred: assign_mask_to_subject(*subj_pred)),
+        starmap(lambda subj, y_pred: assign_mask_to_subject(subj, y_pred)),
         curried.map(lambda subj: subj.apply_inverse_transform(warn=False)),
         curried.map(lambda subj: subj["mask"].data),
         (lambda it: tqdm(it, total=n_outputs)) if prog_bar else tz.identity,

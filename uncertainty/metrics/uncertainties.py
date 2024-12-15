@@ -7,9 +7,8 @@ from typing import Callable, Literal, Optional
 
 import toolz as tz
 import torch
-from toolz import curried
 
-from ..utils import curry
+from ..utils import curry, starfilter, starmap
 from .classification import dice, surface_dice
 
 
@@ -284,8 +283,8 @@ def _pairwise_metric(
     return tz.pipe(
         predictions,
         lambda preds: combinations_with_replacement(preds, 2),
-        curried.filter(lambda x: not x[0].equal(x[1])),  # remove self-comparisons
-        curried.map(lambda x: metric(x[0], x[1], average)),
+        starfilter(lambda x1, x2: not x1.equal(x2)),  # remove self-comparisons
+        starmap(lambda x1, x2: metric(x1, x2, average)),
         list,
         torch.stack,
         lambda preds: torch.mean(preds, dim=0),

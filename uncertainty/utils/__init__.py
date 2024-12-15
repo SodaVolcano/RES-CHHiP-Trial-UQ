@@ -8,10 +8,11 @@ from .string import *
 from .wrappers import *
 
 __all__ = [
-    "unpack",
+    "star",
     "call_method",
     "call_method_impure",
     "starmap",
+    "starfilter",
     "iterate_while",
     "config_logger",
     "logger_wraps",
@@ -27,4 +28,5 @@ __all__ = [
     "next_available_path",
     "merge_with_reduce",
     "side_effect",
+    "transform_nth",
 ]

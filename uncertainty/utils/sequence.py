@@ -60,3 +60,25 @@ def growby_accum[
         curried.cons(init),  # [init, f1, f2, ...]
         curried.accumulate(lambda x, f: f(x)),
     )  # type: ignore
+
+
+@curry
+def transform_nth(n: int, func: Callable, seq: Iterable) -> Iterable:
+    """
+    Apply a function to the nth element of a sequence
+
+    Parameters
+    ----------
+    n: int
+        Index of the element to be transformed
+    func: Callable
+        Function to be applied to the nth element
+    seq: Iterable
+        Sequence to be transformed
+
+    Returns
+    -------
+    Iterable
+        Sequence with the nth element transformed
+    """
+    return (func(x) if i == n else x for i, x in enumerate(seq))

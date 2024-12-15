@@ -21,7 +21,7 @@ from torchmetrics.classification import (
     MultilabelRecall,
 )
 
-from ..utils import curry, starmap, unpack
+from ..utils import curry, star, starmap
 from .surface_dice import compute_surface_dice_at_tolerance, compute_surface_distances
 
 
@@ -66,7 +66,7 @@ def _prepare_tensors(
         prediction,
         lambda x: sigmoid(x) if x.min() < 0 or x.max() > 1 else x,
         lambda pred: (pred > 0.5, label),
-        curried.map(lambda x: x.detach().numpy()),
+        curried.map(lambda arr: arr.detach().numpy()),
         tuple,
     )  # type: ignore
 
@@ -81,7 +81,7 @@ def _medpy_wrapper(
     """
     return lambda prediction, label, average: tz.pipe(
         _prepare_tensors(prediction, label),
-        unpack(
+        star(
             lambda pred, label: _average_methods(average)(
                 pred, label, _distance_with_default(metric)
             )
@@ -249,8 +249,8 @@ def surface_dice(
 
     return tz.pipe(
         _prepare_tensors(prediction, label),
-        unpack(lambda pred, label: (pred, label.astype(bool))),
-        unpack(
+        star(lambda pred, label: (pred, label.astype(bool))),
+        star(
             lambda pred, label: _average_methods(average)(
                 pred,
                 label,

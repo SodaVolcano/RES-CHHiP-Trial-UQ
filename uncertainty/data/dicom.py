@@ -95,7 +95,7 @@ def _get_dicom_slices(dicom_path: str) -> Iterable[dicom.Dataset]:
     return tz.pipe(
         dicom_path,
         list_files,
-        curried.map(lambda x: dicom.dcmread(x, force=True)),
+        curried.map(lambda fname: dicom.dcmread(fname, force=True)),
     )  # type: ignore
 
 

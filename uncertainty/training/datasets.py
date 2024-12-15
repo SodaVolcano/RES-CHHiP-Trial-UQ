@@ -19,7 +19,7 @@ from torch.utils.data import DataLoader, Dataset, IterableDataset
 
 from ..config import auto_match_config
 from ..data import augmentations, batch_augmentations
-from ..utils import unpack
+from ..utils import star, starfilter
 
 
 class RandomPatchDataset(IterableDataset):
@@ -124,7 +124,7 @@ class RandomPatchDataset(IterableDataset):
         """
         return tz.pipe(
             self.__patch_iter(),
-            curried.filter(lambda x_y: torch.any(x_y[1])),
+            starfilter(lambda x, y: torch.any(y)),
             lambda x: islice(x, n_patches),
         )  # type: ignore
 
@@ -165,11 +165,11 @@ class RandomPatchDataset(IterableDataset):
             if len(batch) == 0:
                 batch = tz.pipe(
                     (vol_mask for vol_mask in self.__oversampled_iter()),
-                    unpack(zip),
+                    star(zip),
                     curried.map(torch.stack),
                     tuple,
                     self.batch_transform,
-                    unpack(zip),
+                    star(zip),
                     curried.map(self.transform),
                     list,
                 )
