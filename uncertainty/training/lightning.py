@@ -10,8 +10,7 @@ import torch
 from torch import nn
 from torchmetrics.aggregation import RunningMean
 
-from uncertainty.config import auto_match_config
-
+from ..config import auto_match_config
 from .. import constants as c
 from ..metrics.classification import dice_batched
 

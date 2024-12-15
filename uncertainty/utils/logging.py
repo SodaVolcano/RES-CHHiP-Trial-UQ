@@ -6,7 +6,6 @@ import inspect
 import logging
 import sys
 import warnings
-from enum import auto
 from functools import wraps
 from typing import TextIO
 

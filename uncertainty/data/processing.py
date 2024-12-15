@@ -11,10 +11,9 @@ import torchio as tio
 from loguru import logger
 from toolz import curried
 
-from uncertainty.utils.parallel import pmap
 
 from .. import constants as c
-from ..utils import call_method, curry, logger_wraps
+from ..utils import call_method, curry, logger_wraps, pmap
 from .datatypes import MaskDict, PatientScan, PatientScanPreprocessed
 
 

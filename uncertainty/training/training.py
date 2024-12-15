@@ -29,8 +29,8 @@ from ..utils import (
     logger_wraps,
     next_available_path,
     star,
-    starmap,
     starfilter,
+    starmap,
 )
 from .datasets import SegmentationData
 

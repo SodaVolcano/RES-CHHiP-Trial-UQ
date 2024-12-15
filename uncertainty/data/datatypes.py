@@ -3,7 +3,7 @@ Datatype definitions for patient scans and masks.
 """
 
 from datetime import date
-from typing import Annotated, Iterable, TypedDict
+from typing import Annotated, TypedDict
 
 import numpy as np
 
