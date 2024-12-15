@@ -24,7 +24,14 @@ from toolz import curried
 from ..config import auto_match_config, configuration
 from ..models import get_model
 from ..training import LitModel
-from ..utils import list_files, logger_wraps, next_available_path, star, starmap
+from ..utils import (
+    list_files,
+    logger_wraps,
+    next_available_path,
+    star,
+    starmap,
+    starfilter,
+)
 from .datasets import SegmentationData
 
 DataSplitDict = TypedDict("DataSplitDict", {"train": list[int], "val": list[int]})
@@ -535,3 +542,74 @@ def load_training_dir(
         },
     )
     return config, data_split, (train_indices, test_indices), checkpoints  # type: ignore
+
+
+def select_single_models(checkpoint_dict: dict[str, LitModel]) -> dict[str, LitModel]:
+    """
+    Select the first model in a list of models for each model name in the checkpoint dictionary.
+
+    First model is identified as a model name without a "-<int>" suffix or a model name with a "-0" suffix.
+
+    Parameters
+    ----------
+    checkpoint_dict : dict[str, LitModel]
+        A dictionary containing model names and corresponding `LitModel` objects of the form
+        `{'model_name': LitModel, 'model_name2-0': LitModel, 'model_name2-1': LitModel, ...}`.
+
+    Returns
+    -------
+    dict[str, LitModel]
+        A dictionary containing model names and the corresponding `LitModel` objects
+        with the first model for each model name of the form `{'model_name': LitModel, ...}`.
+    """
+    return tz.pipe(
+        checkpoint_dict.items(),
+        # group by base model name (i.e. without '-<int>' suffix)
+        curried.groupby(
+            star(lambda model_name, _: model_name.split("-")[0])
+        ),  # format: {'model': [('model-name', model), (...), ...], 'model2': ...,}
+        curried.valmap(
+            # select first model: one without "-<int>" suffix OR have "-0" suffix
+            starfilter(
+                lambda model_name, _: (
+                    re.match(r".*-0", model_name) or not re.match(r".*-\d+", model_name)
+                ),
+            )
+        ),
+        # format now: {'model': [('model-name', model)], 'model2': ...,}
+        curried.valmap(list),
+        # Select the first model (i.e. the only model) in the list
+        curried.valmap(lambda model_lst: model_lst[0][1]),
+    )  # type: ignore
+
+
+def select_ensembles(checkpoint_dict: dict[str, LitModel]) -> dict[str, list[LitModel]]:
+    """
+    Select a list of ensembles from a dictionary of model checkpoints.
+
+    An ensemble is defined as a list of models with the same model name but different suffixes.
+    e.g. an ensemble of model `"model1"` is any model names of the form `"model1-<int>"`. If
+    a model name has only one model, it is not considered an ensemble and is not included.
+
+    Parameters
+    ----------
+    checkpoint_dict : dict[str, LitModel]
+        A dictionary containing model names and corresponding `LitModel` objects of the form
+        `{'model_name': LitModel, 'model_name2-0': LitModel, 'model_name2-1': LitModel, ...}`.
+
+    Returns
+    -------
+    dict[str, list[LitModel]]
+        A dictionary containing model names and the corresponding list of `LitModel` objects
+        for each ensemble of the form `{'model_name': [LitModel, LitModel, ...], ...}`.
+    """
+    return tz.pipe(
+        checkpoint_dict.items(),
+        # group by base model name (i.e. without '-<int>' suffix)
+        curried.groupby(
+            star(lambda model_name, _: model_name.split("-")[0])
+        ),  # format: {'model': [('model-name', model), (...), ...], 'model2': ...,}
+        curried.valmap(starmap(lambda _, model: model)),  # get only the model object
+        curried.valmap(list),
+        curried.valfilter(lambda x: len(x) > 1),
+    )  # type: ignore

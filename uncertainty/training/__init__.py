@@ -5,6 +5,8 @@ from .training import (
     load_model,
     load_models,
     load_training_dir,
+    select_ensembles,
+    select_single_models,
     read_fold_splits_file,
     split_into_folds,
     train_model,
@@ -27,4 +29,9 @@ __all__ = [
     "read_fold_splits_file",
     "train_test_split",
     "init_training_dir",
+    "load_model",
+    "load_models",
+    "load_training_dir",
+    "select_ensembles",
+    "select_single_models",
 ]

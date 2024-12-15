@@ -26,6 +26,8 @@ LitModel = training.LitModel
 load_model = training.load_model
 load_models = training.load_models
 load_training_dir = training.load_training_dir
+select_single_models = training.select_single_models
+select_ensembles = training.select_ensembles
 
 
 def get_dataset(n: int = 2):
@@ -783,3 +785,55 @@ class TestLoadTrainingDir:
             all(isinstance(m, LitModel) for m in v.values())
             for v in checkpoints.values()
         )
+
+
+class TestSelectSingleModels:
+
+    # Successfully selects single models from multiple models
+    def test_select_single_models(self):
+        # Create mock models
+        models = {
+            "model-0": 4,
+            "model-2": 5,
+            "model-3": 6,
+            "model2-0": 7,
+            "model2-2": 8,
+            "model2-3": 9,
+            "model3": 10,
+            "model4": 11,
+            "model4-0": 12,
+        }
+
+        # Select models
+        selected_models = select_single_models(models)  # type: ignore
+
+        # Verify selected models
+        assert selected_models == {"model": 4, "model2": 7, "model3": 10, "model4": 11}
+
+
+class TestSelectEnsembles:
+
+    # Successfully selects ensemble models from multiple models
+    def test_select_ensembles(self):
+        # Create mock models
+        models = {
+            "model-0": 4,
+            "model-2": 5,
+            "model-3": 6,
+            "model2-0": 7,
+            "model2-2": 8,
+            "model2-3": 9,
+            "model3": 10,
+            "model4": 11,
+            "model4-0": 12,
+        }
+
+        # Select models
+        selected_models = select_ensembles(models)  # type: ignore
+
+        # Verify selected models
+        assert selected_models == {
+            "model": [4, 5, 6],
+            "model2": [7, 8, 9],
+            "model4": [11, 12],
+        }
