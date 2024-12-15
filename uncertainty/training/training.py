@@ -7,7 +7,6 @@ import pickle
 import random
 import re
 import shutil
-from functools import reduce
 from pathlib import Path
 from typing import Callable, Iterable, Sequence, TypedDict
 
@@ -25,13 +24,7 @@ from toolz import curried
 from ..config import auto_match_config, configuration
 from ..models import get_model
 from ..training import LitModel
-from ..utils import (
-    list_files,
-    logger_wraps,
-    next_available_path,
-    unpack_args,
-    unpacked_map,
-)
+from ..utils import list_files, logger_wraps, next_available_path, unpack_args, starmap
 from .datasets import SegmentationData
 
 DataSplitDict = TypedDict("DataSplitDict", {"train": list[int], "val": list[int]})
@@ -216,7 +209,7 @@ def train_models(
         models,
         curried.map(parse_model_str),
         tz.concat,
-        unpacked_map(
+        starmap(
             lambda model_fn, model_path: (
                 train_model(
                     LitModel(model=model_fn(**kwargs), **kwargs),
@@ -265,8 +258,8 @@ def split_into_folds[
     indices = KFold(n_splits=n_folds).split(dataset)  # type: ignore
     if return_indices:
         # cast from numpy array to list
-        return unpacked_map(lambda train, val: (train.tolist(), val.tolist()), indices)
-    return unpacked_map(
+        return starmap(lambda train, val: (train.tolist(), val.tolist()), indices)
+    return starmap(
         lambda train_idx, val_idx: (
             _get_with_indices(train_idx, dataset),
             _get_with_indices(val_idx, dataset),

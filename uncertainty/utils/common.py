@@ -4,6 +4,7 @@ Collection of common utility functions
 
 from copy import deepcopy
 from typing import Any, Callable, Iterable
+from itertools import starmap as _starmap
 
 import toolz as tz
 
@@ -42,13 +43,15 @@ def unpack_args[T](func: Callable[..., T]) -> Callable[..., T]:
 
 
 @curry
-def unpacked_map[
-    T
-](f: Callable[..., T], iterable: Any,) -> Iterable[T]:
+def starmap[T](f: Callable[..., T], iterable: Iterable[Iterable[Any]]) -> Iterable[T]:
     """
-    Unpack each element of the iterable and apply the function f to it
+    Return an iterator whose values are returned from the function evaluated with an argument tuple taken from the given sequence.
+
+    Curried version of `itertools.starmap`.
+
+    Used instead of map() when argument parameters have already been “pre-zipped” into tuples.
     """
-    return map(unpack_args(f), iterable)
+    return _starmap(f, iterable)
 
 
 @curry
@@ -74,3 +77,12 @@ def iterate_while[
     """
 
     return iterate_while(func, pred, func(initial)) if pred(initial) else initial
+
+
+@curry
+def side_effect[T](func: Callable[[], Any], val: T) -> T:
+    """
+    Perform side effect by calling `func` and let `val` pass through
+    """
+    func()
+    return val

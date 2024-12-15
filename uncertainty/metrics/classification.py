@@ -21,7 +21,7 @@ from torchmetrics.classification import (
     MultilabelRecall,
 )
 
-from ..utils import curry, unpack_args, unpacked_map
+from ..utils import curry, unpack_args, starmap
 from .surface_dice import compute_surface_dice_at_tolerance, compute_surface_distances
 
 
@@ -134,7 +134,7 @@ def _batched_eval(
     """
     return tz.pipe(
         zip(prediction, label),
-        unpacked_map(metric),
+        starmap(metric),
         list,
         torch.stack,
         curry(torch.mean)(dim=0),

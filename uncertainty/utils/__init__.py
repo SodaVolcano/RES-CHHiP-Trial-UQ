@@ -10,7 +10,7 @@ from .wrappers import *
 __all__ = [
     "call_method",
     "call_method_impure",
-    "unpacked_map",
+    "starmap",
     "iterate_while",
     "config_logger",
     "logger_wraps",
@@ -25,4 +25,5 @@ __all__ = [
     "pmap",
     "next_available_path",
     "merge_with_reduce",
+    "side_effect",
 ]

@@ -1,7 +1,6 @@
 from ..context import utils
 
 iterate_while = utils.iterate_while
-unpacked_map = utils.unpacked_map
 
 
 class TestIterateWhile:
@@ -43,25 +42,3 @@ class TestIterateWhile:
 
         result = iterate_while(func, pred, 10)
         assert result == 10
-
-
-class TestUnpackedMap:
-
-    # Function correctly maps over iterable of tuples and unpacks arguments
-    def test_unpacks_and_maps_tuples(self):
-        def add(x, y, z):
-            return x + y + z
-
-        input_tuples = [(1, 2, 5), (3, 4, 3), (5, 6, 8)]
-        result = list(unpacked_map(add, input_tuples))
-
-        assert result == [8, 10, 19]
-
-    def test_curried_unpacks_and_maps_tuples(self):
-        def add(x, y, z):
-            return x + y + z
-
-        input_tuples = [(1, 2, 5), (3, 4, 3), (5, 6, 8)]
-        result = list(unpacked_map(add)(input_tuples))
-
-        assert result == [8, 10, 19]
