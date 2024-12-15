@@ -3,8 +3,8 @@ Collection of common utility functions
 """
 
 from copy import deepcopy
-from typing import Any, Callable, Iterable
 from itertools import starmap as _starmap
+from typing import Any, Callable, Iterable
 
 import toolz as tz
 
@@ -35,9 +35,9 @@ def call_method(method_name: str, /, *args, **kwargs) -> Callable:
     return lambda obj: call_method_impure(method_name, *args, **kwargs)(deepcopy(obj))
 
 
-def unpack_args[T](func: Callable[..., T]) -> Callable[..., T]:
+def unpack[T](func: Callable[..., T]) -> Callable[..., T]:
     """
-    Unpack args from a tuple and pass them to func
+    Unpack args from a tuple and pass them to func, i.e. compute `func(*args)`
     """
     return lambda args: func(*args)
 

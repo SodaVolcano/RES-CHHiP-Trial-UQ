@@ -8,6 +8,7 @@ from .string import *
 from .wrappers import *
 
 __all__ = [
+    "unpack",
     "call_method",
     "call_method_impure",
     "starmap",

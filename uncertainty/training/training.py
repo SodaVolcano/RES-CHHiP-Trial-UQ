@@ -24,7 +24,7 @@ from toolz import curried
 from ..config import auto_match_config, configuration
 from ..models import get_model
 from ..training import LitModel
-from ..utils import list_files, logger_wraps, next_available_path, unpack_args, starmap
+from ..utils import list_files, logger_wraps, next_available_path, starmap, unpack
 from .datasets import SegmentationData
 
 DataSplitDict = TypedDict("DataSplitDict", {"train": list[int], "val": list[int]})
@@ -197,7 +197,7 @@ def train_models(
             return [(get_model(model), Path(model))]
         return tz.pipe(
             model.split("_"),
-            unpack_args(
+            unpack(
                 lambda name, quantity: [
                     (get_model(name), checkpoint_dir / f"{name}-{i}")
                     for i in range(int(quantity))

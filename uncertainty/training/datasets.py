@@ -19,7 +19,7 @@ from torch.utils.data import DataLoader, Dataset, IterableDataset
 
 from ..config import auto_match_config
 from ..data import augmentations, batch_augmentations
-from ..utils import unpack_args
+from ..utils import unpack
 
 
 class RandomPatchDataset(IterableDataset):
@@ -165,11 +165,11 @@ class RandomPatchDataset(IterableDataset):
             if len(batch) == 0:
                 batch = tz.pipe(
                     (vol_mask for vol_mask in self.__oversampled_iter()),
-                    unpack_args(zip),
+                    unpack(zip),
                     curried.map(torch.stack),
                     tuple,
                     self.batch_transform,
-                    unpack_args(zip),
+                    unpack(zip),
                     curried.map(self.transform),
                     list,
                 )
