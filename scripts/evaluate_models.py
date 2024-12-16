@@ -35,45 +35,6 @@ from uncertainty.training import (
 from uncertainty.utils.wrappers import curry
 
 
-def parameterised_inference(
-    mode: str, n_outputs: int, model, config: dict
-) -> Callable[[torch.Tensor], torch.Tensor]:
-    """
-    Get unary inference function f(x) -> y_pred with parameters filled in
-    """
-    aug = torchio_augmentation()
-    aug_batch = RandomAffine3D(
-        5, align_corners=True, shears=0, scale=(0.9, 1.1), p=0.15
-    )
-    return tz.pipe(
-        mode,
-        get_inference_mode,
-        # specify how many outputs to produce if required
-        lambda inference: (
-            inference(n_outputs=n_outputs)
-            if mode not in ["single", "ensemble"]
-            else inference
-        ),
-        lambda inference: (
-            inference(aug=aug, batch_affine=aug_batch) if mode == "tta" else inference
-        ),
-        (
-            (lambda inference: inference(model=model))
-            if mode != "ensemble"
-            else (lambda inference: inference(models=model))
-        ),
-        lambda inference: lambda x: inference(
-            x=x,
-            patch_size=config["patch_size"],
-            subdivisions=2,
-            batch_size=config["batch_size_eval"],
-            output_channels=config["n_kernels_last"],
-            # prog_bar=mode != "single",
-            prog_bar=True,
-        ),
-    )  # type: ignore
-
-
 @curry
 def dump_aggregated_maps(i_preds_y, map_folder_path, class_names: list[str]):
     idx, preds_y = i_preds_y
@@ -246,6 +207,25 @@ def main(
 
 
 """
+1. load_training_dir to get
+    {'fold_1': {'model1": ...}, ...}
+2. for each fold,
+    1. for each mode (single, mcdo, tta, ensemble)
+        1. get inference function
+        2. select relevant models -> select_single_models/ensembles()
+        3. for each model in dict...
+            1. perform_inference
+            2. save CSV in top-most dir as fold-{idx}-mode-{mode}-model-{model}.csv
+    
+
+
+evaluate for EACH FOLD
+    for EACH MODE
+        for EACH MODEL
+
+
+
+
 input:
     {
         'model-1': <model>,
@@ -279,13 +259,14 @@ FOR EACH MODE...
             - load all models into LIST
             - model.eval() for each model
 
-    2. evaluation = (
-        evaluate_prediction(average=average)
-        if mode == "single"
-        else evaluate_predictions(average=average)
-    )
+    don't need to change ----------- 2. 
+        evaluation = (
+            evaluate_prediction(average=average)
+            if mode == "single"
+            else evaluate_predictions(average=average)
+        )
 
-    3. get inference function
+    DONE ------------- 3. get inference function
         - get aug and aug_batch
         - given inference mode... get_inference_mode()
         - if inference fn is tta or mcdo, set PARAMS n_outputs
@@ -300,6 +281,17 @@ FOR EACH MODE...
         - also, get a sorted version that swaps "for" order, as
             [f"{name}_{metric}" for name in class_names for metric in metric_names]
 
+
+        grow_csv:
+            INPUT:
+                - col_names
+                - iterator yielding rows
+
+            1. given iterator, pl.LazyFrame(it, schema=col_names)
+            2. compute average columns...
+
+
+
             
     5. perform inference
         1. load (x, y) pairs from h5
@@ -312,7 +304,53 @@ FOR EACH MODE...
         8. create lazyframe with the iterator, pass in column names
         9. reorder columns using sorted column names
         10. sink to csv
+    
+    DONE - dump predictions
 """
+
+
+def get_parameterised_inference(
+    mode: str,
+    n_outputs: int,
+    model,
+    patch_size: int | tuple[int, int, int],
+    batch_size: int,
+    output_channels: int,
+):
+    """
+    Get unary inference function f(x) -> y_pred with parameters filled in
+    """
+    aug = torchio_augmentation()
+    aug_batch = RandomAffine3D(
+        5, align_corners=True, shears=0, scale=(0.9, 1.1), p=0.15
+    )
+    parameters = tz.pipe(
+        {
+            "patch_size": patch_size,
+            "subdivisions": 2,
+            "batch_size": batch_size,
+            "output_channels": output_channels,
+            "prog_bar": True,
+        },
+        (
+            curried.assoc(key="n_outputs", value=n_outputs)
+            if mode not in ["single", "ensemble"]
+            else tz.identity
+        ),
+        curried.assoc(key="aug", value=aug) if mode == "tta" else tz.identity,
+        (
+            curried.assoc(key="batch_affine", value=aug_batch)
+            if mode == "tta"
+            else tz.identity
+        ),
+        curried.assoc(key="model" if mode != "ensemble" else "models", value=model),
+    )
+
+    return tz.pipe(
+        mode,
+        get_inference_mode,
+        lambda inference: inference(**parameters),
+    )
 
 
 if __name__ == "__main__":

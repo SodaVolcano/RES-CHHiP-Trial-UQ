@@ -1,10 +1,10 @@
 import os
 import tempfile
 from datetime import date
-import torch
 
 import h5py
 import numpy as np
+import torch
 
 from ..context import data
 

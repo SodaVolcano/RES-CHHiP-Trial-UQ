@@ -15,9 +15,9 @@ from .dicom import (
 )
 from .h5 import (
     load_scans_from_h5,
-    save_scans_to_h5,
     save_prediction_to_h5,
     save_predictions_to_h5,
+    save_scans_to_h5,
 )
 from .processing import (
     crop_to_body,

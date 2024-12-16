@@ -82,7 +82,7 @@ def load_scans_from_h5(
 
 
 def save_prediction_to_h5(
-    name: str, h5_path: str, x: torch.Tensor, y: torch.Tensor, y_pred:torch.Tensor 
+    name: str, h5_path: str, x: torch.Tensor, y: torch.Tensor, y_pred: torch.Tensor
 ):
     """
     Save x, y and prediction to a H5 file, appending if the file already exists
@@ -120,24 +120,9 @@ def save_predictions_to_h5(
     dict_ = {"x": x, "y": y, "y_preds": y_preds}
     if compute_aggregation:
         dict_ |= {
-                "probability_map": probability_map(y_preds),
-                "variance_map": variance_map(y_preds),
-                "entropy_map": entropy_map(y_preds),
-            }
+            "probability_map": probability_map(y_preds),
+            "variance_map": variance_map(y_preds),
+            "entropy_map": entropy_map(y_preds),
+        }
     with h5.File(h5_path, "a" if os.path.exists(h5_path) else "w") as h5_file:
         _create_group(dict_, name, h5_file)
-
-
-"""
-list(preds), y
-
-add y
-add group: preds
-    for pred in preds, add to h5
-
-load prediction for A class
-save probability map
-save entropy map
-save variance map
-
-"""

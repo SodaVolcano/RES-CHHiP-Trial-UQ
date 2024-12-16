@@ -49,14 +49,12 @@ if __name__ == "__main__":
         "-i",
         type=str,
         help="Path to the folder containing folders of DICOM files. If not provided, the data_dir from the configuration file will be used.",
-        optional=True,
     )
     parser.add_argument(
         "--out-path",
         "-o",
         type=str,
         help="Output path to store the h5 file. If not provided, the h5_path from the configuration file will be used.",
-        optional=True,
     )
     parser.add_argument(
         "--preprocess",
