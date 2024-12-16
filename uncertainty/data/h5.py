@@ -2,20 +2,20 @@
 Utility functions for loading and saving data to HDF5 files
 """
 
+import os
 from datetime import date
 from typing import Generator, Iterable
-import os
-import torch
 
 import h5py as h5
 import numpy as np
+import torch
 from loguru import logger
 from tqdm import tqdm
 
-from ..metrics import probability_map, variance_map, entropy_map
-
+from ..metrics import entropy_map, probability_map, variance_map
 from ..utils import curry, logger_wraps
-from .datatypes import MaskDict, PatientScan, PatientScanPreprocessed
+from .datatypes import PatientScan, PatientScanPreprocessed
+
 
 @curry
 def _create_group(
@@ -32,15 +32,10 @@ def _create_group(
                 group[key] = str(val)
             case x if isinstance(x, dict):
                 _create_group(val, key, group)
-            case x if isinstance(x, list):
-                [_create_group({i: val}, str(i)) for i, val in enumerate(x)]
-            case x if isinstance(x, np.ndarray | tuple | torch.Tensor):
+            case x if isinstance(x, np.ndarray | tuple | torch.Tensor | list):
                 group.create_dataset(key, data=val, compression="gzip")
             case _:
-                logger.warning(
-                    f"Unsupported type {type(val)} for key {key}, skipping"
-                )
-
+                logger.warning(f"Unsupported type {type(val)} for key {key}, skipping")
 
 
 @logger_wraps(level="INFO")
@@ -86,14 +81,24 @@ def load_scans_from_h5(
             }
 
 
-def save_prediction_to_h5(name: str, h5_path: str, x: np.ndarray, y: np.ndarray, y_pred: np.ndarray):
+def save_prediction_to_h5(
+    name: str, h5_path: str, x: torch.Tensor, y: torch.Tensor, y_pred:torch.Tensor 
+):
     """
     Save x, y and prediction to a H5 file, appending if the file already exists
     """
-    with h5.File(h5_path, 'a' if os.path.exists(h5_path) else 'w') as h5_file:
-        _create_group({'x': x, 'y': y, 'y_pred': y_pred}, name, h5_file)
+    with h5.File(h5_path, "a" if os.path.exists(h5_path) else "w") as h5_file:
+        _create_group({"x": x, "y": y, "y_pred": y_pred}, name, h5_file)
 
-def save_predictions_to_h5(name: str, h5_path: str, x: torch.Tensor, y: torch.Tensor, y_preds: list[torch.Tensor], compute_aggregation: bool = True):
+
+def save_predictions_to_h5(
+    name: str,
+    h5_path: str,
+    x: torch.Tensor,
+    y: torch.Tensor,
+    y_preds: list[torch.Tensor],
+    compute_aggregation: bool = True,
+):
     """
     Save x, y, and list of predictions to H5 file, optionally saving probability, entropy and variance map
 
@@ -111,11 +116,15 @@ def save_predictions_to_h5(name: str, h5_path: str, x: torch.Tensor, y: torch.Te
         List of predictions
     compute_aggregation: bool
         Whether to compute probability, entropy and variance maps
-    #TODO
     """
-    dict_ = {'x': x, 'y': y, 'y_preds': y_preds}
-    dict_ |= {'probability_map': probability_map(y_preds), "variance_map": variance_map(y_preds), "entropy_map": entropy_map(y_preds)} if compute_aggregation else {}
-    with h5.File(h5_path, 'a' if os.path.exists(h5_path) else 'w') as h5_file:
+    dict_ = {"x": x, "y": y, "y_preds": y_preds}
+    if compute_aggregation:
+        dict_ |= {
+                "probability_map": probability_map(y_preds),
+                "variance_map": variance_map(y_preds),
+                "entropy_map": entropy_map(y_preds),
+            }
+    with h5.File(h5_path, "a" if os.path.exists(h5_path) else "w") as h5_file:
         _create_group(dict_, name, h5_file)
 
 

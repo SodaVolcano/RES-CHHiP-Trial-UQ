@@ -75,20 +75,6 @@ def parameterised_inference(
 
 
 @curry
-def dump_pred(i_pred_y):
-    idx, pred_y = i_pred_y
-    pred, y = pred_y[0], pred_y[1]
-
-    unique_folder_name = str(idx)
-    maps_folder = os.path.join("single_preds", unique_folder_name)
-    os.makedirs(maps_folder, exist_ok=True)
-
-    torch.save(y, os.path.join(maps_folder, "label.pt"))
-    torch.save(pred, os.path.join(maps_folder, "pred.pt"))
-    return pred, y
-
-
-@curry
 def dump_aggregated_maps(i_preds_y, map_folder_path, class_names: list[str]):
     idx, preds_y = i_preds_y
     preds, y = list(preds_y[0]), preds_y[1]

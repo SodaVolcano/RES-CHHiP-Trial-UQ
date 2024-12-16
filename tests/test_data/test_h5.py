@@ -1,6 +1,7 @@
 import os
 import tempfile
 from datetime import date
+import torch
 
 import h5py
 import numpy as np
@@ -9,6 +10,9 @@ from ..context import data
 
 save_scans_to_h5 = data.save_scans_to_h5
 load_scans_from_h5 = data.load_scans_from_h5
+_create_group = data.h5._create_group
+save_prediction_to_h5 = data.save_prediction_to_h5
+save_predictions_to_h5 = data.save_predictions_to_h5
 
 dataset = [
     {
@@ -40,6 +44,49 @@ dataset = [
         },
     },
 ]
+
+
+class TestCreateGroup:
+    def test_create_group_with_different_datatypes(self, tmp_path):
+        test_path = tmp_path / "test.h5"
+        dataset2 = {
+            "patient_id": 5,
+            "volume": np.zeros((10, 10, 10)),
+            "spacings": (1.0, 1.0, 1.0),
+            "modality": "CT",
+            "study_date": date(2021, 1, 1),
+            "masks": {
+                "organ1": np.ones((10, 10, 10)),
+                "organ2": np.zeros((10, 10, 10)),
+                "list": [
+                    np.array([1, 2, 3]),
+                    np.array([1.0, 2.0, 3.0]),
+                    torch.tensor([1, 2, 3]),
+                ],
+            },
+            "list": [1, 2, 3],
+            "tensor": torch.tensor([1, 2, 3]),
+            "list2": [
+                np.array([1, 2, 3]),
+                np.array([1.0, 2.0, 3.0]),
+                torch.tensor([1, 2, 3]),
+            ],
+        }
+
+        with h5py.File(test_path, "w") as f:
+            _create_group(dataset2, "test_group", f)
+            assert "test_group" in f
+            assert f["test_group"]["patient_id"][()] == 5  # type: ignore
+            assert np.array_equal(f["test_group"]["volume"][()], np.zeros((10, 10, 10)))  # type: ignore
+            assert f["test_group"]["spacings"][()].tolist() == [1.0, 1.0, 1.0]  # type: ignore
+            assert f["test_group"]["modality"][()].decode() == "CT"  # type: ignore
+            assert f["test_group"]["study_date"][()].decode() == "2021-01-01"  # type: ignore
+            assert np.array_equal(f["test_group"]["masks/organ1"][()], np.ones((10, 10, 10)))  # type: ignore
+            assert np.array_equal(f["test_group"]["masks/organ2"][()], np.zeros((10, 10, 10)))  # type: ignore
+            assert np.array_equal(f["test_group"]["masks/list"][()], np.array([[1.0, 2.0, 3.0] for _ in range(3)]))  # type: ignore
+            assert np.array_equal(f["test_group"]["list"][()], np.array([1, 2, 3]))  # type: ignore
+            assert np.array_equal(f["test_group"]["tensor"][()], np.array([1, 2, 3]))  # type: ignore
+            assert np.array_equal(f["test_group"]["list2"][()], np.array([[1.0, 2.0, 3.0] for _ in range(3)]))  # type: ignore
 
 
 class TestSaveScansToH5:
@@ -89,3 +136,80 @@ class TestLoadScansFromH5:
                 assert data["spacings"] == (1.0, 1.0, 1.0)
                 assert data["manufacturer"] == "GE"
                 assert data["scanner"] == "Optima"
+
+
+class TestSavePredictionToH5:
+    def test_save_prediction_to_h5(self, tmp_path):
+        test_path = tmp_path / "test.h5"
+        x = torch.ones((1, 10, 10, 10))
+        y = torch.zeros((3, 10, 10, 10))
+        y_pred = torch.ones((3, 10, 10, 10))
+        save_prediction_to_h5("test", test_path, x, y, y_pred)
+
+        with h5py.File(test_path, "r") as f:
+            assert "test" in f
+            assert np.array_equal(f["test"]["x"][()], x)  # type: ignore
+            assert np.array_equal(f["test"]["y"][()], y)  # type: ignore
+            assert np.array_equal(f["test"]["y_pred"][()], y_pred)  # type: ignore
+
+    def test_appends_prediction_to_h5(self, tmp_path):
+        test_path = tmp_path / "test.h5"
+        x = torch.ones((1, 10, 10, 10))
+        y = torch.zeros((3, 10, 10, 10))
+        y_pred = torch.ones((3, 10, 10, 10))
+        save_prediction_to_h5("test", test_path, x, y, y_pred)
+        save_prediction_to_h5("test2", test_path, x, y, y_pred)
+
+        with h5py.File(test_path, "r") as f:
+            assert "test" in f
+            assert "test2" in f
+
+            assert np.array_equal(f["test"]["x"][()], x)  # type: ignore
+            assert np.array_equal(f["test"]["y"][()], y)  # type: ignore
+            assert np.array_equal(f["test"]["y_pred"][()], y_pred)  # type: ignore
+            assert np.array_equal(f["test2"]["x"][()], x)  # type: ignore
+            assert np.array_equal(f["test2"]["y"][()], y)  # type: ignore
+            assert np.array_equal(f["test2"]["y_pred"][()], y_pred)  # type: ignore
+
+
+class TestSavePredictionsToH5:
+    def test_save_predictions_to_h5(self, tmp_path):
+        test_path = tmp_path / "test.h5"
+        x = torch.ones((1, 10, 10, 10))
+        y = torch.zeros((3, 10, 10, 10))
+        y_preds = [torch.ones((3, 10, 10, 10)) for _ in range(3)]
+        save_predictions_to_h5("test", test_path, x, y, y_preds)
+
+        with h5py.File(test_path, "r") as f:
+            assert "test" in f
+            assert np.array_equal(f["test"]["x"][()], x)  # type: ignore
+            assert np.array_equal(f["test"]["y"][()], y)  # type: ignore
+            assert np.array_equal(f["test"]["y_preds"][()], y_preds)  # type: ignore
+            assert f["test"]["probability_map"][()].shape == (3, 10, 10, 10)  # type: ignore
+            assert f["test"]["variance_map"][()].shape == (3, 10, 10, 10)  # type: ignore
+            assert f["test"]["entropy_map"][()].shape == (3, 10, 10, 10)  # type: ignore
+
+    def test_appends_predictions_to_h5(self, tmp_path):
+        test_path = tmp_path / "test.h5"
+        x = torch.ones((1, 10, 10, 10))
+        y = torch.zeros((3, 10, 10, 10))
+        y_preds = [torch.ones((3, 10, 10, 10)) for _ in range(3)]
+        save_predictions_to_h5("test", test_path, x, y, y_preds)
+        save_predictions_to_h5("test2", test_path, x, y, y_preds)
+
+        with h5py.File(test_path, "r") as f:
+            assert "test" in f
+            assert "test2" in f
+
+            assert np.array_equal(f["test"]["x"][()], x)  # type: ignore
+            assert np.array_equal(f["test"]["y"][()], y)  # type: ignore
+            assert np.array_equal(f["test"]["y_preds"][()], y_preds)  # type: ignore
+            assert np.array_equal(f["test2"]["x"][()], x)  # type: ignore
+            assert np.array_equal(f["test2"]["y"][()], y)  # type: ignore
+            assert np.array_equal(f["test2"]["y_preds"][()], y_preds)  # type: ignore
+            assert f["test"]["probability_map"][()].shape == (3, 10, 10, 10)  # type: ignore
+            assert f["test"]["variance_map"][()].shape == (3, 10, 10, 10)  # type: ignore
+            assert f["test"]["entropy_map"][()].shape == (3, 10, 10, 10)  # type: ignore
+            assert f["test2"]["probability_map"][()].shape == (3, 10, 10, 10)  # type: ignore
+            assert f["test2"]["variance_map"][()].shape == (3, 10, 10, 10)  # type: ignore
+            assert f["test2"]["entropy_map"][()].shape == (3, 10, 10, 10)  # type: ignore
