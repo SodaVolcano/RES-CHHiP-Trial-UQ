@@ -46,14 +46,14 @@ nix --extra-experimental-features nix-command --extra-experimental-features flak
 # you can now run `uv run python ...` etc
 ```
 
-The Nix shell comes with short-hand alises in `shell.nix` such as `pytest` for `uv run pytest .`.
+The Nix shell comes with short-hand alises in `shell.nix` such as `pytest` for `uv run pytest .` etc.
 
 
 #### Auto-activation with Direnv (Optional)
 
 **Warning: `direnv` allow the execution of any arbitrary bash code in `.envrc`, please examine `.envrc` before you proceed!**
 
-[`direnv`](https://direnv.net/) is used to automatically activate `devenv` when you enter into the folder containing this repository. First, install it via the [official installation guide](https://direnv.net/docs/installation.html) and [hook it into your shell](https://direnv.net/docs/hook.html) (HINT: run `echo $SHELL` to see what shell you are using). Then, inside the project directory where `.envrc` is in the same folder, run...
+[`direnv`](https://direnv.net/) is used to automatically activate the Nix flake when you enter into the folder containing this repository. First, install it via the [official installation guide](https://direnv.net/docs/installation.html) and [hook it into your shell](https://direnv.net/docs/hook.html) (HINT: run `echo $SHELL` to see what shell you are using). Then, inside the project directory where `.envrc` is in the same folder, run...
 
 ```bash
 direnv allow  # allow execution of .envrc automatically

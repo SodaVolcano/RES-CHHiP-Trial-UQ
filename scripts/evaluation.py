@@ -270,34 +270,11 @@ input:
 modes:
     - single/mcdo/tta
         1. select single model from potentially list of models
-            tz.pipe(
-                input.items(),
-                curried.groupby(
-                    # group by model name without '-<int>' suffix
-                    unpack_args(lambda model_name, _: model_name.split('-')[0])
-                ),
-                curried.valmap(
-                    lambda model_lst: filter(
-                        unpack_args(
-                            lambda model_name, _: re.match(r'.*-0', model_name) or not re.match(r".*-\d+", model_name)), model_lst)),
-                curried.valmap(list), # format {'model': [('model-name', model)], 'model2': ..., ...}
-                curried.valmap(lambda x: x[0][1]),
-            )
         2. inference - single/mcdo/tta
 
     - ensemble
         1. accumulate into list
-            tz.pipe(
-                input.items(),
-                curried.groupby(
-                    # group by model name without '-<int>' suffix
-                    unpack_args(lambda model_name, _: model_name.split('-')[0])
-                ),
-                # for each list of model-name: model pairs, only get the model object
-                curried.valmap(lambda model_lst: map(lambda x: x[1], model_lst)),
-                curried.valmap(list),
-                curried.valfilter(lambda x: len(x) > 1),
-            )        
+           
         2. ensemble inference
 
 
@@ -308,7 +285,7 @@ torch.set_grad_enabled(False)
 
 FOR EACH MODE...
 
-    1. load model(s) by checking checkpoint dir type
+    DONE -------------------1. load model(s)
         - if single:
             - load the single model
             - model.eval()
@@ -316,13 +293,13 @@ FOR EACH MODE...
             - load all models into LIST
             - model.eval() for each model
 
-    evaluation = (
+    2. evaluation = (
         evaluate_prediction(average=average)
         if mode == "single"
         else evaluate_predictions(average=average)
     )
 
-    2. get inference function
+    3. get inference function
         - get aug and aug_batch
         - given inference mode... get_inference_mode()
         - if inference fn is tta or mcdo, set PARAMS n_outputs
@@ -330,7 +307,7 @@ FOR EACH MODE...
         - if ensemble, set PARAM models, else PARAM model
         - parameterise with rest of the params...
 
-    3. organise column names for the CSV
+    4. organise column names for the CSV
         - !!!CHANGE: use 'none' AND 'macro' average modes
         - get list of column names as [f"{name}_{metric}" for metric in metric_names for name in class_names]
             class1_metric1, class2_metric1, ..., total_metric1
@@ -338,7 +315,7 @@ FOR EACH MODE...
             [f"{name}_{metric}" for name in class_names for metric in metric_names]
 
             
-    4. perform inference
+    5. perform inference
         1. load (x, y) pairs from h5
         2. if numpy, convert to torch tensor
         3. map tuple (inference(x), y)
@@ -349,7 +326,6 @@ FOR EACH MODE...
         8. create lazyframe with the iterator, pass in column names
         9. reorder columns using sorted column names
         10. sink to csv
-
 """
 
 

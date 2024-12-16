@@ -39,6 +39,7 @@ FoldSplitsDict = dict[str, DataSplitDict]
 TrainDirDict = dict[str, dict[str, Iterable[LitModel]]]
 
 
+@logger_wraps(level="INFO")
 @auto_match_config(prefixes=["training", "data"])
 def train_model(
     model: lightning.LightningModule,
@@ -168,6 +169,7 @@ def train_model(
     trainer.fit(model, dataset)
 
 
+@logger_wraps(level="DEBUG")
 @auto_match_config(prefixes=["training", "data", "unet", "confidnet"])
 def train_models(
     models: list[str],
@@ -237,7 +239,7 @@ def _get_with_indices[
     return [dataset[i] for i in indices]  # type: ignore
 
 
-@logger_wraps(level="INFO")
+@logger_wraps()
 def split_into_folds[
     T
 ](dataset: Sequence[T], n_folds: int, return_indices: bool = False) -> Iterable[
@@ -311,6 +313,7 @@ def write_fold_splits_file(
         pickle.dump(content, f)
 
 
+@logger_wraps(level="DEBUG")
 def read_fold_splits_file(
     path: str | Path,
     fold: int | None = None,
@@ -328,6 +331,7 @@ def read_fold_splits_file(
     return content[f"fold_{fold}"]["train"], content[f"fold_{fold}"]["val"]
 
 
+@logger_wraps()
 def train_test_split(
     dataset: Sequence,
     test_split: float,
@@ -366,6 +370,7 @@ def train_test_split(
     return train_indices, test_indices
 
 
+@logger_wraps(level="INFO")
 @auto_match_config(prefixes=["training"])
 def init_training_dir(
     train_dir: str | Path,
@@ -442,6 +447,7 @@ def init_training_dir(
     return config_copy_path, train_test_path, data_split_path, fold_dirs
 
 
+@logger_wraps(level="DEBUG")
 def load_model(checkpoint_path: Path | str) -> LitModel:
     """
     Load `LitModel` from a checkpoint path.
@@ -452,6 +458,7 @@ def load_model(checkpoint_path: Path | str) -> LitModel:
     )
 
 
+@logger_wraps(level="INFO")
 def load_models(
     checkpoint_dir: str | Path, checkpoint_regex: str = "last.ckpt"
 ) -> dict[str, LitModel]:
@@ -484,6 +491,7 @@ def load_models(
     )  # type: ignore
 
 
+@logger_wraps(level="INFO")
 def load_training_dir(
     train_dir: str | Path,
     checkpoint_regex: str = "last.ckpt",
@@ -536,7 +544,8 @@ def load_training_dir(
             lambda fname: re.match(r"fold_\d+", fname)
             and os.path.isdir(train_dir / fname)
         ),
-        curried.sorted(key=lambda x: int(x.split("_")[1])),  # sort by fold number
+        # sort by fold number
+        curried.sorted(key=lambda fname: int(fname.split("_")[1])),
         lambda fold_dirs: {
             fold: load_models(train_dir / fold, checkpoint_regex) for fold in fold_dirs
         },
@@ -544,6 +553,7 @@ def load_training_dir(
     return config, data_split, (train_indices, test_indices), checkpoints  # type: ignore
 
 
+@logger_wraps(level="INFO")
 def select_single_models(checkpoint_dict: dict[str, LitModel]) -> dict[str, LitModel]:
     """
     Select the first model in a list of models for each model name in the checkpoint dictionary.
@@ -572,7 +582,8 @@ def select_single_models(checkpoint_dict: dict[str, LitModel]) -> dict[str, LitM
             # select first model: one without "-<int>" suffix OR have "-0" suffix
             starfilter(
                 lambda model_name, _: (
-                    re.match(r".*-0", model_name) or not re.match(r".*-\d+", model_name)
+                    re.match(r"^.*-0$", model_name)
+                    or not re.match(r"^.*-\d+$", model_name)
                 ),
             )
         ),
@@ -583,6 +594,7 @@ def select_single_models(checkpoint_dict: dict[str, LitModel]) -> dict[str, LitM
     )  # type: ignore
 
 
+@logger_wraps(level="INFO")
 def select_ensembles(checkpoint_dict: dict[str, LitModel]) -> dict[str, list[LitModel]]:
     """
     Select a list of ensembles from a dictionary of model checkpoints.

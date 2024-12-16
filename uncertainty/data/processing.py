@@ -11,7 +11,6 @@ import torchio as tio
 from loguru import logger
 from toolz import curried
 
-
 from .. import constants as c
 from ..utils import call_method, curry, logger_wraps, pmap
 from .datatypes import MaskDict, PatientScan, PatientScanPreprocessed
@@ -146,7 +145,7 @@ def make_isotropic(
         lambda arr: (
             np.moveaxis(arr, -1, 0) if len(arr.shape) == 3 else arr
         ),  # depth to first axis
-        lambda arr: sitk.GetImageFromArray(arr),
+        sitk.GetImageFromArray,
         call_method("SetOrigin", (0, 0, 0)),
         call_method("SetSpacing", spacings),
         lambda img: sitk.Resample(
@@ -160,7 +159,7 @@ def make_isotropic(
             0,
             img.GetPixelID(),
         ),
-        lambda img: sitk.GetArrayFromImage(img),
+        sitk.GetArrayFromImage,
         # arr is (D, W, H) move back to (H, W, D)
         lambda arr: (
             np.moveaxis(arr, 0, -1) if len(arr.shape) == 3 else arr

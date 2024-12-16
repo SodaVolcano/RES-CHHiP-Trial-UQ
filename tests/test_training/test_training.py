@@ -800,6 +800,7 @@ class TestSelectSingleModels:
             "model2-2": 8,
             "model2-3": 9,
             "model3": 10,
+            "model4-023": 12,
             "model4": 11,
             "model4-0": 12,
         }
