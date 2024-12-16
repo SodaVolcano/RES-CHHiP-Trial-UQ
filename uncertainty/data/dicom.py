@@ -138,8 +138,12 @@ def _load_rt_struct(dicom_path: str) -> Optional[rt_utils.RTStruct]:
     """
     return tz.pipe(
         dicom_path,
-        _get_dicom_slices,
-        curried.filter(_dicom_type_is(uid=c.RT_STRUCTURE_SET)),
+        list_files,
+        curried.filter(
+            lambda path: _dicom_type_is(
+                dicom.dcmread(path, force=True), c.RT_STRUCTURE_SET
+            )
+        ),
         list,
         lambda rt_struct_paths: (
             rt_utils.RTStructBuilder.create_from(
