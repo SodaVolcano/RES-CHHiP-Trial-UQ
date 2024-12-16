@@ -89,6 +89,6 @@ if __name__ == "__main__":
         args.in_path or config["data__data_dir"],
         args.out_path or config["data__h5_path"],
         args.preprocess,
-        config["data__patch_size"],  # patch size is the minimum size
+        config["training__patch_size"],  # patch size is the minimum size
         args.workers or config["data__n_workers"],
     )

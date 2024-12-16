@@ -171,7 +171,7 @@ def load_volume(dicom_path: str) -> Optional[np.ndarray]:
     dicom_path : str
         Path to the directory containing DICOM files
     """
-    dicom_slices = list(_get_dicom_slices(dicom_path))
+    dicom_slices = list(_get_ct_image_slices(dicom_path))
     intercepts = [float(d_slice.RescaleIntercept) for d_slice in dicom_slices]
     slopes = [float(d_slice.RescaleSlope) for d_slice in dicom_slices]
 
@@ -247,7 +247,7 @@ def load_patient_scan(dicom_path: str) -> Optional[PatientScan]:
     dicom_path : str
         Path to the directory containing DICOM files
     """
-    dicom_slices = list(_get_dicom_slices(dicom_path))
+    dicom_slices = list(_get_ct_image_slices(dicom_path))
     spacings = _get_uniform_spacing(dicom_slices)
     if not dicom_slices:
         raise ValueError(f"No DICOM files found in {dicom_path}")
