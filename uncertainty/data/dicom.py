@@ -367,4 +367,7 @@ def load_roi_names(dicom_dir: str) -> set[str]:
     return tz.pipe(
         dicom_dir,
         _load_rt_structs,
+        curried.map(lambda rt_struct: rt_struct.get_roi_names()),
+        curried.reduce(tz.concatv),
+        set,
     )  # type: ignore

@@ -287,6 +287,7 @@ def crop_to_body(
 
 
 @logger_wraps(level="INFO")
+@logger.catch()
 @curry
 def preprocess_volume(
     volume: np.ndarray,
@@ -315,6 +316,7 @@ def preprocess_volume(
 
 
 @logger_wraps(level="INFO")
+@logger.catch()
 @curry
 def preprocess_mask(
     mask: MaskDict, spacings: tuple[float, float, float], organ_ordering: list[str]
@@ -354,8 +356,8 @@ def preprocess_mask(
     )  # type: ignore
 
 
-@logger.catch()
 @logger_wraps(level="INFO")
+@logger.catch()
 @curry
 def preprocess_patient_scan(
     scan: PatientScan,

@@ -11,6 +11,7 @@ from .dicom import (
     load_all_volumes,
     load_mask,
     load_patient_scan,
+    load_roi_names,
     load_volume,
 )
 from .h5 import (
@@ -66,4 +67,5 @@ __all__ = [
     "MaskDict",
     "save_prediction_to_h5",
     "save_predictions_to_h5",
+    "load_roi_names",
 ]

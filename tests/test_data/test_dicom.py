@@ -14,12 +14,13 @@ load_all_patient_scans = data.load_all_patient_scans
 load_all_masks = data.dicom.load_all_masks
 MaskDict = data.MaskDict
 PatientScan = data.PatientScan
+load_roi_names = data.load_roi_names
 
 # Patch paths
 PATCH_LIST_FILES = "uncertainty.data.dicom.list_files"
 PATCH_DCMREAD = "pydicom.dcmread"
 PATCH_RT_CREATE_FROM = "rt_utils.RTStructBuilder.create_from"
-PATCH_LOAD_RT_STRUCT = "uncertainty.data.dicom._load_rt_structs"
+PATCH_LOAD_RT_STRUCTS = "uncertainty.data.dicom._load_rt_structs"
 PATCH_LOAD_VOLUME = "uncertainty.data.dicom.load_volume"
 PATCH_LOAD_MASK = "uncertainty.data.dicom.load_mask"
 PATCH_GENERATE_FULL_PATHS = "uncertainty.data.dicom.generate_full_paths"
@@ -132,7 +133,7 @@ class TestLoadMask:
         mocker.patch(PATCH_DCMREAD, return_value=MOCK_DICOM)
 
         mocker.patch(
-            PATCH_LOAD_RT_STRUCT,
+            PATCH_LOAD_RT_STRUCTS,
             return_value=[mock_rt_struct],
         )
 
@@ -147,7 +148,7 @@ class TestLoadMask:
     def test_load_mask_empty_directory(self, mocker):
         dicom_path = gen_path()
 
-        mocker.patch(PATCH_LOAD_RT_STRUCT, return_value=[])
+        mocker.patch(PATCH_LOAD_RT_STRUCTS, return_value=[])
 
         assert load_mask(dicom_path) is None
 
@@ -157,7 +158,7 @@ class TestLoadMask:
         mock_rt_struct = mocker.Mock()
         mock_rt_struct.get_roi_names.return_value = []
         mocker.patch(
-            PATCH_LOAD_RT_STRUCT,
+            PATCH_LOAD_RT_STRUCTS,
             return_value=[mock_rt_struct],
         )
 
@@ -326,7 +327,7 @@ class TestLoadAllMasks:
 
         mock_rt_struct.get_roi_mask_by_name.return_value = mock_mask
         mocker.patch(
-            PATCH_LOAD_RT_STRUCT,
+            PATCH_LOAD_RT_STRUCTS,
             return_value=[mock_rt_struct],
         )
         mocker.patch(PATCH_GET_DICOM_SLICES, return_value=[MOCK_DICOM, MOCK_DICOM])
@@ -353,3 +354,50 @@ class TestLoadAllMasks:
         result = list(load_all_masks(dicom_collection_path))
 
         assert len(result) == 0
+
+
+class TestLoadRoiNames:
+
+    # Returns correct set of unique ROI names from single RT struct file
+    def test_single_rt_struct_file(self, mocker, tmp_path):
+        # Create mock RT struct with ROI names
+        rt_struct = mocker.Mock()
+        rt_struct.get_roi_names.return_value = ["ROI1", "ROI2", "ROI2", "ROI3"]
+
+        mocker.patch(PATCH_LOAD_RT_STRUCTS, return_value=[rt_struct])
+
+        # Call function
+        result = load_roi_names(str(tmp_path))
+
+        # Verify results
+        assert result == {"ROI1", "ROI2", "ROI3"}
+
+    # test multiple RT struct files
+    def test_mixed_file_types(self, tmp_path, mocker):
+        # Create mock RT struct with ROI names
+        rt_struct = mocker.Mock()
+        rt_struct.get_roi_names.return_value = ["ROI1", "ROI2", "ROI2", "ROI3"]
+        rt_struct2 = mocker.Mock()
+        rt_struct2.get_roi_names.return_value = ["ROI4", "ROI5", "ROI6", "ROI1"]
+        rt_struct3 = mocker.Mock()
+        rt_struct3.get_roi_names.return_value = ["ROI7", "ROI8", "ROI2", "ROI1"]
+
+        # Mock _load_rt_structs to return single RT struct
+        mocker.patch(
+            PATCH_LOAD_RT_STRUCTS, return_value=[rt_struct, rt_struct2, rt_struct3]
+        )
+
+        # Call function
+        result = load_roi_names(str(tmp_path))
+
+        # Verify results
+        assert result == {
+            "ROI1",
+            "ROI2",
+            "ROI3",
+            "ROI4",
+            "ROI5",
+            "ROI6",
+            "ROI7",
+            "ROI8",
+        }
