@@ -15,13 +15,7 @@ import toolz.curried as curried
 from loguru import logger
 
 from .. import constants as c
-from ..utils import (
-    curry,
-    generate_full_paths,
-    list_files,
-    logger_wraps,
-    transform_nth,
-)
+from ..utils import curry, generate_full_paths, list_files, logger_wraps, transform_nth
 from .datatypes import MaskDict, PatientScan
 
 
@@ -383,6 +377,7 @@ def load_roi_names(dicom_dir: str) -> set[str]:
         generate_full_paths(path_generator=os.listdir),
         curried.map(_load_rt_structs),
         curried.map(list),
+        curried.filter(lambda lst: lst != []),
         curried.map(curried.get(0)),
         curried.map(lambda rt_struct: rt_struct.get_roi_names()),
         curried.reduce(tz.concatv),
