@@ -163,6 +163,37 @@ training:
   pin_memory_train: true
   pin_memory_val: true
 
+evaluation:
+  # List of evaluation modes to run, can be any of
+  # "single", "mcdo", "tta", "ensemble"
+  modes:
+    - "single"
+    - "mcdo"
+    - "tta"
+    - "ensemble"
+  # List of metric names separated by comma, can be any of 
+  # 'dice', 'hd', 'hd95', 'asd', 'assd', 'recall', 'sen', 'precision', 
+  # 'ppv', 'surface_dice', 'mean_variance', 'mean_entropy', or 
+  # 'surface_dice_[float] where [float] is the threshold for surface overlap
+  metrics:
+    - "dice"
+    - "surface_dice_1.0"
+    - "surface_dice_1.5"
+    - "surface_dice_2.0"
+    - "surface_dice_2.5"
+    - "surface_dice_3.0"
+    - "surface_dice_5.099"
+    - "surface_dice_13.928"
+    - "hd95"
+    - "assd"
+    - "sen"
+    - "ppv"
+    - "pairwise_dice"
+  # List of names for each class in the dataset along the channel dimension
+  class_names: ["prostate", "bladder", "rectum"]
+  # How many outputs to produce for MCDO and TTA mode
+  n_outputs: 10
+
 logger:
   #  ------------ loguru settings -------------------
   # see https://loguru.readthedocs.io/en/stable/api/logger.html

@@ -408,7 +408,7 @@ def init_training_dir(
     tuple[Path, Path, list[Path]] | None
         A tuple containing paths to...
          - the copied configuration file
-         - test-train split file
+         - train-test split file
          - validation fold splits file
          - the checkpoint folders for each fold
         None is returned if the configuration file already exists in the directory but

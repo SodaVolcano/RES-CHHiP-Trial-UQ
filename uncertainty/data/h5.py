@@ -34,6 +34,8 @@ def _create_group(
                 _create_group(val, key, group)
             case x if isinstance(x, np.ndarray | tuple | torch.Tensor | list):
                 group.create_dataset(key, data=val, compression="gzip")
+            case x if x is None:
+                pass
             case _:
                 logger.warning(f"Unsupported type {type(val)} for key {key}, skipping")
 
@@ -56,6 +58,7 @@ def save_scans_to_h5(
 @logger_wraps(level="INFO")
 def load_scans_from_h5(
     path: str,
+    indices: list[str] | None = None,
 ) -> (
     Generator[PatientScan, None, None] | Generator[PatientScanPreprocessed, None, None]
 ):
@@ -63,7 +66,7 @@ def load_scans_from_h5(
     Load patient scan dictionaries from an h5 file
     """
     with h5.File(path, "r") as hf:
-        for key in hf.keys():
+        for key in indices or hf.keys():
             scan = hf[key]
             yield {
                 "patient_id": scan["patient_id"][()],  # type: ignore
@@ -82,20 +85,37 @@ def load_scans_from_h5(
 
 
 def save_prediction_to_h5(
-    name: str, h5_path: str, x: torch.Tensor, y: torch.Tensor, y_pred: torch.Tensor
+    h5_path: str,
+    group_name: str,
+    x: torch.Tensor | None,
+    y: torch.Tensor | None,
+    y_pred: torch.Tensor,
 ):
     """
     Save x, y and prediction to a H5 file, appending if the file already exists
+
+    Parameters
+    ----------
+    h5_path: str
+        Path to the H5 file
+    group_name: str
+        Name of the group to save in the H5 file
+    x: torch.Tensor | None
+        Input tensor
+    y: torch.Tensor | None
+        Target tensor
+    y_pred: torch.Tensor
+        Prediction tensor
     """
     with h5.File(h5_path, "a" if os.path.exists(h5_path) else "w") as h5_file:
-        _create_group({"x": x, "y": y, "y_pred": y_pred}, name, h5_file)
+        _create_group({"x": x, "y": y, "y_pred": y_pred}, group_name, h5_file)
 
 
 def save_predictions_to_h5(
-    name: str,
     h5_path: str,
-    x: torch.Tensor,
-    y: torch.Tensor,
+    group_name: str,
+    x: torch.Tensor | None,
+    y: torch.Tensor | None,
     y_preds: list[torch.Tensor],
     compute_aggregation: bool = True,
 ):
@@ -104,13 +124,13 @@ def save_predictions_to_h5(
 
     Parameters
     ----------
-    name: str
-        Name of the group to save in the H5 file
     h5_path: str
         Path to the H5 file
-    x: torch.Tensor
+    group_name: str
+        Name of the group to save in the H5 file
+    x: torch.Tensor | None
         Input tensor
-    y: torch.Tensor
+    y: torch.Tensor | None
         Target tensor
     y_preds: list[torch.Tensor]
         List of predictions
@@ -125,4 +145,4 @@ def save_predictions_to_h5(
             "entropy_map": entropy_map(y_preds),
         }
     with h5.File(h5_path, "a" if os.path.exists(h5_path) else "w") as h5_file:
-        _create_group(dict_, name, h5_file)
+        _create_group(dict_, group_name, h5_file)

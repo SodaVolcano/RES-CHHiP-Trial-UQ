@@ -144,11 +144,24 @@ class TestSavePredictionToH5:
         x = torch.ones((1, 10, 10, 10))
         y = torch.zeros((3, 10, 10, 10))
         y_pred = torch.ones((3, 10, 10, 10))
-        save_prediction_to_h5("test", test_path, x, y, y_pred)
+        save_prediction_to_h5(test_path, "test", x, y, y_pred)
 
         with h5py.File(test_path, "r") as f:
             assert "test" in f
             assert np.array_equal(f["test"]["x"][()], x)  # type: ignore
+            assert np.array_equal(f["test"]["y"][()], y)  # type: ignore
+            assert np.array_equal(f["test"]["y_pred"][()], y_pred)  # type: ignore
+
+    def test_dont_save_x(self, tmp_path):
+        test_path = tmp_path / "test.h5"
+        x = None
+        y = torch.zeros((3, 10, 10, 10))
+        y_pred = torch.ones((3, 10, 10, 10))
+        save_prediction_to_h5(test_path, "test", x, y, y_pred)
+
+        with h5py.File(test_path, "r") as f:
+            assert "test" in f
+            assert "x" not in f["test"]  # type: ignore
             assert np.array_equal(f["test"]["y"][()], y)  # type: ignore
             assert np.array_equal(f["test"]["y_pred"][()], y_pred)  # type: ignore
 
@@ -157,8 +170,8 @@ class TestSavePredictionToH5:
         x = torch.ones((1, 10, 10, 10))
         y = torch.zeros((3, 10, 10, 10))
         y_pred = torch.ones((3, 10, 10, 10))
-        save_prediction_to_h5("test", test_path, x, y, y_pred)
-        save_prediction_to_h5("test2", test_path, x, y, y_pred)
+        save_prediction_to_h5(test_path, "test", x, y, y_pred)
+        save_prediction_to_h5(test_path, "test2", x, y, y_pred)
 
         with h5py.File(test_path, "r") as f:
             assert "test" in f
@@ -178,7 +191,7 @@ class TestSavePredictionsToH5:
         x = torch.ones((1, 10, 10, 10))
         y = torch.zeros((3, 10, 10, 10))
         y_preds = [torch.ones((3, 10, 10, 10)) for _ in range(3)]
-        save_predictions_to_h5("test", test_path, x, y, y_preds)
+        save_predictions_to_h5(test_path, "test", x, y, y_preds)
 
         with h5py.File(test_path, "r") as f:
             assert "test" in f
@@ -194,8 +207,8 @@ class TestSavePredictionsToH5:
         x = torch.ones((1, 10, 10, 10))
         y = torch.zeros((3, 10, 10, 10))
         y_preds = [torch.ones((3, 10, 10, 10)) for _ in range(3)]
-        save_predictions_to_h5("test", test_path, x, y, y_preds)
-        save_predictions_to_h5("test2", test_path, x, y, y_preds)
+        save_predictions_to_h5(test_path, "test", x, y, y_preds)
+        save_predictions_to_h5(test_path, "test2", x, y, y_preds)
 
         with h5py.File(test_path, "r") as f:
             assert "test" in f

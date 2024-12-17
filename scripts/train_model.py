@@ -113,7 +113,7 @@ if __name__ == "__main__":
         default="configuration.yaml",
     )
     parser.add_argument(
-        "--in-path",
+        "--h5-path",
         "-i",
         type=str,
         help="Path to the H5 dataset of PatientScan dictionaries. If not provided, the h5_path from the configuration file will be used.",
@@ -158,7 +158,7 @@ if __name__ == "__main__":
         train_models_for_one_fold(
             config,
             args.config,
-            args.in_path or config["data__h5_path"],
+            args.h5_path or config["data__h5_path"],
             args.train_dir or config["training__train_dir"],
             args.fold,
             args.models,
@@ -167,7 +167,7 @@ if __name__ == "__main__":
         train_models_for_all_folds(
             config,
             args.config,
-            args.in_path or config["data__h5_path"],
+            args.h5_path or config["data__h5_path"],
             args.train_dir or config["training__train_dir"],
             args.models,
         )
