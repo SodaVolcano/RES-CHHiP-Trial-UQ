@@ -1,35 +1,34 @@
-from pathlib import Path
-from typing import Callable, Iterable
 import gc
 import sys
+from pathlib import Path
+from typing import Callable, Iterable
+
 import numpy as np
 import polars as pl
 import toolz as tz
 import torch
-from toolz import curried
 from kornia.augmentation import RandomAffine3D
 from loguru import logger
-
+from toolz import curried
 
 sys.path.append("..")
 sys.path.append(".")
+from scripts.__helpful_parser import HelpfulParser
+from uncertainty.config import configuration
+from uncertainty.data import load_scans_from_h5, torchio_augmentations
 from uncertainty.data.h5 import save_prediction_to_h5, save_predictions_to_h5
+from uncertainty.evaluation import (
+    evaluate_prediction,
+    evaluate_predictions,
+    get_inference_mode,
+)
 from uncertainty.training import (
     LitModel,
     load_training_dir,
     select_ensembles,
     select_single_models,
 )
-from uncertainty.config import configuration
-from uncertainty.data import torchio_augmentations, load_scans_from_h5
-from uncertainty.evaluation import (
-    get_inference_mode,
-    evaluate_prediction,
-    evaluate_predictions,
-)
-from uncertainty.utils import config_logger, transform_nth, side_effect, star
-
-from scripts.__helpful_parser import HelpfulParser
+from uncertainty.utils import config_logger, side_effect, star, transform_nth
 
 
 @torch.no_grad()

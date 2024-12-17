@@ -2,7 +2,7 @@
 Collection of functions to preprocess numpy arrays and patient scans
 """
 
-from typing import Iterable, Literal, Optional, Sequence
+from typing import Iterable, Iterator, Literal, Optional, Sequence
 
 import numpy as np
 import SimpleITK as sitk
@@ -415,7 +415,7 @@ def preprocess_dataset(
     min_size: tuple[int, int, int],
     organ_ordering: list[str] = list(c.ORGAN_MATCHES.keys()),
     n_workers: int = 1,
-) -> Iterable[PatientScanPreprocessed]:
+) -> Iterator[PatientScanPreprocessed]:
     """
     Preprocess a dataset of PatientScan objects into (volume, masks) pairs
 

@@ -358,30 +358,34 @@ class TestLoadAllMasks:
 
 class TestLoadRoiNames:
 
-    # Returns correct set of unique ROI names from single RT struct file
+    # Returns correct ROI names from single RT struct file
     def test_single_rt_struct_file(self, mocker, tmp_path):
         # Create mock RT struct with ROI names
         rt_struct = mocker.Mock()
-        rt_struct.get_roi_names.return_value = ["ROI1", "ROI2", "ROI2", "ROI3"]
+        rt_struct.get_roi_names.return_value = ["ROI1", "ROI2", "ROI3"]
 
         mocker.patch(PATCH_LOAD_RT_STRUCTS, return_value=[rt_struct])
         mocker.patch(PATCH_GENERATE_FULL_PATHS, return_value=lambda _: [tmp_path])
 
         # Call function
-        result = load_roi_names(str(tmp_path))
+        result = next(load_roi_names(str(tmp_path)))
 
         # Verify results
-        assert result == {"ROI1", "ROI2", "ROI3"}
+        assert result == ["ROI1", "ROI2", "ROI3"]
 
     # test multiple RT struct files
-    def test_mixed_file_types(self, tmp_path, mocker):
-        # Create mock RT struct with ROI names
+    def test_multiple_rt_struct_files(self, tmp_path, mocker):
+        expected = [
+            ["ROI1", "ROI2", "ROI2", "ROI3"],
+            ["ROI4", "ROI5", "ROI6", "ROI1"],
+            ["ROI7", "ROI8", "ROI2", "ROI1"],
+        ]
         rt_struct = mocker.Mock()
-        rt_struct.get_roi_names.return_value = ["ROI1", "ROI2", "ROI2", "ROI3"]
+        rt_struct.get_roi_names.return_value = expected[0]
         rt_struct2 = mocker.Mock()
-        rt_struct2.get_roi_names.return_value = ["ROI4", "ROI5", "ROI6", "ROI1"]
+        rt_struct2.get_roi_names.return_value = expected[1]
         rt_struct3 = mocker.Mock()
-        rt_struct3.get_roi_names.return_value = ["ROI7", "ROI8", "ROI2", "ROI1"]
+        rt_struct3.get_roi_names.return_value = expected[2]
 
         # Mock _load_rt_structs to return single RT struct
         mocker.patch(
@@ -394,16 +398,7 @@ class TestLoadRoiNames:
         )
 
         # Call function
-        result = load_roi_names(str(tmp_path))
+        result = list(load_roi_names(str(tmp_path)))
 
         # Verify results
-        assert result == {
-            "ROI1",
-            "ROI2",
-            "ROI3",
-            "ROI4",
-            "ROI5",
-            "ROI6",
-            "ROI7",
-            "ROI8",
-        }
+        assert result == expected

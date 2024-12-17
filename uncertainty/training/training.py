@@ -8,7 +8,7 @@ import random
 import re
 import shutil
 from pathlib import Path
-from typing import Callable, Iterable, Sequence, TypedDict
+from typing import Callable, Iterable, Iterator, Sequence, TypedDict
 
 import lightning
 import toolz as tz
@@ -242,7 +242,7 @@ def _get_with_indices[
 @logger_wraps()
 def split_into_folds[
     T
-](dataset: Sequence[T], n_folds: int, return_indices: bool = False) -> Iterable[
+](dataset: Sequence[T], n_folds: int, return_indices: bool = False) -> Iterator[
     tuple[list[int] | Sequence[T], list[int] | Sequence[T]]
 ]:
     """

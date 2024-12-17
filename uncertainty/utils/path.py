@@ -6,7 +6,7 @@ import os
 import re
 from functools import reduce
 from pathlib import Path
-from typing import Callable, Generator, Iterable
+from typing import Callable, Generator, Iterable, Iterator
 
 import toolz as tz
 import toolz.curried as curried
@@ -72,7 +72,7 @@ def resolve_path_placeholders(path_pattern: str, placeholders: list[str]) -> lis
     if not placeholders:
         return [path_pattern]
 
-    def placeholder_in_list() -> Iterable[str]:
+    def placeholder_in_list() -> Iterator[str]:
         """
         Find all placeholders in the path pattern that are in the list
         """

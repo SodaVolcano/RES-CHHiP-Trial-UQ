@@ -5,7 +5,7 @@ Set of methods to load and save DICOM files
 import gc
 import os
 from datetime import date
-from typing import Iterable, Optional
+from typing import Iterable, Iterator, Optional
 
 import numpy as np
 import pydicom as dicom
@@ -90,7 +90,7 @@ def _get_uniform_spacing(
 
 
 @logger_wraps()
-def _get_dicom_slices(dicom_path: str) -> Iterable[dicom.Dataset]:
+def _get_dicom_slices(dicom_path: str) -> Iterator[dicom.Dataset]:
     """
     Return all DICOM files in `dicom_path` containing .dcm files
     """
@@ -133,7 +133,7 @@ def _load_roi_mask(
 
 
 @logger_wraps()
-def _load_rt_structs(dicom_path: str) -> Iterable[rt_utils.RTStruct]:
+def _load_rt_structs(dicom_path: str) -> Iterator[rt_utils.RTStruct]:
     """
     Create list of RTStructBuilder from DICOM RT struct file in `dicom_path`
     """
@@ -291,7 +291,7 @@ def load_patient_scan(dicom_path: str) -> Optional[PatientScan]:
 
 @logger_wraps(level="INFO")
 @curry
-def load_all_volumes(dicom_collection_path: str) -> Iterable[np.ndarray]:
+def load_all_volumes(dicom_collection_path: str) -> Iterator[np.ndarray]:
     """
     Load 3D volumes from folders of DICOM files in `dicom_collection_path`
 
@@ -315,7 +315,7 @@ def load_all_volumes(dicom_collection_path: str) -> Iterable[np.ndarray]:
 
 @logger_wraps(level="INFO")
 @curry
-def load_all_masks(dicom_collection_path: str) -> Iterable[MaskDict]:
+def load_all_masks(dicom_collection_path: str) -> Iterator[MaskDict]:
     """
     Load dictionary of masks from folders of DICOM files in dicom_collection_path
 
@@ -340,7 +340,7 @@ def load_all_masks(dicom_collection_path: str) -> Iterable[MaskDict]:
 
 @logger_wraps(level="INFO")
 @curry
-def load_all_patient_scans(dicom_collection_path: str) -> Iterable[PatientScan]:
+def load_all_patient_scans(dicom_collection_path: str) -> Iterator[PatientScan]:
     """
     Load PatientScans from folders of DICOM files in `dicom_collection_path`
 
@@ -363,9 +363,9 @@ def load_all_patient_scans(dicom_collection_path: str) -> Iterable[PatientScan]:
     )  # type: ignore
 
 
-def load_roi_names(dicom_dir: str) -> set[str]:
+def load_roi_names(dicom_dir: str) -> Iterator[list[str]]:
     """
-    Return a set of all ROI names given directory containing folders of DICOM files
+    Return a list of all ROI names for each folders of DICOM files in given directory
 
     Parameters
     ----------
@@ -380,6 +380,4 @@ def load_roi_names(dicom_dir: str) -> set[str]:
         curried.filter(lambda lst: lst != []),
         curried.map(curried.get(0)),
         curried.map(lambda rt_struct: rt_struct.get_roi_names()),
-        curried.reduce(tz.concatv),
-        set,
     )  # type: ignore

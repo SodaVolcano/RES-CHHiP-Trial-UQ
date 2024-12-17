@@ -5,7 +5,7 @@ PyTorch Dataset classes for loading data from H5 files.
 import random
 import time
 from itertools import islice
-from typing import Callable, Generator, Iterable
+from typing import Callable, Generator, Iterable, Iterator
 
 import h5py as h5
 import lightning as lit
@@ -118,7 +118,7 @@ class RandomPatchDataset(IterableDataset):
     @torch.no_grad()
     def __fg_patch_iter(
         self, n_patches: int
-    ) -> Iterable[tuple[torch.Tensor, torch.Tensor]]:
+    ) -> Iterator[tuple[torch.Tensor, torch.Tensor]]:
         """
         Iterator of `n_patches` patches guaranteed to contain a foreground
         """
@@ -131,7 +131,7 @@ class RandomPatchDataset(IterableDataset):
     @torch.no_grad()
     def __random_patch_iter(
         self, n_patches: int
-    ) -> Iterable[tuple[torch.Tensor, torch.Tensor]]:
+    ) -> Iterator[tuple[torch.Tensor, torch.Tensor]]:
         """
         Iterator of `n_patches` patches randomly sampled
         """

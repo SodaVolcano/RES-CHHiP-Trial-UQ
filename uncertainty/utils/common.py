@@ -4,7 +4,7 @@ Collection of common utility functions
 
 from copy import deepcopy
 from itertools import starmap as _starmap
-from typing import Any, Callable, Iterable
+from typing import Any, Callable, Iterable, Iterator
 
 import toolz as tz
 
@@ -43,7 +43,7 @@ def star[T](func: Callable[..., T]) -> Callable[..., T]:
 
 
 @curry
-def starmap[T](f: Callable[..., T], iterable: Iterable[Iterable[Any]]) -> Iterable[T]:
+def starmap[T](f: Callable[..., T], iterable: Iterable[Iterable[Any]]) -> Iterator[T]:
     """
     Return an iterator whose values are returned from the function evaluated with an argument tuple taken from the given sequence.
 
@@ -57,7 +57,7 @@ def starmap[T](f: Callable[..., T], iterable: Iterable[Iterable[Any]]) -> Iterab
 @curry
 def starfilter(
     f: Callable[..., bool], iterable: Iterable[Iterable[Any]]
-) -> Iterable[Any]:
+) -> Iterator[Any]:
     """
     Filter elements from an iterable using a function f(a, b, ...) that takes a tuple of arguments (a, b, ...).
     """
