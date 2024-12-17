@@ -7,10 +7,10 @@ from ..context import constants, data, gen_path
 
 load_volume = data.load_volume
 c = constants
-_load_rt_struct = data.dicom._load_rt_struct
+_load_rt_structs = data.dicom._load_rt_structs
 load_mask = data.load_mask
-load_patient_scan = data.dicom.load_patient_scan
-load_all_patient_scans = data.dicom.load_all_patient_scans
+load_patient_scan = data.load_patient_scan
+load_all_patient_scans = data.load_all_patient_scans
 load_all_masks = data.dicom.load_all_masks
 MaskDict = data.MaskDict
 PatientScan = data.PatientScan
@@ -19,7 +19,7 @@ PatientScan = data.PatientScan
 PATCH_LIST_FILES = "uncertainty.data.dicom.list_files"
 PATCH_DCMREAD = "pydicom.dcmread"
 PATCH_RT_CREATE_FROM = "rt_utils.RTStructBuilder.create_from"
-PATCH_LOAD_RT_STRUCT = "uncertainty.data.dicom._load_rt_struct"
+PATCH_LOAD_RT_STRUCT = "uncertainty.data.dicom._load_rt_structs"
 PATCH_LOAD_VOLUME = "uncertainty.data.dicom.load_volume"
 PATCH_LOAD_MASK = "uncertainty.data.dicom.load_mask"
 PATCH_GENERATE_FULL_PATHS = "uncertainty.data.dicom.generate_full_paths"
@@ -90,7 +90,7 @@ class Test_LoadRtStruct:
         )
         mocker.patch(PATCH_DCMREAD, return_value=mock_dicom_file)
 
-        result = _load_rt_struct(dicom_path)
+        result = list(_load_rt_structs(dicom_path))[0]
 
         assert result == "RTStructBuilderInstance"
         mock_rt_struct_builder.assert_called_once_with(
@@ -103,16 +103,16 @@ class Test_LoadRtStruct:
 
         mocker.patch(PATCH_LIST_FILES, return_value=[])
 
-        assert _load_rt_struct(dicom_path) == None
+        assert list(_load_rt_structs(dicom_path)) == []
 
     # Empty directory
     def test_load_rt_struct_empty_directory(self, mocker):
         dicom_path = gen_path()
         mocker.patch(PATCH_LIST_FILES, return_value=[])
 
-        result = _load_rt_struct(dicom_path)
+        result = list(_load_rt_structs(dicom_path))
 
-        assert result is None
+        assert result == []
 
 
 class TestLoadMask:
@@ -133,7 +133,7 @@ class TestLoadMask:
 
         mocker.patch(
             PATCH_LOAD_RT_STRUCT,
-            return_value=mock_rt_struct,
+            return_value=[mock_rt_struct],
         )
 
         mask = load_mask(dicom_path)
@@ -147,7 +147,7 @@ class TestLoadMask:
     def test_load_mask_empty_directory(self, mocker):
         dicom_path = gen_path()
 
-        mocker.patch(PATCH_LOAD_RT_STRUCT, return_value=None)
+        mocker.patch(PATCH_LOAD_RT_STRUCT, return_value=[])
 
         assert load_mask(dicom_path) is None
 
@@ -158,7 +158,7 @@ class TestLoadMask:
         mock_rt_struct.get_roi_names.return_value = []
         mocker.patch(
             PATCH_LOAD_RT_STRUCT,
-            return_value=mock_rt_struct,
+            return_value=[mock_rt_struct],
         )
 
         mask = load_mask(dicom_path)
@@ -327,7 +327,7 @@ class TestLoadAllMasks:
         mock_rt_struct.get_roi_mask_by_name.return_value = mock_mask
         mocker.patch(
             PATCH_LOAD_RT_STRUCT,
-            return_value=mock_rt_struct,
+            return_value=[mock_rt_struct],
         )
         mocker.patch(PATCH_GET_DICOM_SLICES, return_value=[MOCK_DICOM, MOCK_DICOM])
 

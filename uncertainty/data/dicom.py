@@ -14,7 +14,7 @@ import toolz.curried as curried
 from loguru import logger
 
 from .. import constants as c
-from ..utils import curry, generate_full_paths, list_files, logger_wraps
+from ..utils import curry, generate_full_paths, list_files, logger_wraps, transform_nth
 from .datatypes import MaskDict, PatientScan
 
 
@@ -95,6 +95,7 @@ def _get_dicom_slices(dicom_path: str) -> Iterable[dicom.Dataset]:
     return tz.pipe(
         dicom_path,
         list_files,
+        curried.filter(lambda fname: fname.endswith(".dcm")),
         curried.map(lambda fname: dicom.dcmread(fname, force=True)),
     )  # type: ignore
 
@@ -130,11 +131,9 @@ def _load_roi_mask(
 
 
 @logger_wraps()
-def _load_rt_struct(dicom_path: str) -> Optional[rt_utils.RTStruct]:
+def _load_rt_structs(dicom_path: str) -> Iterable[rt_utils.RTStruct]:
     """
-    Create RTStructBuilder from DICOM RT struct file in `dicom_path`
-
-    None is returned if no RT struct file is found
+    Create list of RTStructBuilder from DICOM RT struct file in `dicom_path`
     """
     return tz.pipe(
         dicom_path,
@@ -144,14 +143,13 @@ def _load_rt_struct(dicom_path: str) -> Optional[rt_utils.RTStruct]:
                 dicom.dcmread(path, force=True), c.RT_STRUCTURE_SET
             )
         ),
-        list,
-        lambda rt_struct_paths: (
-            rt_utils.RTStructBuilder.create_from(
-                dicom_series_path=dicom_path,
-                rt_struct_path=rt_struct_paths[0],
+        curried.map(
+            lambda rt_struct_path: (
+                rt_utils.RTStructBuilder.create_from(
+                    dicom_series_path=dicom_path,
+                    rt_struct_path=rt_struct_path,
+                )
             )
-            if rt_struct_paths
-            else None
         ),
     )  # type: ignore
 
@@ -213,20 +211,24 @@ def load_mask(dicom_path: str) -> Optional[MaskDict]:
     dicom_path : str
         Path to the directory containing DICOM files including the RT struct file
     """
-    rt_struct = _load_rt_struct(dicom_path)
-    if rt_struct is None:
+    rt_struct = list(_load_rt_structs(dicom_path))
+    if rt_struct == []:
         raise ValueError(f"No RT struct file found in {dicom_path}")
+    elif len(rt_struct) != 1:
+        logger.warning(
+            f"Multiple RT struct files found! Using the first one at {rt_struct[0]}..."
+        )
 
-    roi_names = tz.pipe(
-        rt_struct.get_roi_names(), curried.map(_standardise_roi_name), list
-    )
+    roi_names = rt_struct[0].get_roi_names()
 
     return tz.pipe(
         roi_names,
-        curried.map(_load_roi_mask(rt_struct=rt_struct)),
+        curried.map(_load_roi_mask(rt_struct=rt_struct[0])),
         curried.filter(lambda mask: mask is not None),
         curried.map(_flip_array),
-        lambda masks: dict(zip(roi_names, masks)),
+        lambda masks: zip(roi_names, masks),
+        curried.map(transform_nth(0, _standardise_roi_name)),
+        dict,
     )  # type: ignore
 
 
@@ -355,4 +357,14 @@ def load_all_patient_scans(dicom_collection_path: str) -> Iterable[PatientScan]:
         generate_full_paths(path_generator=os.listdir),
         curried.map(load_patient_scan),
         curried.filter(lambda scan: scan is not None),
+    )  # type: ignore
+
+
+def load_roi_names(dicom_dir: str) -> set[str]:
+    """
+    Return a set of all ROI names from all .dcm files in `dicom_dir`, searching subdirectories
+    """
+    return tz.pipe(
+        dicom_dir,
+        _load_rt_structs,
     )  # type: ignore
