@@ -20,8 +20,8 @@ from ..utils import (
     generate_full_paths,
     list_files,
     logger_wraps,
-    transform_nth,
     side_effect,
+    transform_nth,
 )
 from .datatypes import MaskDict, PatientScan
 
@@ -371,13 +371,19 @@ def load_all_patient_scans(dicom_collection_path: str) -> Iterable[PatientScan]:
 
 def load_roi_names(dicom_dir: str) -> set[str]:
     """
-    Return a set of all ROI names from all .dcm files in `dicom_dir`, searching subdirectories
+    Return a set of all ROI names given directory containing folders of DICOM files
+
+    Parameters
+    ----------
+    dicom_dir : str
+        Path to the directory containing folders of DICOM files
     """
     return tz.pipe(
         dicom_dir,
-        _load_rt_structs,
+        generate_full_paths(path_generator=os.listdir),
+        curried.map(_load_rt_structs),
+        curried.map(curried.get(0)),
         curried.map(lambda rt_struct: rt_struct.get_roi_names()),
-        curried.map(side_effect(lambda: gc.collect())),
         curried.reduce(tz.concatv),
         set,
     )  # type: ignore

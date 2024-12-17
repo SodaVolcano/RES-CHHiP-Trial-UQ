@@ -365,6 +365,7 @@ class TestLoadRoiNames:
         rt_struct.get_roi_names.return_value = ["ROI1", "ROI2", "ROI2", "ROI3"]
 
         mocker.patch(PATCH_LOAD_RT_STRUCTS, return_value=[rt_struct])
+        mocker.patch(PATCH_GENERATE_FULL_PATHS, return_value=lambda _: [tmp_path])
 
         # Call function
         result = load_roi_names(str(tmp_path))
@@ -384,7 +385,12 @@ class TestLoadRoiNames:
 
         # Mock _load_rt_structs to return single RT struct
         mocker.patch(
-            PATCH_LOAD_RT_STRUCTS, return_value=[rt_struct, rt_struct2, rt_struct3]
+            PATCH_LOAD_RT_STRUCTS,
+            side_effect=[[rt_struct], [rt_struct2], [rt_struct3]],
+        )
+        mocker.patch(
+            PATCH_GENERATE_FULL_PATHS,
+            return_value=lambda _: [tmp_path, tmp_path, tmp_path],
         )
 
         # Call function
