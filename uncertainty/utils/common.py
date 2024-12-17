@@ -93,6 +93,13 @@ def iterate_while[
 def side_effect[T](func: Callable[[], Any], val: T) -> T:
     """
     Perform side effect by calling `func` and let `val` pass through
+
+    Parameters
+    ----------
+    func: Callable
+        Function to be called, cannot take any arguments
+    val: any
+        Value to be returned
     """
     func()
     return val

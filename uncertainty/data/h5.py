@@ -56,6 +56,7 @@ def save_scans_to_h5(
 
 
 @logger_wraps(level="INFO")
+@curry
 def load_scans_from_h5(
     path: str,
     indices: list[str] | None = None,
@@ -84,6 +85,8 @@ def load_scans_from_h5(
             }
 
 
+@logger_wraps(level="INFO")
+@curry
 def save_prediction_to_h5(
     h5_path: str,
     group_name: str,
@@ -111,6 +114,8 @@ def save_prediction_to_h5(
         _create_group({"x": x, "y": y, "y_pred": y_pred}, group_name, h5_file)
 
 
+@logger_wraps(level="INFO")
+@curry
 def save_predictions_to_h5(
     h5_path: str,
     group_name: str,

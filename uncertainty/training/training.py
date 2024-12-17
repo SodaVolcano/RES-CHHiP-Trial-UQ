@@ -36,7 +36,7 @@ from .datasets import SegmentationData
 
 DataSplitDict = TypedDict("DataSplitDict", {"train": list[int], "val": list[int]})
 FoldSplitsDict = dict[str, DataSplitDict]
-TrainDirDict = dict[str, dict[str, Iterable[LitModel]]]
+TrainDirDict = dict[str, dict[str, LitModel]]
 
 
 @logger_wraps(level="INFO")
@@ -495,7 +495,12 @@ def load_models(
 def load_training_dir(
     train_dir: str | Path,
     checkpoint_regex: str = "last.ckpt",
-) -> tuple[dict, FoldSplitsDict, tuple[list[int], list[int]], TrainDirDict]:
+) -> tuple[
+    dict,
+    FoldSplitsDict,
+    tuple[list[int], list[int]] | tuple[list[str], list[str]],
+    TrainDirDict,
+]:
     """
     Load the configuration, data splits, train and test indices, and model checkpoints from training directory.
 
@@ -517,7 +522,7 @@ def load_training_dir(
 
     Returns
     -------
-    tuple[dict, FoldSplitsDict, tuple[list[int], list[int]], TrainDirDict]
+    tuple[dict, FoldSplitsDict, tuple[list[int], list[int]] | tuple[list[str], list[str]], dict[str, dict[str, LitModel]]]
         A tuple containing:
         - the configuration dictionary
         - the fold splits dictionary containing train and validation indices

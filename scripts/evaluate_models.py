@@ -1,33 +1,35 @@
+from pathlib import Path
+from typing import Callable, Iterable
 import gc
 import sys
-from typing import Callable
-
 import numpy as np
 import polars as pl
 import toolz as tz
 import torch
+from toolz import curried
 from kornia.augmentation import RandomAffine3D
 from loguru import logger
-from toolz import curried
+
 
 sys.path.append("..")
 sys.path.append(".")
-from scripts.__helpful_parser import HelpfulParser
-from uncertainty.config import configuration
-from uncertainty.data import load_scans_from_h5, torchio_augmentations
 from uncertainty.data.h5 import save_prediction_to_h5, save_predictions_to_h5
-from uncertainty.evaluation import (
-    evaluate_prediction,
-    evaluate_predictions,
-    get_inference_mode,
-)
 from uncertainty.training import (
     LitModel,
     load_training_dir,
     select_ensembles,
     select_single_models,
 )
-from uncertainty.utils import config_logger, side_effect, transform_nth
+from uncertainty.config import configuration
+from uncertainty.data import torchio_augmentations, load_scans_from_h5
+from uncertainty.evaluation import (
+    get_inference_mode,
+    evaluate_prediction,
+    evaluate_predictions,
+)
+from uncertainty.utils import config_logger, transform_nth, side_effect, star
+
+from scripts.__helpful_parser import HelpfulParser
 
 
 @torch.no_grad()
@@ -152,6 +154,7 @@ def main(
             1. perform_inference
             2. save CSV in top-most dir as fold-{idx}-mode-{mode}-model-{model}.csv
     
+h5_path = pred_dir / f"fold-{idx}-mode-{mode}-model-{model}.h5"
 
 
 evaluate for EACH FOLD
@@ -251,7 +254,7 @@ def get_parameterised_inference(
     patch_size: int | tuple[int, int, int],
     batch_size: int,
     output_channels: int,
-):
+) -> Callable[[torch.Tensor], torch.Tensor]:
     """
     Get unary inference function f(x) -> y_pred with parameters filled in
     """
@@ -285,10 +288,10 @@ def get_parameterised_inference(
         mode,
         get_inference_mode,
         lambda inference: inference(**parameters),
-    )
+    )  # type: ignore
 
 
-def _to_tensors(
+def _to_tensors_if_np(
     arrays: tuple[np.ndarray | torch.Tensor, ...]
 ) -> tuple[torch.Tensor, ...]:
     """Convert x, y pair to torch tensor if they are numpy arrays"""
@@ -297,7 +300,7 @@ def _to_tensors(
         curried.map(
             lambda arr: (
                 torch.tensor(arr, requires_grad=False)
-                if not isinstance(arr, torch.Tensor)
+                if isinstance(arr, np.ndarray)
                 else arr
             )
         ),
@@ -306,53 +309,79 @@ def _to_tensors(
 
 
 def perform_inference(
-    model_name: str,
     h5_path: str,
     test_indices: list[str],
     inference_fn: Callable[[torch.Tensor], torch.Tensor],
-    save_pred: Callable[[torch.Tensor, torch.Tensor, torch.Tensor], None],
-):
+    save_pred: Callable,
+    save_pred_path: str,
+    evaluate_pred: Callable,
+) -> Iterable[list[float]]:
+    """
+    Return iterator of list of metrics for each prediction
+    """
+    save_pred = save_pred(save_pred_path)  # set h5_path
+
     return tz.pipe(
         load_scans_from_h5(h5_path, test_indices),
+        # tuple format matches save_pred's func signature
         curried.map(
             lambda scan: (
                 scan["patient_id"],
-                scan["volume"],
+                None,  # don't save x, save space on disk
                 scan["masks"],
                 scan["volume"],
             )
         ),
-        curried.map(_to_tensors),
+        curried.map(_to_tensors_if_np),
         curried.map(transform_nth(3, inference_fn)),
+        curried.map(tuple),
         curried.map(side_effect(save_pred)),
-        # to torch tensor if numpy
+        curried.map(star(lambda _, __, y, y_pred: evaluate_pred(y_pred, y))),
+        curried.map(lambda tensor: tensor.tolist()),
+        curried.map(side_effect(lambda: gc.collect())),
     )
+
+
+def grow_csv():
+    pass
 
 
 @torch.no_grad()
 def infer_using_mode(
     h5_path: str,
-    ckpt_dict: dict[str, dict[str, LitModel]],
+    ckpt_dict: dict[str, LitModel],
     mode: str,
     n_outputs: int,
     patch_size: int | tuple[int, int, int],
     batch_size: int,
     output_channels: int,
+    metric_names: list[str],
     test_indices: list[str],
+    pred_dir: Path,
 ):
     mode_specific_fns = {
-        "single": (select_single_models, save_prediction_to_h5),
-        "ensemble": (select_ensembles, save_predictions_to_h5),
-        "mcdo": (select_single_models, save_prediction_to_h5),
-        "tta": (select_single_models, save_prediction_to_h5),
+        "single": (select_single_models, save_prediction_to_h5, evaluate_prediction),
+        "mcdo": (select_single_models, save_prediction_to_h5, evaluate_prediction),
+        "tta": (select_single_models, save_prediction_to_h5, evaluate_prediction),
+        "ensemble": (select_ensembles, save_predictions_to_h5, evaluate_predictions),
     }
     select_model = mode_specific_fns[mode][0]
     save_pred = mode_specific_fns[mode][1]
+    evaluator = mode_specific_fns[mode][2](metric_names=metric_names, average="none")
 
-    model = select_model(ckpt_dict)
-    inference_fn = get_parameterised_inference(
-        mode, n_outputs, model, patch_size, batch_size, output_channels
-    )
+    model_dict = select_model(ckpt_dict)
+    for model_name, model in model_dict.items():
+        inference_fn = get_parameterised_inference(
+            mode, n_outputs, model, patch_size, batch_size, output_channels
+        )
+        eval_metrics_it = perform_inference(
+            h5_path,
+            test_indices,
+            inference_fn,
+            save_pred,
+            str(pred_dir / f"{mode}_{model_name}.h5"),
+            evaluator,
+        )
 
 
 def main(
@@ -362,8 +391,23 @@ def main(
     class_names: list,
     n_outputs: int,
     h5_path: str,
+    pred_dir: Path,
 ):
-    config, _, (_, test_idx), ckpt_dict = load_training_dir(train_dir)
+    config, _, (_, test_idx), fold_dict = load_training_dir(train_dir)
+    for fold_name, ckpt_dict in fold_dict.items():
+        for mode in modes:
+            infer_using_mode(
+                h5_path,
+                ckpt_dict,
+                mode,
+                n_outputs,
+                config["data__patch_size"],
+                config["training__batch_size"],
+                config["model__output_channels"],
+                metrics,
+                test_idx,  # type: ignore
+                pred_dir / f"fold-{fold_name}",
+            )
 
 
 if __name__ == "__main__":
@@ -415,6 +459,13 @@ if __name__ == "__main__":
         help="Path to the H5 dataset of PatientScan dictionaries.",
         required=False,
     )
+    parser.add_argument(
+        "--pred-dir",
+        "-p",
+        type=str,
+        help="Path to the directory where predictions will be saved. If not provided, the pred_dir from the configuration file will be used.",
+        required=False,
+    )
 
     args = parser.parse_args()
     config = configuration(args.config)
@@ -433,4 +484,5 @@ if __name__ == "__main__":
         ),
         args.n_outputs or config["evaluation__n_outputs"],
         args.h5_path or config["data__h5_path"],
+        Path(args.pred_dir or config["evaluation__pred_dir"]),
     )

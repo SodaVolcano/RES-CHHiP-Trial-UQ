@@ -193,6 +193,8 @@ evaluation:
   class_names: ["prostate", "bladder", "rectum"]
   # How many outputs to produce for MCDO and TTA mode
   n_outputs: 10
+  # Folder to store predictions from the model
+  predictions_dir: "./predictions"
 
 logger:
   #  ------------ loguru settings -------------------
