@@ -87,7 +87,7 @@ class Test_LoadRtStruct:
 
         mocker.patch(
             PATCH_LIST_FILES,
-            return_value=[mock_dicom_file],
+            return_value=["file.dcm"],
         )
         mocker.patch(PATCH_DCMREAD, return_value=mock_dicom_file)
 
@@ -95,7 +95,7 @@ class Test_LoadRtStruct:
 
         assert result == "RTStructBuilderInstance"
         mock_rt_struct_builder.assert_called_once_with(
-            dicom_series_path=dicom_path, rt_struct_path=mock_dicom_file
+            dicom_series_path=dicom_path, rt_struct_path="file.dcm"
         )
 
     # No RT struct file present in the directory

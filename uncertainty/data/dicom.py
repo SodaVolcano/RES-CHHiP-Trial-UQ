@@ -138,6 +138,7 @@ def _load_rt_structs(dicom_path: str) -> Iterable[rt_utils.RTStruct]:
     return tz.pipe(
         dicom_path,
         list_files,
+        curried.filter(lambda path: path.endswith(".dcm")),
         curried.filter(
             lambda path: _dicom_type_is(
                 dicom.dcmread(path, force=True), c.RT_STRUCTURE_SET
