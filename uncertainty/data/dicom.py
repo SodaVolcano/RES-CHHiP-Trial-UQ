@@ -2,6 +2,7 @@
 Set of methods to load and save DICOM files
 """
 
+import gc
 import os
 from datetime import date
 from typing import Iterable, Optional
@@ -14,7 +15,14 @@ import toolz.curried as curried
 from loguru import logger
 
 from .. import constants as c
-from ..utils import curry, generate_full_paths, list_files, logger_wraps, transform_nth
+from ..utils import (
+    curry,
+    generate_full_paths,
+    list_files,
+    logger_wraps,
+    transform_nth,
+    side_effect,
+)
 from .datatypes import MaskDict, PatientScan
 
 
@@ -369,6 +377,7 @@ def load_roi_names(dicom_dir: str) -> set[str]:
         dicom_dir,
         _load_rt_structs,
         curried.map(lambda rt_struct: rt_struct.get_roi_names()),
+        curried.map(side_effect(lambda: gc.collect())),
         curried.reduce(tz.concatv),
         set,
     )  # type: ignore
