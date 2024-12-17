@@ -20,7 +20,6 @@ from ..utils import (
     generate_full_paths,
     list_files,
     logger_wraps,
-    side_effect,
     transform_nth,
 )
 from .datatypes import MaskDict, PatientScan
@@ -45,7 +44,8 @@ def _flip_array(array: np.ndarray) -> np.ndarray:
 
 @curry
 def _dicom_type_is(dicom: dicom.Dataset, uid: str) -> bool:
-    return dicom.SOPClassUID == uid
+    # Some dicom files do not have SOPClassUID...
+    return hasattr(dicom, "SOPClassUID") and dicom.SOPClassUID == uid
 
 
 def _standardise_roi_name(name: str) -> str:
@@ -382,6 +382,7 @@ def load_roi_names(dicom_dir: str) -> set[str]:
         dicom_dir,
         generate_full_paths(path_generator=os.listdir),
         curried.map(_load_rt_structs),
+        curried.map(list),
         curried.map(curried.get(0)),
         curried.map(lambda rt_struct: rt_struct.get_roi_names()),
         curried.reduce(tz.concatv),
