@@ -2,7 +2,6 @@
 Set of methods to load and save DICOM files
 """
 
-import gc
 import os
 from datetime import date
 from typing import Iterable, Iterator, Optional

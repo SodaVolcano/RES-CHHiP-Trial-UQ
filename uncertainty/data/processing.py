@@ -227,7 +227,8 @@ def find_organ_roi(organ: str, roi_lst: list[str]) -> Optional[str]:
     return tz.pipe(
         roi_lst,
         sorted,
-        lambda lst: [name for name in lst if name in c.ORGAN_MATCHES[organ]],
+        curried.filter(lambda name: name in c.ORGAN_MATCHES[organ]),
+        list,
         # encase [min(...)] in list as we will use lst[0] later
         lambda names: [min(names, key=len)] if len(names) > 1 else names,
         lambda name: None if name == [] else name[0],
@@ -286,8 +287,8 @@ def crop_to_body(
     return tuple(arr[:, rmin:rmax, cmin:cmax, zmin:zmax] for arr in [vol, mask])
 
 
-@logger_wraps(level="INFO")
 @logger.catch()
+@logger_wraps(level="INFO")
 @curry
 def preprocess_volume(
     volume: np.ndarray,
@@ -315,8 +316,8 @@ def preprocess_volume(
     )
 
 
-@logger_wraps(level="INFO")
 @logger.catch()
+@logger_wraps(level="INFO")
 @curry
 def preprocess_mask(
     mask: MaskDict, spacings: tuple[float, float, float], organ_ordering: list[str]
@@ -356,8 +357,8 @@ def preprocess_mask(
     )  # type: ignore
 
 
-@logger_wraps(level="INFO")
 @logger.catch()
+@logger_wraps(level="INFO")
 @curry
 def preprocess_patient_scan(
     scan: PatientScan,
