@@ -25,12 +25,13 @@ def main(
     preprocess: bool,
     min_size: tuple[int, ...],
     n_workers: int,
+    duplicate_name_strategy: str,
 ):
 
     scans = load_all_patient_scans(dicom_path)
     if preprocess:
         scans = preprocess_dataset(scans, min_size=min_size, n_workers=n_workers)
-    save_scans_to_h5(scans, save_path)
+    save_scans_to_h5(scans, save_path, duplicate_name_strategy)
 
 
 if __name__ == "__main__":
@@ -91,4 +92,5 @@ if __name__ == "__main__":
         args.preprocess,
         config["training__patch_size"],  # patch size is the minimum size
         args.workers or config["data__n_workers"],
+        config["data__duplicate_name_strategy"],
     )

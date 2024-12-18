@@ -9,6 +9,9 @@ data:
   h5_path: "./data/preprocessed_dataset.h5"
   # Number of processes for data preprocessing
   n_workers: 2
+  # When writing data to h5 file, how to handle duplicate keys (patient IDs)
+  # Any of: "skip" the duplicate, "overwrite" the duplicate, "rename" by adding a suffix
+  duplicate_name_strategy: "skip"
 
 unet:
   # ------------------ Conolution Block ------------------
