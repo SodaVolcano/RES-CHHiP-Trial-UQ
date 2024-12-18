@@ -1,8 +1,9 @@
 from datetime import date
+from unittest.mock import patch
 
 import numpy as np
 
-from ..context import data
+from ..context import data, utils
 
 # Import aliases
 map_interval = data.map_interval
@@ -13,6 +14,8 @@ preprocess_dataset = data.processing.preprocess_dataset
 preprocess_volume = data.processing.preprocess_volume
 preprocess_mask = data.processing.preprocess_mask
 preprocess_patient_scan = data.processing.preprocess_patient_scan
+preprocess_dataset = data.processing.preprocess_dataset
+curry = utils.curry
 
 
 class TestEnsureMinSize:
@@ -308,3 +311,72 @@ class TestPreprocessPatientScan:
         assert all(
             dim >= min_dim for dim, min_dim in zip(result["volume"].shape[1:], min_size)
         )
+
+
+class TestPreprocessDataset:
+
+    # Dataset with valid PatientScan objects is preprocessed correctly with default parameters
+    def test_valid_dataset_default_params(self):
+        # Create test dataset
+        masks = {
+            "prostate": np.random.randint(0, 2, (100, 100, 100)),
+            "bladder": np.random.randint(0, 2, (100, 100, 100)),
+            "rectum": np.random.randint(0, 2, (100, 100, 100)),
+            "eye": np.random.randint(0, 2, (100, 100, 100)),
+            "banana": np.random.randint(0, 2, (100, 100, 100)),
+        }
+
+        dataset = [
+            {
+                "patient_id": i,
+                "volume": np.random.rand(20, 15, 10).astype(np.float32),
+                "dimension_original": (20, 15, 10),
+                "spacings": (1.0, 1.0, 1.0),
+                "modality": "CT",
+                "manufacturer": "GE",
+                "scanner": "Optima",
+                "study_date": date(2021, 1, 1),
+                "masks": masks,
+            }
+            for i in range(2)
+        ]
+
+        # Process dataset
+        min_size = (10, 10, 10)
+        processed = list(preprocess_dataset(dataset=dataset, min_size=min_size))
+
+        # Verify results
+        assert len(processed) == 2
+        for scan in processed:
+            assert isinstance(scan["volume"], np.ndarray)
+            assert isinstance(scan["masks"], np.ndarray)
+            assert scan["volume"].shape[-3:] >= min_size
+            assert scan["masks"].shape[-3:] >= min_size
+            assert "organ_ordering" in scan
+
+    # test that the function continues if exception is raised in preprocess_patient_scan
+    def test_preprocess_dataset_continues_on_exception(self):
+        # Create a mock dataset with one valid and one invalid scan
+        volume = np.random.rand(100, 100, 100)
+        masks = {
+            "banana": np.random.randint(0, 2, (100, 100, 100)),
+        }
+
+        dataset = [
+            {
+                "patient_id": 1,
+                "volume": volume,
+                "dimension_original": (100, 100, 100),
+                "spacings": (1.0, 1.5, 1.0),
+                "modality": "CT",
+                "manufacturer": "test",
+                "scanner": "test",
+                "study_date": date(2020, 1, 1),
+                "masks": masks,
+            }
+            for _ in range(2)
+        ]
+
+        # Run preprocess_dataset and ensure it processes the valid scan
+        result = list(preprocess_dataset(dataset, min_size=(10, 10, 10)))
+        assert result == []

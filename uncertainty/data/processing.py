@@ -287,8 +287,8 @@ def crop_to_body(
     return tuple(arr[:, rmin:rmax, cmin:cmax, zmin:zmax] for arr in [vol, mask])
 
 
-@logger.catch()
 @logger_wraps(level="INFO")
+@logger.catch()
 @curry
 def preprocess_volume(
     volume: np.ndarray,
@@ -316,8 +316,8 @@ def preprocess_volume(
     )
 
 
-@logger.catch()
 @logger_wraps(level="INFO")
+@logger.catch()
 @curry
 def preprocess_mask(
     mask: MaskDict, spacings: tuple[float, float, float], organ_ordering: list[str]
@@ -357,8 +357,8 @@ def preprocess_mask(
     )  # type: ignore
 
 
-@logger.catch()
 @logger_wraps(level="INFO")
+@logger.catch()
 @curry
 def preprocess_patient_scan(
     scan: PatientScan,
@@ -436,10 +436,12 @@ def preprocess_dataset(
         Number of parallel processes to use, set to <= 1 to disable, by default 1
     """
     mapper = pmap(n_workers=n_workers) if n_workers > 1 else curried.map
+    preprocessor = tz.pipe(
+        preprocess_patient_scan(min_size=min_size, organ_ordering=organ_ordering),
+        logger.catch(),  # excepts don't work if the function is curried... wrap again
+    )
     return tz.pipe(
         dataset,
-        mapper(
-            preprocess_patient_scan(min_size=min_size, organ_ordering=organ_ordering)
-        ),
+        mapper(preprocessor),
         curried.filter(lambda scan: scan is not None),
     )  # type: ignore

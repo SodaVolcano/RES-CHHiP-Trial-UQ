@@ -116,8 +116,8 @@ def _get_ct_image_slices(dicom_path: str) -> Iterable[dicom.Dataset]:
     )  # type: ignore
 
 
-@logger.catch()
 @logger_wraps()
+@logger.catch()
 @curry
 def _load_roi_mask(
     name: str,
@@ -195,7 +195,7 @@ def load_volume(dicom_path: str) -> Optional[np.ndarray]:
     )  # type: ignore
 
 
-@logger.catch()
+@curried.excepts(Exception, handler=logger.exception)  # type: ignore
 @logger_wraps(level="INFO")
 @curry
 def load_mask(dicom_path: str) -> Optional[MaskDict]:
@@ -234,8 +234,8 @@ def load_mask(dicom_path: str) -> Optional[MaskDict]:
     )  # type: ignore
 
 
-@logger.catch()
 @logger_wraps(level="INFO")
+@logger.catch()
 @curry
 def load_patient_scan(dicom_path: str) -> Optional[PatientScan]:
     """
