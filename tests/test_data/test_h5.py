@@ -88,6 +88,46 @@ class TestCreateGroup:
             assert np.array_equal(f["test_group"]["tensor"][()], np.array([1, 2, 3]))  # type: ignore
             assert np.array_equal(f["test_group"]["list2"][()], np.array([[1.0, 2.0, 3.0] for _ in range(3)]))  # type: ignore
 
+    def test_duplicate_name_strategies(self, tmp_path):
+        test_path = tmp_path / "test.h5"
+        dataset2 = {
+            "patient_id": 5,
+            "volume": np.zeros((10, 10, 10)),
+            "spacings": (1.0, 1.0, 1.0),
+            "modality": "CT",
+            "study_date": date(2021, 1, 1),
+            "masks": {
+                "organ1": np.ones((10, 10, 10)),
+                "organ2": np.zeros((10, 10, 10)),
+            },
+            "list": [1, 2, 3],
+            "tensor": torch.tensor([1, 2, 3]),
+            "list2": [
+                np.array([1, 2, 3]),
+                np.array([1.0, 2.0, 3.0]),
+                torch.tensor([1, 2, 3]),
+            ],
+        }
+
+        with h5py.File(test_path, "w") as f:
+            _create_group(dataset2, "test_group", f)
+            assert "test_group" in f
+
+            temp = dataset2.copy()
+            temp["patient_id"] = 6
+            _create_group(temp, "test_group", f, duplicate_name_strategy="skip")
+            assert f["test_group"]["patient_id"][()] == 5  # type: ignore
+
+            _create_group(temp, "test_group", f, duplicate_name_strategy="overwrite")
+            assert f["test_group"]["patient_id"][()] == 6  # type: ignore
+
+            _create_group(temp, "test_group", f, duplicate_name_strategy="rename")
+            assert "test_group-1" in f
+            assert f["test_group-1"]["patient_id"][()] == 6  # type: ignore
+            _create_group(temp, "test_group", f, duplicate_name_strategy="rename")
+            assert "test_group-2" in f
+            assert f["test_group-2"]["patient_id"][()] == 6  # type: ignore
+
 
 class TestSaveScansToH5:
 
