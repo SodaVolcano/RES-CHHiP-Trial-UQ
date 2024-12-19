@@ -12,6 +12,10 @@ data:
   # When writing data to h5 file, how to handle duplicate keys (patient IDs)
   # Any of: "skip" the duplicate, "overwrite" the duplicate, "rename" by adding a suffix
   duplicate_name_strategy: "skip"
+  # Whether to remove .dcm files that are not part of a CT image series and not RT structs
+  # Used to avoid errors when rt_utils tries to use image dimension from e.g. a RT dose file
+  # WARNING: This will delete files, use with caution!
+  purge_data_dir: true
 
 unet:
   # ------------------ Conolution Block ------------------

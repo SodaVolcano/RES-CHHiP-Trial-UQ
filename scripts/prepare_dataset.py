@@ -15,6 +15,7 @@ from uncertainty.data import (
     load_all_patient_scans,
     preprocess_dataset,
     save_scans_to_h5,
+    purge_dicom_dir,
 )
 from uncertainty.utils import config_logger
 
@@ -26,7 +27,11 @@ def main(
     min_size: tuple[int, ...],
     n_workers: int,
     duplicate_name_strategy: str,
+    purge: bool,
 ):
+
+    if purge:
+        purge_dicom_dir(dicom_path)
 
     scans = load_all_patient_scans(dicom_path)
     if preprocess:
@@ -78,6 +83,13 @@ if __name__ == "__main__":
         help="Enable logging. Default is True.",
         default=True,
     )
+    parser.add_argument(
+        "--purge",
+        "-P",
+        action="store_true",
+        help="Remove all .dcm files that are not part of a series or RT struct.",
+        default=False,
+    )
 
     args = parser.parse_args()
     config = configuration(args.config)
@@ -93,4 +105,5 @@ if __name__ == "__main__":
         config["training__patch_size"],  # patch size is the minimum size
         args.workers or config["data__n_workers"],
         config["data__duplicate_name_strategy"],
+        args.purge or config["data__purge_data_dir"],
     )
