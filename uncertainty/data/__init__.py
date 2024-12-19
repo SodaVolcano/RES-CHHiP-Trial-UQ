@@ -13,6 +13,7 @@ from .dicom import (
     load_patient_scan,
     load_roi_names,
     load_volume,
+    purge_dicom_dir,
 )
 from .h5 import (
     load_scans_from_h5,
@@ -68,4 +69,5 @@ __all__ = [
     "save_prediction_to_h5",
     "save_predictions_to_h5",
     "load_roi_names",
+    "purge_dicom_dir",
 ]

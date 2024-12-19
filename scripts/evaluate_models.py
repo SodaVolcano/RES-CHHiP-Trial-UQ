@@ -290,7 +290,7 @@ def get_parameterised_inference(
     )  # type: ignore
 
 
-def _to_tensors_if_np(
+def _to_tensors_if_numpy(
     arrays: tuple[np.ndarray | torch.Tensor, ...]
 ) -> tuple[torch.Tensor, ...]:
     """Convert x, y pair to torch tensor if they are numpy arrays"""
@@ -331,7 +331,7 @@ def perform_inference(
                 scan["volume"],
             )
         ),
-        curried.map(_to_tensors_if_np),
+        curried.map(_to_tensors_if_numpy),
         curried.map(transform_nth(3, inference_fn)),
         curried.map(tuple),
         curried.map(side_effect(save_pred)),

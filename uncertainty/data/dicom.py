@@ -56,7 +56,7 @@ def _dicom_slice_order(dicom_file: dicom.Dataset) -> np.ndarray:
     """
     return tz.pipe(
         np.array(dicom_file.ImageOrientationPatient),
-        lambda iop: np.cross(iop[0:3], iop[3:]),
+        lambda iop: np.cross(iop[:3], iop[3:]),
         lambda normal: np.dot(np.array(dicom_file.ImagePositionPatient), normal),
     )
 
@@ -380,3 +380,31 @@ def load_roi_names(dicom_dir: str) -> Iterator[list[str]]:
         curried.map(curried.get(0)),
         curried.map(lambda rt_struct: rt_struct.get_roi_names()),
     )  # type: ignore
+
+
+def purge_dicom_dir(dicom_dir: str) -> None:
+    """
+    Remove all .dcm files that are not part of a CT image series or RT struct
+
+    WARNING: This searches through all subdirectories as well!
+
+    This is necessary as rt_utils.RTStructBuilder.create_from may try to
+    use e.g. array dimensions in dose plans which will be different from actual
+    array dimensions in the CT image series -> hence an array broadcasting error.
+    See https://github.com/qurit/rt-utils/issues/62
+    """
+    tz.pipe(
+        dicom_dir,
+        list_files,
+        curried.filter(lambda path: path.endswith(".dcm")),
+        curried.filter(
+            lambda path: (
+                not _dicom_type_is(dicom.dcmread(path, force=True), c.CT_IMAGE)
+                and not _dicom_type_is(
+                    dicom.dcmread(path, force=True), c.RT_STRUCTURE_SET
+                )
+            )
+        ),
+        curried.map(os.remove),
+        list,
+    )
