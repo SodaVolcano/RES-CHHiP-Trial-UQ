@@ -14,8 +14,8 @@ from uncertainty import configuration
 from uncertainty.data import (
     load_all_patient_scans,
     preprocess_dataset,
-    save_scans_to_h5,
     purge_dicom_dir,
+    save_scans_to_h5,
 )
 from uncertainty.utils import config_logger
 

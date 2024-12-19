@@ -14,7 +14,15 @@ import toolz.curried as curried
 from loguru import logger
 
 from .. import constants as c
-from ..utils import curry, generate_full_paths, list_files, logger_wraps, transform_nth
+from ..utils import (
+    curry,
+    generate_full_paths,
+    list_files,
+    logger_wraps,
+    star,
+    starfilter,
+    transform_nth,
+)
 from .datatypes import MaskDict, PatientScan
 
 
@@ -222,13 +230,19 @@ def load_mask(dicom_path: str) -> Optional[MaskDict]:
         )
 
     roi_names = rt_struct[0].get_roi_names()
+    # catch() decorator don't work with curried functions >:(, rewrap here
+    load_roi_mask = tz.pipe(
+        _load_roi_mask(rt_struct=rt_struct[0]),
+        logger.catch(),
+    )
 
     return tz.pipe(
-        roi_names,
-        curried.map(_load_roi_mask(rt_struct=rt_struct[0])),
-        curried.filter(lambda mask: mask is not None),
-        curried.map(_flip_array),
-        lambda masks: zip(roi_names, masks),
+        (roi_names, roi_names),
+        star(zip),
+        curried.map(transform_nth(1, load_roi_mask)),
+        curried.map(tuple),
+        starfilter(lambda name, mask: mask is not None),
+        curried.map(transform_nth(1, _flip_array)),
         curried.map(transform_nth(0, _standardise_roi_name)),
         dict,
     )  # type: ignore
