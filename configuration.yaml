@@ -202,6 +202,8 @@ evaluation:
   n_outputs: 10
   # Folder to store predictions from the model
   predictions_dir: "./predictions"
+  # Folder to store CSV with evaluation metrics
+  csv_dir: "./evaluations"
 
 logger:
   #  ------------ loguru settings -------------------

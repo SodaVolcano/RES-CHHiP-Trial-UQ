@@ -11,6 +11,7 @@ from kornia.augmentation import RandomAffine3D
 from loguru import logger
 from toolz import curried
 
+
 sys.path.append("..")
 sys.path.append(".")
 from scripts.__helpful_parser import HelpfulParser
@@ -28,222 +29,14 @@ from uncertainty.training import (
     select_ensembles,
     select_single_models,
 )
-from uncertainty.utils import config_logger, side_effect, star, transform_nth
-
-
-@torch.no_grad()
-def perform_inference(
-    checkpoint_dir: str,
-    metric_names: list[str],
-    mode: str,
-    average: str,
-    class_names: list[str] | None,
-    out_path: str,
-    n_outputs: int,
-    dataset_path: str,
-    map_path: str,
-):
-    # load checkpoint
-
-    torch.set_grad_enabled(False)
-
-    evaluation = (
-        evaluate_prediction(average=average)
-        if mode == "single"
-        else evaluate_predictions(average=average)
-    )
-    inference = parameterised_inference(mode, n_outputs, model, config)  # type: ignore
-
-    if average == "none":
-        assert (
-            class_names is not None
-        ), "You must specify class names when average == 'none'!"
-    col_names = (
-        metric_names
-        if average != "none"
-        # [class1_metric1, class2_metric1, ..., class1_metric2, class2_metric2, ...]
-        else [f"{name}_{metric}" for metric in metric_names for name in class_names]  # type: ignore
-    )
-    col_names_sorted = (
-        metric_names
-        if average != "none"
-        # [class1_metric1, class1_metric2, ..., class2_metric1, class2_metric2, ...]
-        else [f"{name}_{metric}" for name in class_names for metric in metric_names]  # type: ignore
-    )
-
-    def collect_garbage(x):
-        # Memory aren't cleared after each iteration for some reason so we do it manually...
-        gc.collect()
-        return x
-
-    tz.pipe(
-        load_xy_from_h5(dataset_path),
-        curried.map(
-            lambda xy: crop_to_body(xy[0], xy[1])
-        ),  # reduce storage space of array
-        # to torch tensor if numpy
-        curried.map(
-            lambda xy: (
-                tuple(map(torch.tensor, xy))
-                if isinstance(xy[0], np.ndarray) or isinstance(xy[1], np.ndarray)
-                else xy
-            )
-        ),
-        curried.map(lambda xy: (inference(xy[0]), xy[1])),
-        enumerate,
-        curried.map(
-            dump_aggregated_maps(map_folder_path=map_path, class_names=class_names)
-            if mode != "single"
-            else dump_pred
-        ),
-        curried.map(lambda y_pred: evaluation(y_pred[0], y_pred[1], metric_names)),
-        curried.map(lambda tensor: tensor.tolist()),
-        curried.map(collect_garbage),
-        lambda it: pl.LazyFrame(it, schema=col_names),
-        lambda it: it.select(pl.col(col_names_sorted)),  # reorder columns
-        lambda lf: lf.sink_csv(out_path),
-    )
-
-
-@torch.no_grad()
-def main(
-    single_model_dir: str,
-    ensemble_dir: str,
-    inference_modes: list[str],
-    metric_names: list[str],
-    average: str,
-    class_names: list[str] | None,
-    out_path: str,
-    n_outputs: int,
-    dataset_path: str,
-):
-
-    for mode in inference_modes:
-        checkpoint_dir = ensemble_dir if mode == "ensemble" else single_model_dir
-        perform_inference(
-            checkpoint_dir,
-            list(
-                filter(
-                    lambda name: (
-                        name not in ["mean_variance", "mean_entropy", "pairwise_dice"]
-                        if mode == "single"
-                        else True
-                    ),
-                    metric_names,
-                )
-            ),
-            mode,
-            average,
-            class_names,
-            f"{mode}_{out_path}",
-            n_outputs,
-            dataset_path,
-            map_path=f"prediction_maps/{mode}",
-        )
-
-
-"""
-1. load_training_dir to get
-    {'fold_1': {'model1": ...}, ...}
-2. for each fold,
-    1. for each mode (single, mcdo, tta, ensemble)
-        1. get inference function
-        2. select relevant models -> select_single_models/ensembles()
-        3. for each model in dict...
-            1. perform_inference
-            2. save CSV in top-most dir as fold-{idx}-mode-{mode}-model-{model}.csv
-    
-h5_path = pred_dir / f"fold-{idx}-mode-{mode}-model-{model}.h5"
-
-
-evaluate for EACH FOLD
-    for EACH MODE
-        for EACH MODEL
-
-
-
-
-input:
-    {
-        'model-1': <model>,
-        'model-2': <model>,
-        'model2-1': <model>,
-        'model2-2': <model>,
-    }
-modes:
-    - single/mcdo/tta
-        1. select single model from potentially list of models
-        2. inference - single/mcdo/tta
-
-    - ensemble
-        1. accumulate into list
-           
-        2. ensemble inference
-
-
-
-old code pseudocode:
-torch.set_grad_enabled(False)
-
-
-FOR EACH MODE...
-
-    DONE -------------------1. load model(s)
-        - if single:
-            - load the single model
-            - model.eval()
-        - else if ensemble:
-            - load all models into LIST
-            - model.eval() for each model
-
-    don't need to change ----------- 2. 
-        evaluation = (
-            evaluate_prediction(average=average)
-            if mode == "single"
-            else evaluate_predictions(average=average)
-        )
-
-    DONE ------------- 3. get inference function
-        - get aug and aug_batch
-        - given inference mode... get_inference_mode()
-        - if inference fn is tta or mcdo, set PARAMS n_outputs
-        - if tta, set PARAMS aug and aug_batch
-        - if ensemble, set PARAM models, else PARAM model
-        - parameterise with rest of the params...
-
-    4. organise column names for the CSV
-        - !!!CHANGE: use 'none' AND 'macro' average modes
-        - get list of column names as [f"{name}_{metric}" for metric in metric_names for name in class_names]
-            class1_metric1, class2_metric1, ..., total_metric1
-        - also, get a sorted version that swaps "for" order, as
-            [f"{name}_{metric}" for name in class_names for metric in metric_names]
-
-
-        grow_csv:
-            INPUT:
-                - col_names
-                - iterator yielding rows
-
-            1. given iterator, pl.LazyFrame(it, schema=col_names)
-            2. compute average columns...
-
-
-
-            
-    5. perform inference
-        1. load (x, y) pairs from h5
-        2. if numpy, convert to torch tensor
-        3. map tuple (inference(x), y)
-        4. dump aggregated maps if not single, else dump single prediction
-        5. evaluate y and y_pred using metric names
-        6. convert to list
-        7. side-effect: collect garbage
-        8. create lazyframe with the iterator, pass in column names
-        9. reorder columns using sorted column names
-        10. sink to csv
-    
-    DONE - dump predictions
-"""
+from uncertainty.utils import (
+    config_logger,
+    side_effect,
+    star,
+    transform_nth,
+    list_files,
+    curry,
+)
 
 
 def get_parameterised_inference(
@@ -316,7 +109,7 @@ def perform_inference(
     evaluate_pred: Callable,
 ) -> Iterable[list[float]]:
     """
-    Return iterator of list of metrics for each prediction
+    Return iterator of list of [patient_id, metric1, metric2, ...] for each prediction
     """
     save_pred = save_pred(save_pred_path)  # set h5_path
 
@@ -335,14 +128,62 @@ def perform_inference(
         curried.map(transform_nth(3, inference_fn)),
         curried.map(tuple),
         curried.map(side_effect(save_pred)),
-        curried.map(star(lambda _, __, y, y_pred: evaluate_pred(y_pred, y))),
-        curried.map(lambda tensor: tensor.tolist()),
+        curried.map(
+            star(
+                lambda patient_id, _, y, y_pred: (
+                    [patient_id],
+                    evaluate_pred(y_pred, y),
+                )
+            )
+        ),
+        curried.map(transform_nth(1, lambda tensor: tensor.tolist())),
+        curried.map(tz.concat),
         curried.map(side_effect(lambda: gc.collect())),
     )
 
 
-def grow_csv():
-    pass
+def to_csv(
+    it: Iterable[list[float]],
+    col_names: list[str],
+    col_names_reordered: list[str],
+    out_path: str | Path,
+):
+    """
+    Given an iterator of metrics each starting with ID, compute metric-wise average and save to CSV
+    """
+    avg_metrics = tz.pipe(
+        col_names_reordered[1:],  # skip patient_id
+        curried.groupby(lambda col_name: col_name.split("_")[-1]),
+        lambda groups: {
+            f"avg_{metric}": pl.mean_horizontal(*cols)
+            for metric, cols in groups.items()
+        },
+    )
+
+    tz.pipe(
+        pl.LazyFrame(it, schema=col_names),
+        lambda lf: lf.select(pl.col(col_names_reordered)),
+        # add average metrics onto the end
+        lambda lf: lf.with_columns(**avg_metrics),
+        lambda lf: lf.sink_csv(out_path),
+    )
+
+
+def compute_fold_avg_csv(csv_dir: Path, col_names: list[str]):
+    """
+    Compute the average of the CSV files in the directory and save to a new CSV file
+    """
+    tz.pipe(
+        csv_dir,
+        list_files,
+        curried.map(pl.scan_csv),
+        curry(pl.concat)(how="vertical"),
+        lambda lf: lf.group_by("patient_id"),
+        lambda lf: lf.agg(
+            [pl.col(col).mean() for col in col_names[1:]]  # [1:] skip patient_id
+        ),
+        lambda lf: lf.sink(csv_dir / "fold_avg.csv"),
+    )
 
 
 @torch.no_grad()
@@ -355,8 +196,10 @@ def infer_using_mode(
     batch_size: int,
     output_channels: int,
     metric_names: list[str],
+    class_names: list[str],
     test_indices: list[str],
     pred_dir: Path,
+    csv_dir: Path,
 ):
     mode_specific_fns = {
         "single": (select_single_models, save_prediction_to_h5, evaluate_prediction),
@@ -367,6 +210,15 @@ def infer_using_mode(
     select_model = mode_specific_fns[mode][0]
     save_pred = mode_specific_fns[mode][1]
     evaluator = mode_specific_fns[mode][2](metric_names=metric_names, average="none")
+
+    # class1_metric1, class2_metric1, ..., class1_metric2, class2_metric2, ...
+    col_names = ["patient_id"] + [
+        f"{cls_name}_{metric}" for metric in metric_names for cls_name in class_names
+    ]
+    # class1_metric1, class1_metric2, ..., class2_metric1, class2_metric2, ...
+    col_names_reordered = ["patient_id"] + [
+        f"{cls_name}_{metric}" for cls_name in class_names for metric in metric_names
+    ]
 
     model_dict = select_model(ckpt_dict)
     for model_name, model in model_dict.items():
@@ -381,6 +233,14 @@ def infer_using_mode(
             str(pred_dir / f"{mode}_{model_name}.h5"),
             evaluator,
         )
+        to_csv(
+            eval_metrics_it,
+            col_names,
+            col_names_reordered,
+            csv_dir / f"{mode}_{model_name}.csv",
+        )
+
+    compute_fold_avg_csv(csv_dir, col_names_reordered)
 
 
 def main(
@@ -391,8 +251,10 @@ def main(
     n_outputs: int,
     h5_path: str,
     pred_dir: Path,
+    csv_dir: Path,
 ):
-    config, _, (_, test_idx), fold_dict = load_training_dir(train_dir)
+    config, _, (_, test_indices), fold_dict = load_training_dir(train_dir)
+
     for fold_name, ckpt_dict in fold_dict.items():
         for mode in modes:
             infer_using_mode(
@@ -404,8 +266,10 @@ def main(
                 config["training__batch_size"],
                 config["model__output_channels"],
                 metrics,
-                test_idx,  # type: ignore
+                class_names,
+                test_indices,  # type: ignore
                 pred_dir / f"fold-{fold_name}",
+                csv_dir / f"fold-{fold_name}",
             )
 
 
@@ -465,6 +329,12 @@ if __name__ == "__main__":
         help="Path to the directory where predictions will be saved. If not provided, the pred_dir from the configuration file will be used.",
         required=False,
     )
+    parser.add_argument(
+        "--csv-dir",
+        "-o",
+        type=str,
+        help="Path to the directory where the CSV files will be saved. If not provided, the csv_dir from the configuration file will be used.",
+    )
 
     args = parser.parse_args()
     config = configuration(args.config)
@@ -483,5 +353,6 @@ if __name__ == "__main__":
         ),
         args.n_outputs or config["evaluation__n_outputs"],
         args.h5_path or config["data__h5_path"],
-        Path(args.pred_dir or config["evaluation__pred_dir"]),
+        Path(args.pred_dir or config["evaluation__predictions_dir"]),
+        Path(args.csv_dir or config["evaluation__csv_dir"]),
     )
