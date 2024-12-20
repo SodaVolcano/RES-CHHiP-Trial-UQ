@@ -11,6 +11,8 @@ import torchio as tio
 from loguru import logger
 from toolz import curried
 
+from uncertainty.utils.sequence import transform_nth
+
 from .. import constants as c
 from ..utils import call_method, curry, logger_wraps, pmap
 from .datatypes import MaskDict, PatientScan, PatientScanPreprocessed
@@ -255,7 +257,7 @@ def _bounding_box3d(img: np.ndarray):
 @curry
 def crop_to_body(
     vol_mask: tuple[np.ndarray, np.ndarray],
-    trim_border_px: int = 3,
+    trim_border_px: int = 5,
     thresh: float = c.BODY_THRESH,
 ):
     """
@@ -312,7 +314,6 @@ def preprocess_volume(
         volume,
         make_isotropic(spacings=spacings, method=interpolation),
         curry(np.expand_dims)(axis=0),  # Add channel dimension, now (C, H, W, D)
-        z_score_scale,
     )
 
 
@@ -406,8 +407,12 @@ def preprocess_patient_scan(
         crop_to_body,
         ensure_min_size(min_size=min_size),
         curried.map(lambda arr: arr.astype(np.float32)),
+        # Z-score normalisation has to come after cropping
+        # cropping uses thresholding, z-score before will change the intensities!
+        transform_nth(0, z_score_scale),
         tuple,
     )
+
     return scan  # type: ignore
 
 
