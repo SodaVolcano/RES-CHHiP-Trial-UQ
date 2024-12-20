@@ -204,7 +204,7 @@ def sliding_inference(
         tz.concat,
         curried.map(lambda y_pred: y_pred.cpu().numpy()),
         lambda y_pred_patches: zip(patch_indices, y_pred_patches),
-        (lambda it: tqdm(it, total=len(patch_indices))) if prog_bar else tz.identity,
+        lambda it: tqdm(it, total=len(patch_indices), disable=not prog_bar),
     )
 
     y_pred = _reconstruct_image(
@@ -351,7 +351,7 @@ def ensemble_inference(
             )
         ),
         curried.map(lambda inference: inference(x)),
-        (lambda it: tqdm(it, total=len(models))) if prog_bar else tz.identity,
+        lambda it: tqdm(it, total=len(models), disable=not prog_bar),
     )  # type: ignore
 
 
@@ -454,7 +454,7 @@ def tta_inference(
         starmap(lambda subj, y_pred: assign_mask_to_subject(subj, y_pred)),
         curried.map(lambda subj: subj.apply_inverse_transform(warn=False)),
         curried.map(lambda subj: subj["mask"].data),
-        (lambda it: tqdm(it, total=n_outputs)) if prog_bar else tz.identity,
+        lambda it: tqdm(it, total=n_outputs, disable=not prog_bar),
     )  # type: ignore
 
 

@@ -12,6 +12,7 @@ import rt_utils
 import toolz as tz
 import toolz.curried as curried
 from loguru import logger
+from tqdm import tqdm
 
 from .. import constants as c
 from ..utils import (
@@ -396,7 +397,7 @@ def load_roi_names(dicom_dir: str) -> Iterator[list[str]]:
     )  # type: ignore
 
 
-def purge_dicom_dir(dicom_dir: str) -> None:
+def purge_dicom_dir(dicom_dir: str, prog_bar: bool = True) -> None:
     """
     Remove all .dcm files that are not part of a CT image series or RT struct
 
@@ -406,10 +407,20 @@ def purge_dicom_dir(dicom_dir: str) -> None:
     use e.g. array dimensions in dose plans which will be different from actual
     array dimensions in the CT image series -> hence an array broadcasting error.
     See https://github.com/qurit/rt-utils/issues/62
+
+    Parameters
+    ----------
+    dicom_dir : str
+        Path to the directory containing DICOM files
+    prog_bar : bool, optional
+        Whether to show a progress bar, by default True
     """
     tz.pipe(
         dicom_dir,
         list_files,
+        lambda files: tqdm(
+            files, desc="Purging DICOM files", disable=not prog_bar, total=len(files)
+        ),
         curried.filter(lambda path: path.endswith(".dcm")),
         curried.filter(
             lambda path: (

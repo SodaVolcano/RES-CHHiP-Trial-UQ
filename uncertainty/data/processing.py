@@ -380,6 +380,7 @@ def preprocess_patient_scan(
     organ_ordering : list[str]
         List of organ names in order to keep
     """
+    old_mask_keys = scan["masks"].keys()
 
     scan = tz.pipe(
         scan,
@@ -396,7 +397,8 @@ def preprocess_patient_scan(
     )
     if scan["masks"] is None:
         raise ValueError(
-            f"Missing organs in {scan["patient_id"]} with required organs {organ_ordering}"
+            f"Missing organs in {scan["patient_id"]} with required organs {organ_ordering}, "
+            f"available organs: {old_mask_keys}",
         )
 
     scan["volume"], scan["masks"] = tz.pipe(
@@ -438,7 +440,7 @@ def preprocess_dataset(
     mapper = pmap(n_workers=n_workers) if n_workers > 1 else curried.map
     preprocessor = tz.pipe(
         preprocess_patient_scan(min_size=min_size, organ_ordering=organ_ordering),
-        logger.catch(),  # excepts don't work if the function is curried... wrap again
+        logger.catch(),  # catch() don't work if the function is curried... wrap again
     )
     return tz.pipe(
         dataset,
