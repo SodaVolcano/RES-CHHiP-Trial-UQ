@@ -11,7 +11,6 @@ from kornia.augmentation import RandomAffine3D
 from loguru import logger
 from toolz import curried
 
-
 sys.path.append("..")
 sys.path.append(".")
 from scripts.__helpful_parser import HelpfulParser
@@ -31,11 +30,11 @@ from uncertainty.training import (
 )
 from uncertainty.utils import (
     config_logger,
+    curry,
+    list_files,
     side_effect,
     star,
     transform_nth,
-    list_files,
-    curry,
 )
 
 
@@ -169,9 +168,13 @@ def to_csv(
     )
 
 
-def compute_fold_avg_csv(csv_dir: Path, col_names: list[str]):
+def compute_fold_avg_csv(csv_dir: Path, col_names: list[str], out_path: Path):
     """
     Compute the average of the CSV files in the directory and save to a new CSV file
+
+    # TODO: group by csv name (because this will average across mode...) and put this in main()
+    what should we average across?
+    - average across: fold, model and mode?
     """
     tz.pipe(
         csv_dir,
@@ -182,7 +185,7 @@ def compute_fold_avg_csv(csv_dir: Path, col_names: list[str]):
         lambda lf: lf.agg(
             [pl.col(col).mean() for col in col_names[1:]]  # [1:] skip patient_id
         ),
-        lambda lf: lf.sink(csv_dir / "fold_avg.csv"),
+        lambda lf: lf.sink(out_path),
     )
 
 
@@ -240,7 +243,7 @@ def infer_using_mode(
             csv_dir / f"{mode}_{model_name}.csv",
         )
 
-    compute_fold_avg_csv(csv_dir, col_names_reordered)
+    compute_fold_avg_csv(csv_dir, col_names_reordered, csv_dir / f"{mode}_avg.csv")
 
 
 def main(

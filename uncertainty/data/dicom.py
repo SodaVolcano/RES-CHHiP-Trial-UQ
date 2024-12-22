@@ -14,6 +14,7 @@ import toolz.curried as curried
 from loguru import logger
 from tqdm import tqdm
 
+
 from .. import constants as c
 from ..utils import (
     curry,
@@ -23,6 +24,8 @@ from ..utils import (
     star,
     starfilter,
     transform_nth,
+    merge_with_reduce,
+    rename_key,
 )
 from .datatypes import MaskDict, PatientScan
 
@@ -433,3 +436,55 @@ def purge_dicom_dir(dicom_dir: str, prog_bar: bool = True) -> None:
         curried.map(os.remove),
         list,
     )
+
+
+@logger_wraps(level="INFO")
+def compute_dataset_stats(
+    dataset: Iterable[PatientScan],
+) -> dict[str, dict[str, np.ndarray | set[str]]]:
+    """
+    Return dictionary of statistics from patient scans in `dataset`
+
+    Parameters
+    ----------
+    dataset : Iterable[PatientScan]
+        List of patient scans
+
+    Returns
+    -------
+    dict[str, dict[str, float]]
+        Dictionary containing the keys:
+        - "dimension_original": Mean dimensions of the original volumes
+          when they were loaded
+        - "dimension_actual": Mean dimensions of the volumes
+        - "spacings": Mean spacings of the volumes
+        - "manufacturer": Set of manufacturers for the scanners
+        - "scanner": Set of scanner names
+    """
+    return tz.pipe(
+        dataset,
+        curried.map(
+            curried.keyfilter(
+                lambda k: k
+                in [
+                    "volume",
+                    "spacings",
+                    "dimension_original",
+                    "manufacturer",
+                    "scanner",
+                ]
+            )
+        ),
+        curried.map(curried.update_in(keys=["volume"], func=lambda v: v.shape)),
+        merge_with_reduce(
+            func=lambda x, y: [x] + [y] if not isinstance(x, list) else x + [y]
+        ),
+        curried.update_in(keys=["spacings"], func=lambda s: np.array(s).mean(axis=0)),
+        curried.update_in(
+            keys=["dimension_original"], func=lambda d: np.array(d).mean(axis=0)
+        ),
+        curried.update_in(keys=["volume"], func=lambda v: np.array(v).mean(axis=0)),
+        curried.update_in(keys=["manufacturer"], func=set),
+        curried.update_in(keys=["scanner"], func=set),
+        rename_key("volume", "dimension_actual"),
+    )  # type: ignore

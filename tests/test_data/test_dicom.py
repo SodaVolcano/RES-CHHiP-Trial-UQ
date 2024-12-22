@@ -17,6 +17,7 @@ PatientScan = data.PatientScan
 load_roi_names = data.load_roi_names
 purge_dicom_dir = data.purge_dicom_dir
 curry = utils.curry
+compute_dataset_stats = data.compute_dataset_stats
 
 # Patch paths
 PATCH_LIST_FILES = "uncertainty.data.dicom.list_files"
@@ -461,3 +462,49 @@ class TestPurgeDicomDir:
         assert ct_file.exists()
         assert rt_file.exists()
         assert not other_file.exists()
+
+
+class TestComputeDatasetStats:
+
+    # Function correctly calculates mean dimensions from original volumes
+    def test_mean_dimensions_calculation(self):
+        # Create test dataset with known dimensions
+        dataset = [
+            {
+                "volume": np.random.rand(10, 20, 30),
+                "dimension_original": (10, 15, 20),
+                "spacings": (2.4, 1.5, 1.0),
+                "manufacturer": "GE",
+                "scanner": "Scanner1",
+            },
+            {
+                "volume": np.random.rand(20, 30, 40),
+                "dimension_original": (20, 30, 40),
+                "spacings": (5.0, 2.0, 1.0),
+                "manufacturer": "GE",
+                "scanner": "Scanner2",
+            },
+            {
+                "volume": np.random.rand(5, 10, 15),
+                "dimension_original": (5, 10, 15),
+                "spacings": (2.0, 1.0, 1.0),
+                "manufacturer": "Siemens",
+                "scanner": "Scanner3",
+            },
+        ]
+
+        stats = compute_dataset_stats(dataset)  # type: ignore
+        assert np.allclose(
+            stats["dimension_actual"],  # type: ignore
+            np.mean([[10, 20, 30], [20, 30, 40], [5, 10, 15]], axis=0),
+        )
+        assert np.allclose(
+            stats["dimension_original"],  # type: ignore
+            np.mean([[10, 15, 20], [20, 30, 40], [5, 10, 15]], axis=0),
+        )
+        assert np.allclose(
+            stats["spacings"],  # type: ignore
+            np.mean([[2.4, 1.5, 1.0], [5.0, 2.0, 1.0], [2.0, 1.0, 1.0]], axis=0),
+        )
+        assert stats["manufacturer"] == set(["GE", "Siemens"])
+        assert stats["scanner"] == set(["Scanner1", "Scanner2", "Scanner3"])

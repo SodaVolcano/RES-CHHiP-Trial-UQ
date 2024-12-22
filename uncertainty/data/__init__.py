@@ -14,6 +14,7 @@ from .dicom import (
     load_roi_names,
     load_volume,
     purge_dicom_dir,
+    compute_dataset_stats,
 )
 from .h5 import (
     load_scans_from_h5,
@@ -70,4 +71,5 @@ __all__ = [
     "save_predictions_to_h5",
     "load_roi_names",
     "purge_dicom_dir",
+    "compute_dataset_stats",
 ]

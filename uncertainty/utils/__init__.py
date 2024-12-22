@@ -29,4 +29,5 @@ __all__ = [
     "merge_with_reduce",
     "side_effect",
     "transform_nth",
+    "rename_key",
 ]

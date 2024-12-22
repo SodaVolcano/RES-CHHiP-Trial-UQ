@@ -116,9 +116,6 @@ def logger_config(config_path: str | Path = "configuration.yaml") -> dict:
         config["logger"]["sink"], config["logger"]["sink"]
     )
 
-    # No retention for stdout and stderr
-    if config["logger"]["sink"] in [sys.stdout, sys.stderr]:
-        config["logger"]["retention"] = config["logger"].get("retention", None)
     return _with_prefix("logger", config["logger"]) if "logger" in config else {}
 
 

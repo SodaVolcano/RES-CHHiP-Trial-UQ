@@ -55,9 +55,10 @@ def config_logger(
         sink,  # type: ignore
         format=format,
         level=level,
-        retention=retention,
         backtrace=backtrace,
         diagnose=diagnose,
+        # no retention if using stderr or stdout
+        **{"retention": retention} if sink in [sys.stderr, sys.stdout] else {},  # type: ignore
     )
 
     # Intercept standard logging messages and redirect them to Loguru logger

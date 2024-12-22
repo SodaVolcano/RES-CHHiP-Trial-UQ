@@ -77,6 +77,7 @@ The project is configured globally via `configuration.yaml` and values in it can
 | Global constants and list of ROI names to include/exclude   | `uncertainty/constants.py`     |
 | Augmentations | In `uncertainty/data/augmentations.py`, `augmentations()` and `batch_augmentations()` |
 | Data preprocessing | Functions in `uncertainty/data/processing.py` |
+| Global constants | Variables in `uncertainty/constants.py` |
 
 ### Using `uncertainty` as a Library Module
 Just import `uncertainty` lol.
@@ -100,7 +101,7 @@ config_logger(**configuration())
 | -------------------- | --------------------------------------------------------------------------------------------------------------- |
 | `prepare_dataset.py` | Preprocess folder of folders of DICOM files and save in a single HDF5 file.                                     |
 | `train_model.py`     | Initialise a training directory, perform data splitting, and train a list of models across $n$ validation folds |
-| `evaluation.py`      | Evaluate models on the (test) dataset using specified metrics and output a `csv` file of the result             |
+| `evaluate_model.py`      | Evaluate models on the (test) dataset using specified metrics and output `csv` files of the result             |
 
 
 ### Tests
