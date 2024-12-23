@@ -6,6 +6,7 @@ from .augmentations import (
 )
 from .datatypes import MaskDict, PatientScan, PatientScanPreprocessed
 from .dicom import (
+    compute_dataset_stats,
     load_all_masks,
     load_all_patient_scans,
     load_all_volumes,
@@ -14,7 +15,6 @@ from .dicom import (
     load_roi_names,
     load_volume,
     purge_dicom_dir,
-    compute_dataset_stats,
 )
 from .h5 import (
     load_scans_from_h5,

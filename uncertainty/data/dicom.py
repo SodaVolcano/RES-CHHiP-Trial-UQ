@@ -14,18 +14,17 @@ import toolz.curried as curried
 from loguru import logger
 from tqdm import tqdm
 
-
 from .. import constants as c
 from ..utils import (
     curry,
     generate_full_paths,
     list_files,
     logger_wraps,
+    merge_with_reduce,
+    rename_key,
     star,
     starfilter,
     transform_nth,
-    merge_with_reduce,
-    rename_key,
 )
 from .datatypes import MaskDict, PatientScan
 
