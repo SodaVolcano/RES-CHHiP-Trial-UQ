@@ -63,7 +63,12 @@ def setup(h5_path: str, train_dir: str, config_path: str, config: dict):
 
     # split into test set
     dataset = H5Dataset(h5_path)
-    res = init_training_dir(train_dir, config_path, dataset.indices, **config)
+    res = init_training_dir(
+        train_dir=train_dir,
+        config_path=config_path,
+        dataset_indices=dataset.indices,
+        **config,
+    )
 
     assert (
         res != None
@@ -80,9 +85,8 @@ def train_models_for_one_fold(
     fold_idx: int,
     models: list[str],
 ):
-    train_test_path, fold_split_path, fold_dirs = setup(
-        h5_path, train_dir, config_path, config
-    )
+    # test set not used so don't use train-test split
+    _, fold_split_path, fold_dirs = setup(h5_path, train_dir, config_path, config)
     train_one_fold(
         fold_idx, h5_path, config, models, fold_split_path, fold_dirs[fold_idx]
     )
@@ -95,9 +99,8 @@ def train_models_for_all_folds(
     train_dir: str,
     models: list[str],
 ):
-    train_test_path, fold_split_path, fold_dirs = setup(
-        h5_path, train_dir, config_path, config
-    )
+    # test set not used so don't use train-test split
+    _, fold_split_path, fold_dirs = setup(h5_path, train_dir, config_path, config)
 
     for fold_idx, ckpt_path in enumerate(fold_dirs):
         train_one_fold(fold_idx, h5_path, config, models, fold_split_path, ckpt_path)

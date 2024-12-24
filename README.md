@@ -206,6 +206,9 @@ test(**config)  # OUTPUT: (69, "hello")
 
 # 2. Manually specified kwargs override config entries
 test(b="no hello >:(", **config)  # OUTPUT: (69, "no hello >:(")
+# You must explcitly overwrite config args using keyword params!
+test("no hello >:(", **config) # ERROR: duplicate value for param `b`
+
 
 
 # 3. If param with same name appear in dictionary, later entries override earlier ones
