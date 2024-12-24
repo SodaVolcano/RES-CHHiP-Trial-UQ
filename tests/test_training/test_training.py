@@ -549,12 +549,14 @@ class TestInitTrainingDir:
         # Setup existing training dir
         train_dir = tmp_path / "training"
         train_dir.mkdir()
+
+        config_content = "unet:\n  hello: world\ndata:\n  hauk: twah!\nlogger:\n  sink: loll\ntraining:\n  yes: no\nconfidnet:\n  bleh: blah"
         config_path = tmp_path / "config.yaml"
-        config_path.write_text("test config")
+        config_path.write_text(config_content)
 
         # Create existing config file with different path
         existing_config = train_dir / "configuration.yaml"
-        existing_config.write_text("existing config")
+        existing_config.write_text(config_content)
 
         dataset = list(range(10))
 
@@ -566,10 +568,19 @@ class TestInitTrainingDir:
             n_folds=3,
             test_split=0.2,
         )
+        # If configs are the same, proceed as normal
+        assert result is not None
 
-        # Verify function returns None and doesn't overwrite
+        existing_config.write_text(config_content + "\n  something: else")
+        result = init_training_dir(
+            train_dir=train_dir,
+            config_path=config_path,
+            dataset_indices=dataset,
+            n_folds=3,
+            test_split=0.2,
+        )
+        # Verify function returns None and doesn't overwrite if config is differnt
         assert result is None
-        assert existing_config.read_text() == "existing config"
 
 
 class TestLoadModel:

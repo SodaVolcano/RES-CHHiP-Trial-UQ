@@ -419,9 +419,11 @@ def init_training_dir(
 
     # Copy configuration file to train_dir, fail if it already exists
     config_copy_path = train_dir / "configuration.yaml"
-    if os.path.exists(config_copy_path) and config_path != config_copy_path:
+    if os.path.exists(config_copy_path) and (
+        configuration(config_copy_path) != configuration(config_path)
+    ):
         logger.error(
-            f"configuration.yaml already exists in {train_dir} but specified different configuration path {config_path}. Please remove it or use the same configuration file."
+            f"configuration.yaml already exists in {train_dir} but configuration at path {config_path} is different from configuration at path {config_copy_path}. Please remove it or use the same configuration file."
         )
         return
     shutil.copy(config_path, config_copy_path)

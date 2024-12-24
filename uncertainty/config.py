@@ -41,37 +41,42 @@ def _strs_to_torch_modules(config: dict, prefix: str) -> dict:
     transforms = [
         (
             "activation",
-            curried.assoc_in(
+            lambda _dict: tz.assoc_in(
+                _dict,
                 keys=[prefix, "activation"],
-                value=getattr(nn, config[prefix]["activation"]),
+                value=getattr(nn, _dict[prefix]["activation"]),
             ),
         ),
         (
             "final_layer_activation",
-            curried.assoc_in(
+            lambda _dict: tz.assoc_in(
+                _dict,
                 keys=[prefix, "final_layer_activation"],
-                value=getattr(nn, config[prefix]["activation"]),
+                value=getattr(nn, _dict[prefix]["activation"]),
             ),
         ),
         (
             "initialiser",
-            curried.assoc_in(
+            lambda _dict: tz.assoc_in(
+                _dict,
                 keys=[prefix, "initialiser"],
-                value=getattr(nn.init, config[prefix]["initialiser"]),
+                value=getattr(nn.init, _dict[prefix]["initialiser"]),
             ),
         ),
         (
             "optimiser",
-            curried.assoc_in(
+            lambda _dict: tz.assoc_in(
+                _dict,
                 keys=[prefix, "optimiser"],
-                value=getattr(optim, config[prefix]["optimiser"]),
+                value=getattr(optim, _dict[prefix]["optimiser"]),
             ),
         ),
         (
             "lr_scheduler",
-            curried.assoc_in(
+            lambda _dict: tz.assoc_in(
+                _dict,
                 keys=[prefix, "lr_scheduler"],
-                value=getattr(optim.lr_scheduler, config[prefix]["lr_scheduler"]),
+                value=getattr(optim.lr_scheduler, _dict[prefix]["lr_scheduler"]),
             ),
         ),
     ]
