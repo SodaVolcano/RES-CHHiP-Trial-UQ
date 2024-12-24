@@ -52,7 +52,7 @@ def _strs_to_torch_modules(config: dict) -> dict:
             lambda _dict: tz.assoc_in(
                 _dict,
                 keys=["final_layer_activation"],
-                value=getattr(nn, _dict["activation"]),
+                value=getattr(nn, _dict["final_layer_activation"]),
             ),
         ),
         (
