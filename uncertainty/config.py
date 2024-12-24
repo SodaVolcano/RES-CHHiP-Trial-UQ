@@ -20,7 +20,7 @@ from torch import nn, optim
 _with_prefix = lambda prefix, dict_: tz.keymap(lambda k: f"{prefix}__{k}", dict_)
 
 
-def _strs_to_torch_modules(config: dict, prefix: str) -> dict:
+def _strs_to_torch_modules(config: dict) -> dict:
     """
     Convert strings to torch modules
     """
@@ -34,7 +34,7 @@ def _strs_to_torch_modules(config: dict, prefix: str) -> dict:
             *[
                 transformation
                 for key, transformation in transformations
-                if key in config[prefix]
+                if key in config
             ],
         )
 
@@ -43,40 +43,40 @@ def _strs_to_torch_modules(config: dict, prefix: str) -> dict:
             "activation",
             lambda _dict: tz.assoc_in(
                 _dict,
-                keys=[prefix, "activation"],
-                value=getattr(nn, _dict[prefix]["activation"]),
+                keys=["activation"],
+                value=getattr(nn, _dict["activation"]),
             ),
         ),
         (
             "final_layer_activation",
             lambda _dict: tz.assoc_in(
                 _dict,
-                keys=[prefix, "final_layer_activation"],
-                value=getattr(nn, _dict[prefix]["activation"]),
+                keys=["final_layer_activation"],
+                value=getattr(nn, _dict["activation"]),
             ),
         ),
         (
             "initialiser",
             lambda _dict: tz.assoc_in(
                 _dict,
-                keys=[prefix, "initialiser"],
-                value=getattr(nn.init, _dict[prefix]["initialiser"]),
+                keys=["initialiser"],
+                value=getattr(nn.init, _dict["initialiser"]),
             ),
         ),
         (
             "optimiser",
             lambda _dict: tz.assoc_in(
                 _dict,
-                keys=[prefix, "optimiser"],
-                value=getattr(optim, _dict[prefix]["optimiser"]),
+                keys=["optimiser"],
+                value=getattr(optim, _dict["optimiser"]),
             ),
         ),
         (
             "lr_scheduler",
             lambda _dict: tz.assoc_in(
                 _dict,
-                keys=[prefix, "lr_scheduler"],
-                value=getattr(optim.lr_scheduler, _dict[prefix]["lr_scheduler"]),
+                keys=["lr_scheduler"],
+                value=getattr(optim.lr_scheduler, _dict["lr_scheduler"]),
             ),
         ),
     ]
@@ -96,7 +96,7 @@ def unet_config(config_path: str | Path = "configuration.yaml") -> dict:
     with open(config_path, "r") as file:
         config = yaml.safe_load(file)
 
-    config = _strs_to_torch_modules(config, "unet")
+    config["unet"] = _strs_to_torch_modules(config["unet"])
 
     return _with_prefix("unet", config["unet"]) if "unet" in config else {}
 
@@ -104,7 +104,7 @@ def unet_config(config_path: str | Path = "configuration.yaml") -> dict:
 def confidnet_config(config_path: str | Path = "configuration.yaml") -> dict:
     with open(config_path, "r") as file:
         config = yaml.safe_load(file)
-    config = _strs_to_torch_modules(config, "confidnet")
+    config["confidnet"] = _strs_to_torch_modules(config["confidnet"])
     return (
         _with_prefix("confidnet", config["confidnet"]) if "confidnet" in config else {}
     )
