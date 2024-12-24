@@ -3,7 +3,10 @@ checkpoints/
 .vscode/
 /data/
 /models/
-/lightning_logs/
+/tensorboard-logs/
+/training-output/
+/predictions/
+/evaluations/
 # prevent leaking sensitive image in ipynb and image output
 *.png
 *.jpg
@@ -16,6 +19,7 @@ logs/
 *.h5
 *.dcm
 *.nii.gz
+*.nii
 *.ipynb
 *.pt
 *.pkl

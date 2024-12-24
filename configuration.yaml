@@ -79,7 +79,7 @@ confidnet:
   # "Sigmoid" for binary classification or "Softmax" for multi-class classification
   last_activation: "Sigmoid"
   # Path to pretrained U-Net model to use as encoder
-  pretrained_unet_path: "./checkpoints/unet"
+  #pretrained_unet_path: "./checkpoints/unet"
   # ------------------ ConfidNet Training Settings ------------------
   # Weight initialiser for model from torch.nn.init
   initialiser: "kaiming_normal_"
@@ -132,7 +132,7 @@ training:
   # See https://lightning.ai/docs/pytorch/stable/api/lightning.pytorch.callbacks.ModelCheckpoint.html
   checkpoint_name: "{epoch:03d}-{val_loss:.4f}"
   # Save model checkpoint every n epochs
-  checkpoint_every_n_epochs: 100
+  checkpoint_every_n_epoch: 100
   # Whether to save the last checkpoint as "last.pth"
   save_last_checkpoint: true
 
