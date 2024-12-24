@@ -30,8 +30,8 @@ unet:
   # Whether to apply instance norm after convolution and before activation
   # - Batch norm don't work well with small batch size
   use_instance_norm: true
-  # AKA momentum, how much of new mean and variance are added to running mean and variance
-  instance_norm_decay: 0.9
+  # AKA decay, how much of new mean and variance are added to running mean and variance
+  instance_norm_momentum: 0.9
   # Small value added to variance to avoid division by zero
   instance_norm_epsilon: 1e-5
 
