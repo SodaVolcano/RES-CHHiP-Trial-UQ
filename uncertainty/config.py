@@ -164,7 +164,10 @@ def auto_match_config(*, prefixes: list[str]):
     If a function is called with explicit keyword arguments with the same
     name in the configuration dictionary, the explicit keyword argument
     will override the value in the configuration dictionary. E.g. `a=10` in
-    `my_func(a=10, **config)` will take precedence over `config["a"]`.
+    `my_func(a=10, **config)` will take precedence over `config["a"]`. Note
+    that you CANNOT pass value by positional argument for parameter with name
+    `k` if `k` is a key in the configuration dictionary - i.e. overwriting
+    configuration values must be explicit by passing them as keyword arguments.
 
     Parameters
     ----------
@@ -197,8 +200,10 @@ def auto_match_config(*, prefixes: list[str]):
     ...     print(a, common_param)
     ...     test2(**kwargs)  # no need to pass common_param in test2
     >>> config = {"a__a": 30, "a__common_param": 4, "a__c": 7}
+    >>> test(**config)
     30 4
     7 4
+    >>> test(4, **config) # ValueError: Multiple values for parameter 'a'
     """
 
     def wrapper(func):

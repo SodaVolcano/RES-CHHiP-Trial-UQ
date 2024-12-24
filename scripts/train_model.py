@@ -43,7 +43,7 @@ def train_one_fold(
     train_indices, val_indices = res
 
     dataset = SegmentationData(
-        h5_path,
+        h5_path=h5_path,
         train_indices=train_indices,  # type: ignore
         val_indices=val_indices,  # type: ignore
         **config,
