@@ -60,7 +60,7 @@ class LitModel(lit.LightningModule):
         Size of the window for the running mean of the loss.
     save_hyperparams : bool
         Whether to save the hyperparameters as `hparams` attribute.
-    dump_tensors_every_n_epochs : int
+    dump_tensors_every_n_epoch : int
         If greater than 0, dump x, y, and predictions to disk every n epochs.
     """
 
@@ -71,18 +71,18 @@ class LitModel(lit.LightningModule):
         class_names: list[str] = list(c.ORGAN_MATCHES.keys()),
         running_loss_window: int = 10,
         save_hyperparams: bool = True,
-        dump_tensors_every_n_epochs: int = 0,
+        dump_tensors_every_n_epoch: int = 0,
         dump_tensors_dir: str = "tensor_dump",
     ):
         super().__init__()
         if save_hyperparams:
             self.save_hyperparameters(ignore=["model"])
-        if dump_tensors_every_n_epochs > 0:
+        if dump_tensors_every_n_epoch > 0:
             os.makedirs(dump_tensors_dir, exist_ok=True)
 
         self.model = model
         self.class_names = class_names
-        self.dump_tensors_every_n_epochs = dump_tensors_every_n_epochs
+        self.dump_tensors_every_n_epoch = dump_tensors_every_n_epoch
         self.dump_tensors_dir = dump_tensors_dir
 
         self.dice = dice_batched
@@ -113,8 +113,8 @@ class LitModel(lit.LightningModule):
         )
 
         if (
-            self.dump_tensors_every_n_epochs > 0
-            and self.current_epoch % self.dump_tensors_every_n_epochs == 0
+            self.dump_tensors_every_n_epoch > 0
+            and self.current_epoch % self.dump_tensors_every_n_epoch == 0
         ):
             _dump_tensors(
                 self.dump_tensors_dir, x, y, y_pred, dice, loss, self.current_epoch

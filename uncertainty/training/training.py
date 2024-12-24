@@ -50,7 +50,7 @@ def train_model(
     # Checkpoint parameters
     checkpoint_path: str | Path,
     checkpoint_name: str,
-    checkpoint_every_n_epochs: int,
+    checkpoint_every_n_epoch: int,
     # Training parameters
     n_epochs: int,
     n_batches_per_epoch: int,
@@ -87,7 +87,7 @@ def train_model(
         Directory path where model checkpoints will be saved.
     checkpoint_name : str
         Base name for the checkpoint files. Each checkpoint will be saved with this name followed by an epoch or step indicator.
-    checkpoint_every_n_epochs : int
+    checkpoint_every_n_epoch : int
         Frequency (in epochs) at which model checkpoints are saved during training.
     n_epochs : int
         Total number of epochs to train the model.
@@ -134,7 +134,7 @@ def train_model(
         dirpath=checkpoint_path,
         save_on_train_epoch_end=not run_validation,
         filename=checkpoint_name,
-        every_n_epochs=checkpoint_every_n_epochs,
+        every_n_epochs=checkpoint_every_n_epoch,
         save_top_k=-1,
     )
     checkpoint_last = ModelCheckpoint(

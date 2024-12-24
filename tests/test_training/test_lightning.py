@@ -2,7 +2,6 @@ from datetime import date
 from pathlib import Path
 
 import numpy as np
-import pytest
 import torch
 from torch import nn
 from torchmetrics.aggregation import RunningMean
@@ -58,7 +57,7 @@ class TestLitModel:
 
         assert isinstance(lit_model.model, nn.Module)
         assert lit_model.class_names == list(c.ORGAN_MATCHES.keys())
-        assert lit_model.dump_tensors_every_n_epochs == 0
+        assert lit_model.dump_tensors_every_n_epoch == 0
         assert lit_model.dump_tensors_dir == "tensor_dump"
         assert callable(lit_model.dice)
         assert callable(lit_model.dice_classwise)
@@ -125,7 +124,7 @@ class TestLitModel:
             experiment_name="test_exp",
             checkpoint_path=checkpoint_dir,
             checkpoint_name="{epoch:03d}-{val_loss:.4f}",
-            checkpoint_every_n_epochs=1,
+            checkpoint_every_n_epoch=1,
             n_epochs=2,
             n_batches_per_epoch=2,
             n_batches_val=2,

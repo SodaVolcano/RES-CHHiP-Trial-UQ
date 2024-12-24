@@ -102,12 +102,16 @@ training:
   # Window for running loss calculation, reduce noise in loss plot
   running_loss_window: 10
   # Whether to dump x, y, and predictions from the model every n epochs
-  dump_tensors_every_n_epochs: 50
+  dump_tensors_every_n_epoch: 50
   # Perform validation check every n epochs, 0 to disable validation
-  check_val_every_n_epochs: 50
+  check_val_every_n_epoch: 50
   # Number of validation steps to run before starting training, 0 to disable.
   num_sanity_val_steps: 2
 
+  #  ---------- tensorboard settings -------------------
+  #  see https://lightning.ai/docs/pytorch/stable/extensions/logging.html
+  log_dir: "./tensorboard-logs/"  
+  
   # ------------------ Trainer Settings ------------------
   # Specifies the distributed training strategy, see https://lightning.ai/docs/pytorch/stable/extensions/strategy.html
   strategy: "ddp"
@@ -221,6 +225,3 @@ logger:
   # Log level; ["TRACE", "DEBUG", "INFO", "SUCCESS", "WARNING", "ERROR", "CRITICAL"]
   level: "INFO"
 
-  #  ---------- tensorboard settings -------------------
-  #  see https://lightning.ai/docs/pytorch/stable/extensions/logging.html
-  tb_logger_path: "./logs/"
