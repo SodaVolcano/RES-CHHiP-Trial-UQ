@@ -90,16 +90,22 @@ def iterate_while[
 
 
 @curry
-def side_effect[T](func: Callable[[], Any], val: T) -> T:
+def side_effect[T](func: Callable[..., Any], val: T, pass_val: bool = False) -> T:
     """
     Perform side effect by calling `func` and let `val` pass through
 
     Parameters
     ----------
     func: Callable
-        Function to be called, cannot take any arguments
+        Function to be called, cannot take any arguments if `pass_val` is False,
+        otherwise must take `val` as its only argument
     val: any
         Value to be returned
+    pass_val: bool
+        Whether to pass `val` to `func`
     """
-    func()
+    if pass_val:
+        func(val)
+    else:
+        func()
     return val

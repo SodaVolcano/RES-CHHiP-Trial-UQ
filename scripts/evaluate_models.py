@@ -1,8 +1,8 @@
 import gc
-from itertools import tee
 import os
 import re
 import sys
+from itertools import tee
 from pathlib import Path
 from typing import Callable, Iterable
 
@@ -129,7 +129,7 @@ def perform_inference(
         curried.map(_to_tensors_if_numpy),
         curried.map(transform_nth(3, inference_fn)),
         curried.map(tuple),
-        curried.map(side_effect(save_pred)),
+        curried.map(side_effect(save_pred, pass_val=True)),
         curried.map(
             star(
                 lambda patient_id, _, y, y_pred: (
