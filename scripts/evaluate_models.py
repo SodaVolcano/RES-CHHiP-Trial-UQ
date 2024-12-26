@@ -1,4 +1,5 @@
 import gc
+import re
 import sys
 from pathlib import Path
 from typing import Callable, Iterable
@@ -120,7 +121,7 @@ def perform_inference(
                 scan["patient_id"],
                 None,  # don't save x, save space on disk
                 scan["masks"],
-                scan["volume"],
+                scan["volume"],  # this will be transformed to y_pred
             )
         ),
         curried.map(_to_tensors_if_numpy),
@@ -168,24 +169,33 @@ def to_csv(
     )
 
 
-def compute_fold_avg_csv(csv_dir: Path, col_names: list[str], out_path: Path):
+def compute_fold_avg_csv(csv_dir: Path, col_names: list[str], out_dir: Path):
     """
     Compute the average of the CSV files in the directory and save to a new CSV file
-
-    # TODO: group by csv name (because this will average across mode...) and put this in main()
-    what should we average across?
-    - average across: fold, model and mode?
     """
+
+    def average_lazyframes(path_lst: list[str]):
+        """Aggregate list of CSV files into a single averaged LazyFrame"""
+        return tz.pipe(
+            path_lst,
+            curried.map(pl.scan_csv),
+            curry(pl.concat)(how="vertical"),
+            lambda lf: lf.group_by("patient_id"),
+            lambda lf: lf.agg(
+                [pl.col(col).mean() for col in col_names[1:]]  # [1:] skip patient_id
+            ),
+        )
+
     tz.pipe(
         csv_dir,
         list_files,
-        curried.map(pl.scan_csv),
-        curry(pl.concat)(how="vertical"),
-        lambda lf: lf.group_by("patient_id"),
-        lambda lf: lf.agg(
-            [pl.col(col).mean() for col in col_names[1:]]  # [1:] skip patient_id
+        # group by into {(mode, model_name): [path, path2, ...], ...}
+        curried.groupby(lambda path: re.match(r"(.+?)_(.+?)\.csv$", path).groups()),  # type: ignore
+        curried.valmap(average_lazyframes),
+        curried.keymap(star(lambda model, name: f"{model}_{name}_avg.csv")),
+        curried.itemmap(
+            star(lambda name, lf: lf.sink(out_dir / name)),
         ),
-        lambda lf: lf.sink(out_path),
     )
 
 
@@ -199,29 +209,19 @@ def infer_using_mode(
     batch_size: int,
     output_channels: int,
     metric_names: list[str],
-    class_names: list[str],
+    col_names: list[str],
+    col_names_reordered: list[str],
     test_indices: list[str],
     pred_dir: Path,
     csv_dir: Path,
 ):
-    mode_specific_fns = {
+    select_model, save_pred, evaluator = {
         "single": (select_single_models, save_prediction_to_h5, evaluate_prediction),
         "mcdo": (select_single_models, save_prediction_to_h5, evaluate_prediction),
         "tta": (select_single_models, save_prediction_to_h5, evaluate_prediction),
         "ensemble": (select_ensembles, save_predictions_to_h5, evaluate_predictions),
-    }
-    select_model = mode_specific_fns[mode][0]
-    save_pred = mode_specific_fns[mode][1]
-    evaluator = mode_specific_fns[mode][2](metric_names=metric_names, average="none")
-
-    # class1_metric1, class2_metric1, ..., class1_metric2, class2_metric2, ...
-    col_names = ["patient_id"] + [
-        f"{cls_name}_{metric}" for metric in metric_names for cls_name in class_names
-    ]
-    # class1_metric1, class1_metric2, ..., class2_metric1, class2_metric2, ...
-    col_names_reordered = ["patient_id"] + [
-        f"{cls_name}_{metric}" for cls_name in class_names for metric in metric_names
-    ]
+    }[mode]
+    evaluator = evaluator(metric_names=metric_names, average="none")
 
     model_dict = select_model(ckpt_dict)
     for model_name, model in model_dict.items():
@@ -243,8 +243,6 @@ def infer_using_mode(
             csv_dir / f"{mode}_{model_name}.csv",
         )
 
-    compute_fold_avg_csv(csv_dir, col_names_reordered, csv_dir / f"{mode}_avg.csv")
-
 
 def main(
     train_dir: str,
@@ -258,6 +256,15 @@ def main(
 ):
     config, _, (_, test_indices), fold_dict = load_training_dir(train_dir)
 
+    # class1_metric1, class2_metric1, ..., class1_metric2, class2_metric2, ...
+    col_names = ["patient_id"] + [
+        f"{cls_name}_{metric}" for metric in metrics for cls_name in class_names
+    ]
+    # class1_metric1, class1_metric2, ..., class2_metric1, class2_metric2, ...
+    col_names_reordered = ["patient_id"] + [
+        f"{cls_name}_{metric}" for cls_name in class_names for metric in metrics
+    ]
+
     for fold_name, ckpt_dict in fold_dict.items():
         for mode in modes:
             infer_using_mode(
@@ -269,11 +276,14 @@ def main(
                 config["training__batch_size"],
                 config["model__output_channels"],
                 metrics,
-                class_names,
+                col_names,
+                col_names_reordered,
                 test_indices,  # type: ignore
-                pred_dir / f"fold-{fold_name}",
-                csv_dir / f"fold-{fold_name}",
+                pred_dir / fold_name,
+                csv_dir / fold_name,
             )
+
+    compute_fold_avg_csv(csv_dir, col_names_reordered, csv_dir)
 
 
 if __name__ == "__main__":
