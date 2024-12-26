@@ -1,4 +1,6 @@
 import gc
+from itertools import tee
+import os
 import re
 import sys
 from pathlib import Path
@@ -190,12 +192,37 @@ def compute_fold_avg_csv(csv_dir: Path, col_names: list[str], out_dir: Path):
         csv_dir,
         list_files,
         # group by into {(mode, model_name): [path, path2, ...], ...}
-        curried.groupby(lambda path: re.match(r"(.+?)_(.+?)\.csv$", path).groups()),  # type: ignore
+        curried.groupby(lambda path: re.match(r"(.+?)_(.+?)\.csv$", os.path.basename(path)).groups()),  # type: ignore
         curried.valmap(average_lazyframes),
         curried.keymap(star(lambda model, name: f"{model}_{name}_avg.csv")),
-        curried.itemmap(
-            star(lambda name, lf: lf.sink(out_dir / name)),
+        lambda dict_: dict_.items(),
+        curried.map(
+            star(lambda name, lf: lf.sink_csv(out_dir / name)),
         ),
+        list,
+    )
+
+
+def compute_lazyframe_avg(csv_dir: Path):
+    """
+    Compute average of all CSV files in the directory and save to a new CSV file
+    """
+    tz.pipe(
+        csv_dir,
+        list_files,
+        tee,
+        transform_nth(1, curried.map(pl.scan_csv)),
+        transform_nth(
+            1,
+            curried.map(lambda lf: lf.drop("patient_id")),
+        ),
+        curried.map(list),
+        star(zip),
+        # Add filename in the "name" column
+        curried.map(star(lambda name, lf: lf.with_columns(pl.lit(name).alias("name")))),
+        pl.concat,
+        lambda lf: lf.group_by("name").mean(),
+        lambda lf: lf.sink_csv(csv_dir / "avg.csv"),
     )
 
 
@@ -284,6 +311,7 @@ def main(
             )
 
     compute_fold_avg_csv(csv_dir, col_names_reordered, csv_dir)
+    compute_lazyframe_avg(csv_dir)
 
 
 if __name__ == "__main__":
