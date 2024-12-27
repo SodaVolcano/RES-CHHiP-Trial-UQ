@@ -6,7 +6,7 @@ from .inference import (
     sliding_inference,
     tta_inference,
 )
-from .visualisation import box_plot
+from .visualisation import box_plot, plot_surface_dices
 
 __all__ = [
     "sliding_inference",
@@ -17,4 +17,5 @@ __all__ = [
     "evaluate_predictions",
     "get_inference_mode",
     "box_plot",
+    "plot_surface_dices",
 ]

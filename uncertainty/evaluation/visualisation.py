@@ -10,23 +10,33 @@ import seaborn as sns
 import toolz as tz
 import torch
 from matplotlib.figure import Figure
+from matplotlib.axes import Axes
 from toolz import curried
 
 from ..metrics import entropy_map, probability_map, variance_map
 from ..utils import star, transform_nth
 
 
+def assert_dfs(dfs: list[pl.LazyFrame | pl.DataFrame], df_names: list[str]) -> None:
+    assert all(
+        set(dfs[0].columns) == set(df.columns) for df in dfs
+    ), "ALl Dataframes must have the same columns"
+    assert (n_dfs := len(dfs)) == (
+        n_names := len(df_names)
+    ), f"Specified {n_names} dataframe names but got {n_dfs} dataframes"
+
+
 def box_plot(
     dfs: list[pl.LazyFrame | pl.DataFrame],
+    df_names: list[str],
     x_label: str,
     y_label: str,
-    cluster_names: list[str],
     col_group_title: str,
     col_name_transform: Callable[[str], str],
     col_filter: str | list[str],
     figsize: tuple[int, int] = (10, 10),
     gap: float = 0.2,
-):
+) -> tuple[Figure, Axes]:
     """
     Show a box plot of the data in `dfs` grouped by `col_group_title`.
 
@@ -40,14 +50,14 @@ def box_plot(
     dfs : list[pl.LazyFrame | pl.DataFrame]
         List of dataframes with the same columns to plot. Each dataframe is
         displayed as a separate cluster of boxes in the plot with cluster
-        names given by `cluster_names`. A cluster consists of boxes for each
+        names given by `df_names`. A cluster consists of boxes for each
         column in a single dataframe (which is selected using `col_filter`).
     x_label : str
         Label for the x-axis of the plot
     y_label : str
         Label for the y-axis of the plot
-    cluster_names : list[str]
-        List of cluster names; ticks to display on the x-axis.
+    df_names : list[str]
+        List of names corresponding to each dataframe in `dfs`; ticks to display on the x-axis.
     col_group_title : str
         Overall title for the column groups in the plot.
     col_name_transform : Callable[[str], str]
@@ -92,22 +102,17 @@ def box_plot(
                 C1                 C2
                           X
     """
-    assert all(
-        set(dfs[0].columns) == set(df.columns) for df in dfs
-    ), "ALl Dataframes must have the same columns"
-    assert (n_dfs := len(dfs)) == (
-        n_clusters := len(cluster_names)
-    ), f"Specified {n_clusters} clusters but got {n_dfs} dataframes"
+    assert_dfs(dfs, df_names)
 
     combined = tz.pipe(
-        zip(cluster_names, dfs),
+        zip(df_names, dfs),
         curried.map(transform_nth(1, lambda df: df.lazy())),
         curried.map(transform_nth(1, lambda df: df.select(pl.col(col_filter)))),
         curried.map(
             star(
-                lambda cluster, lf: lf.unpivot(
+                lambda name, lf: lf.unpivot(
                     variable_name=col_group_title, value_name=y_label
-                ).with_columns(pl.lit(cluster).alias(x_label))
+                ).with_columns(pl.lit(name).alias(x_label))
             )
         ),
         pl.concat,
@@ -155,6 +160,92 @@ def box_plot(
         handle.set_alpha(1)
     ax.legend(handles[:n_handles], labels[:n_handles], title=col_group_title)
     f.tight_layout()
+    return f, ax
+
+
+def plot_surface_dices(
+    dfs: list[pl.LazyFrame | pl.DataFrame],
+    df_names: list[str],
+    y_label: str = "Surface Dice",
+    x_label: str = "Tolerance (mm)",
+    figsize: tuple[int, int] = (10, 10),
+    max_tolerance: float | None = None,
+    re_pattern: str = r"^(\w+)_surface_dice_([\d\.]+)$",
+) -> tuple[Figure, Axes]:
+    """
+    Plot the surface dices from the dataframes in `dfs` across increasing thresholds.
+
+    Parameters
+    ----------
+    dfs : list[pl.LazyFrame | pl.DataFrame]
+        List of dataframes with columns of surface dice scores. Each organ and dataframe
+        in `dfs` is displayed as a separate colour and line style in the plot respectively.
+    df_names : list[str]
+        List of names corresponding to each dataframe in `dfs`.
+    y_label : str
+        Label for the y-axis of the plot.
+    x_label : str
+        Label for the x-axis of the plot.
+    figsize : tuple[int, int]
+        Size of the figure in inches.
+    max_tolerance : float | None
+        Maximum tolerance to consider for the plot (inclusive). If None, all tolerances are considered.
+    re_pattern : str
+        Regex pattern to identify columns in the dataframe as surface dices. The pattern must
+        have two groups: the first group must capture the organ name and the second group must
+        capture the tolerance. The default pattern assumes the column names are of the form
+        "<organ>_surface_dice_<tolerance>".
+    """
+    assert_dfs(dfs, df_names)
+
+    surface_dices = tz.pipe(
+        zip(df_names, dfs),
+        curried.map(transform_nth(1, lambda df: df.lazy())),
+        curried.map(transform_nth(1, lambda lf: lf.select(pl.col(re_pattern)))),
+        curried.map(
+            star(lambda name, lf: lf.with_columns(pl.lit(name).alias("Method")))
+        ),
+        pl.concat,
+        lambda stacked_lf: stacked_lf.group_by("Method").mean(),
+        lambda mean_lf: mean_lf.unpivot(
+            on=pl.col(re_pattern),
+            variable_name="organ_tolerance",
+            value_name="surface_dice",
+            index="Method",
+        ),
+        lambda lf: lf.with_columns(
+            [
+                pl.col("organ_tolerance").str.extract(re_pattern, 1).alias("Organ"),
+                pl.col("organ_tolerance")
+                .str.extract(re_pattern, 2)
+                .cast(pl.Float64)
+                .alias("Tolerance"),
+            ]
+        ),
+        lambda lf: lf.sort(["Method", "Organ", "Tolerance"]),
+        (
+            (lambda lf: lf.filter(pl.col("Tolerance") <= max_tolerance))
+            if max_tolerance
+            else tz.identity
+        ),
+        lambda lf: lf.collect().to_pandas(),
+    )
+
+    f = plt.figure(figsize=figsize)
+    ax = f.add_subplot(111)
+    sns.lineplot(
+        data=surface_dices,
+        x="Tolerance",
+        y="surface_dice",
+        hue="Organ",
+        style="Method",
+        markers=True,
+    )
+    f.tight_layout()
+    ax.set_xlabel(x_label)
+    ax.set_ylabel(y_label)
+    ax.legend()
+    ax.grid()
     return f, ax
 
 
