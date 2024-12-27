@@ -95,9 +95,9 @@ def box_plot(
     assert all(
         set(dfs[0].columns) == set(df.columns) for df in dfs
     ), "ALl Dataframes must have the same columns"
-    assert (n_cols := len(cols := dfs[0].select(pl.col(col_filter)).columns)) == (
+    assert (n_dfs := len(dfs)) == (
         n_clusters := len(cluster_names)
-    ), f"Specified {n_clusters} clusters but got {n_cols} columns in filtered dataframe with columns {cols}"
+    ), f"Specified {n_clusters} clusters but got {n_dfs} dataframes"
 
     combined = tz.pipe(
         zip(cluster_names, dfs),
@@ -149,8 +149,8 @@ def box_plot(
         gap=gap,
     )
 
+    n_handles = len(dfs[0].select(pl.col(col_filter)).columns)
     handles, labels = ax.get_legend_handles_labels()
-    n_handles = len(cluster_names)
     for handle in handles[:n_handles]:
         handle.set_alpha(1)
     ax.legend(handles[:n_handles], labels[:n_handles], title=col_group_title)
