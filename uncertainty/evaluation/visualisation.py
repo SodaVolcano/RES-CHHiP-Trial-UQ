@@ -9,8 +9,8 @@ import polars as pl
 import seaborn as sns
 import toolz as tz
 import torch
-from matplotlib.figure import Figure
 from matplotlib.axes import Axes
+from matplotlib.figure import Figure
 from toolz import curried
 
 from ..metrics import entropy_map, probability_map, variance_map
@@ -247,6 +247,14 @@ def plot_surface_dices(
     ax.legend()
     ax.grid()
     return f, ax
+
+
+def plot_aurc(
+    df: pl.DataFrame | pl.LazyFrame,
+):
+    """
+    df: hhave eval + confidence
+    """
 
 
 # def display_slices_grid(

@@ -83,7 +83,7 @@ def _medpy_wrapper(
         _prepare_tensors(prediction, label),
         star(
             lambda pred, label: _average_methods(average)(
-                pred, label, _distance_with_default(metric)
+                pred, label, _distance_with_default(metric)  # type: ignore
             )
         ),
         lambda arr: torch.tensor(arr) if not isinstance(arr, torch.Tensor) else arr,
@@ -137,7 +137,7 @@ def _batched_eval(
         starmap(metric),
         list,
         torch.stack,
-        curry(torch.mean)(dim=0),
+        curry(torch.mean, fallback=True)(dim=0),
     )  # type: ignore
 
 
@@ -165,7 +165,7 @@ def dice(
     """
     return _torchmetric_wrapper(
         BinaryF1Score(zero_division=1),
-        curry(MultilabelF1Score)(zero_division=1),
+        curry(MultilabelF1Score)(zero_division=1),  # type: ignore
         prediction,
         label,
         average,
@@ -196,7 +196,7 @@ def dice_batched(
     """
     return _torchmetric_wrapper_batched(
         BinaryF1Score(zero_division=1),
-        curry(MultilabelF1Score)(zero_division=1),
+        curry(MultilabelF1Score)(zero_division=1),  # type: ignore
         prediction,
         label,
         average,
@@ -254,7 +254,7 @@ def surface_dice(
             lambda pred, label: _average_methods(average)(
                 pred,
                 label,
-                _distance_with_default(compute_surface_dice),
+                _distance_with_default(compute_surface_dice),  # type: ignore
             )
         ),
     )  # type: ignore
@@ -294,7 +294,7 @@ def surface_dice_batched(
         return torch.tensor(torch.nan)
 
     return _batched_eval(
-        prediction, label, surface_dice(average=average, tolerance=tolerance)
+        prediction, label, surface_dice(average=average, tolerance=tolerance)  # type: ignore
     )
 
 
@@ -349,7 +349,7 @@ def hausdorff_distance_batched(
         - "macro": Calculate metrics for each class and average them.
         - "none": Return the metrics for each class separately.
     """
-    return _batched_eval(prediction, label, hausdorff_distance(average=average))
+    return _batched_eval(prediction, label, hausdorff_distance(average=average))  # type: ignore
 
 
 @curry
@@ -402,7 +402,7 @@ def hausdorff_distance_95_batched(
         - "macro": Calculate metrics for each class and average them.
         - "none": Return the metrics for each class separately.
     """
-    return _batched_eval(prediction, label, hausdorff_distance_95(average=average))
+    return _batched_eval(prediction, label, hausdorff_distance_95(average=average))  # type: ignore
 
 
 @curry
@@ -566,7 +566,7 @@ def average_surface_distance_batched(
         - "macro": Calculate metrics for each class and average them.
         - "none": Return the metrics for each class separately.
     """
-    return _batched_eval(prediction, label, average_surface_distance(average=average))
+    return _batched_eval(prediction, label, average_surface_distance(average=average))  # type: ignore
 
 
 @curry
@@ -615,7 +615,7 @@ def average_symmetric_surface_distance_batched(
         - "none": Return the metrics for each class separately.
     """
     return _batched_eval(
-        prediction, label, average_symmetric_surface_distance(average=average)
+        prediction, label, average_symmetric_surface_distance(average=average)  # type: ignore
     )
 
 
@@ -701,7 +701,7 @@ def get_classification_metric(name: str) -> Optional[Callable]:
             surface_dice_batched(tolerance=float(name.split("_")[-1]))
             if "batched" in name
             else surface_dice(tolerance=float(name.split("_")[-1]))
-        )
+        )  # type: ignore
 
     return {
         "hd": hausdorff_distance,

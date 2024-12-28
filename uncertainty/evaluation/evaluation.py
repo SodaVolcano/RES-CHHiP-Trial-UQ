@@ -157,7 +157,7 @@ def evaluate_predictions(
             curried.map(spatial_metric(label=label, average=avg)),
             list,
             torch.vstack,
-            curry(torch.mean)(dim=0),
+            curry(torch.mean, fallback=True)(dim=0),
         )
 
     if not isinstance(predictions, torch.Tensor):
