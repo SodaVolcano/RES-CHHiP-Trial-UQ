@@ -4,13 +4,13 @@ Wrappers for functions
 
 import inspect
 from functools import wraps
-from typing import Callable
+from typing import Any, Callable
 
 import toolz as tz
 from toolz import curry as _curry
 
 
-def curry[T](f: Callable[..., T], fallback: bool = False):
+def curry[T](f: Callable[..., T], fallback: bool = False) -> Any:
     """
      A curried function `f` can be partially parameterised.
 

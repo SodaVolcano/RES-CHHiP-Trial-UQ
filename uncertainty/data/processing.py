@@ -15,7 +15,7 @@ from uncertainty.utils.sequence import transform_nth
 
 from .. import constants as c
 from ..utils import call_method, curry, logger_wraps, pmap
-from .datatypes import MaskDict, PatientScan, PatientScanPreprocessed
+from .datatypes import MaskDict, PatientScan
 
 
 def to_torchio_subject(volume_mask: tuple[np.ndarray, np.ndarray]) -> tio.Subject:
@@ -365,7 +365,7 @@ def preprocess_patient_scan(
     scan: PatientScan,
     min_size: tuple[int, int, int],
     organ_ordering: list[str] = list(c.ORGAN_MATCHES.keys()),
-) -> Optional[PatientScanPreprocessed]:
+) -> Optional[PatientScan]:
     """
     Preprocess a PatientScan object into (volume, masks) pairs of shape (C, H, W, D)
 
@@ -381,6 +381,7 @@ def preprocess_patient_scan(
     organ_ordering : list[str]
         List of organ names in order to keep
     """
+    assert isinstance(scan["masks"], dict), "Masks must be a dictionary"
     old_mask_keys = scan["masks"].keys()
 
     scan = tz.pipe(
@@ -423,7 +424,7 @@ def preprocess_dataset(
     min_size: tuple[int, int, int],
     organ_ordering: list[str] = list(c.ORGAN_MATCHES.keys()),
     n_workers: int = 1,
-) -> Iterator[PatientScanPreprocessed]:
+) -> Iterator[PatientScan]:
     """
     Preprocess a dataset of PatientScan objects into (volume, masks) pairs
 

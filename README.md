@@ -163,7 +163,7 @@ Yummy.
 A function can by "curried" if it's decorated with `@curry`. A "curried" function can be called with *only some of the required arguments* (i.e. partially initialised). This is a **new function** that can be called with the remaining arguments.
 
 ```python
-from uncertainty.utils import curry  # wrapper around toolz.curry
+from uncertainty.utils import curry
 
 @curry
 def add(a, b, c=3):

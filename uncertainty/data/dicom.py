@@ -302,6 +302,7 @@ def load_patient_scan(dicom_path: str) -> Optional[PatientScan]:
             int(d_file.StudyDate[4:6]),
             int(d_file.StudyDate[6:]),
         ),
+        "organ_ordering": list(mask.keys()),
     }  # type: ignore
 
 

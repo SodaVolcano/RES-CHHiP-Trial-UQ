@@ -14,7 +14,7 @@ from tqdm import tqdm
 
 from ..metrics import entropy_map, probability_map, variance_map
 from ..utils import curry, iterate_while, logger_wraps
-from .datatypes import PatientScan, PatientScanPreprocessed
+from .datatypes import PatientScan
 
 
 @curry
@@ -75,7 +75,7 @@ def _create_group(
 @logger_wraps(level="INFO")
 @curry
 def save_scans_to_h5(
-    dataset: Iterable[PatientScan] | Iterable[PatientScanPreprocessed],
+    dataset: Iterable[PatientScan],
     path: str = "./data/dataset.h5",
     duplicate_name_strategy: Literal["skip", "overwrite", "rename"] = "skip",
 ) -> None:
@@ -84,7 +84,7 @@ def save_scans_to_h5(
 
     Parameters
     ----------
-    dataset: Iterable[PatientScan] | Iterable[PatientScanPreprocessed]
+    dataset: Iterable[PatientScan]
         List of patient scan dictionaries
     path: str
         Path to the h5 file
@@ -109,7 +109,7 @@ def load_scans_from_h5(
     path: str,
     indices: list[str] | None = None,
 ) -> (
-    Generator[PatientScan, None, None] | Generator[PatientScanPreprocessed, None, None]
+    Generator[PatientScan, None, None]
 ):
     """
     Load patient scan dictionaries from an h5 file

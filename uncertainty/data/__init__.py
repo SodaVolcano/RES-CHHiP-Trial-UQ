@@ -4,7 +4,7 @@ from .augmentations import (
     inverse_affine_transform,
     torchio_augmentations,
 )
-from .datatypes import MaskDict, PatientScan, PatientScanPreprocessed
+from .datatypes import MaskDict, PatientScan
 from .dicom import (
     compute_dataset_stats,
     load_all_masks,
@@ -65,7 +65,6 @@ __all__ = [
     "inverse_affine_transform",
     "batch_augmentations",
     "PatientScan",
-    "PatientScanPreprocessed",
     "MaskDict",
     "save_prediction_to_h5",
     "save_predictions_to_h5",
