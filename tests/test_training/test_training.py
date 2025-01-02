@@ -1,3 +1,4 @@
+import os
 import pickle
 import tempfile
 from datetime import date
@@ -527,6 +528,7 @@ class TestInitTrainingDir:
         assert (train_dir / "validation-fold-splits.pkl").exists()
         assert len(fold_dirs) == 3
         assert all(d.exists() for d in fold_dirs)
+        assert all(os.listdir(d) == [] for d in fold_dirs)
 
         # test that training indices do not overlap with validation indices
         split_dict = read_fold_splits_file(folds_path)

@@ -208,8 +208,7 @@ def train_models(
             model.split("_"),
             star(
                 lambda name, quantity: [
-                    (get_model(name), checkpoint_dir / f"{name}-{i}")
-                    for i in range(int(quantity))
+                    (get_model(name), f"{name}-{i}") for i in range(int(quantity))
                 ]
             ),
         )  # type: ignore
