@@ -8,7 +8,7 @@ from loguru import logger
 
 sys.path.append("..")
 sys.path.append(".")
-from __helpful_parser import HelpfulParser
+from .__helpful_parser import HelpfulParser
 
 from chhip_uq import configuration
 from chhip_uq.data import (
@@ -88,7 +88,6 @@ if __name__ == "__main__":
         "-P",
         action="store_true",
         help="Remove all .dcm files that are not part of a series or RT struct.",
-        default=False,
     )
 
     args = parser.parse_args()
@@ -105,5 +104,5 @@ if __name__ == "__main__":
         config["training__patch_size"],  # patch size is the minimum size
         args.workers or config["data__n_workers"],
         config["data__duplicate_name_strategy"],
-        args.purge or config["data__purge_data_dir"],
+        args.purge,
     )
