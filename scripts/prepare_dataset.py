@@ -8,6 +8,8 @@ from loguru import logger
 
 sys.path.append("..")
 sys.path.append(".")
+from __helpful_parser import HelpfulParser
+
 from chhip_uq import configuration
 from chhip_uq.data import (
     load_all_patient_scans,
@@ -16,8 +18,6 @@ from chhip_uq.data import (
     save_scans_to_h5,
 )
 from chhip_uq.utils import config_logger
-
-from __helpful_parser import HelpfulParser
 
 
 def main(
