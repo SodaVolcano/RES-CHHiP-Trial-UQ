@@ -2,14 +2,16 @@
 Code for performing uncertainty quantification on CT prostate cancer images.
 
 ## Content
-- [Setup](#setup)
-    - [uv](#uv)
-    - [Nix](#nix)
-        - [Auto-activation with Direnv (Optional)](#auto-activation-with-direnv-optional)
+- [Installation](#installation)
+    - [Installing as a Library](#installing-as-a-library)
+        - [uv](#1-uv)
+        - [pip](#2-pip)
+    - [Installing only Project Dependencies](#installing-only-project-dependencies)
+        - [uv](#1-uv-1)
+        - [Nix](#2-nix)
 - [Usage](#usage)
     - [Configuring the Project](#configuring-the-project)
     - [Using `chhip_uq` as a Library Module](#using-chhip_uq-as-a-library-module)
-        - [Logging](#logging)
     - [Using the Scripts](#using-the-scripts)
     - [Tests](#tests)
 - [Code Overview](#code-overview)
@@ -20,20 +22,41 @@ Code for performing uncertainty quantification on CT prostate cancer images.
     - [Auto-wiring of Configuration Dictionary](#auto-wiring-of-configuration-dictionary)
 
 
-## Setup
+
+## Installation
+Instructions below assumes you are at the **top-level of the project directory** (i.e. folder containing `pyproject.toml` etc).
+
+
+### Installing as a Library
+Install `chhip_uq` as a library to import into your own project using **one** of the options below:
+
+#### 1. `uv`
+Ensure that you’ve run `uv init` or that a `pyproject.toml` file exists in the current directory. Then, run
+
+```bash
+uv add "chhip_uq @ git+https://github.com/SodaVolcano/RES-CHHiP-Trial-UQ"
+```
+
+#### 2. `pip`
+To install the package with pip, run
+
+```bash
+pip install https://github.com/SodaVolcano/RES-CHHiP-Trial-UQ/releases/download/v2025.01.02/chhip_uq-0.1.0-py3-none-any.whl
+```
+
+### Installing only Project Dependencies
+Install dependencies of `chhip_uq` for development purposes.
 
 You can **either** install directly via [uv](https://docs.astral.sh/uv/) or use [Nix](https://nixos.org/) to indirectly manage uv for extra reproducibility which also offers some convenient aliases.
 
-Instructions below assumes you are at the **top-level of the project directory** (i.e. folder containing `pyproject.toml` etc).
-
-### uv
+#### 1. uv
 [uv](https://docs.astral.sh/uv/) manages and configures Python dependencies. First install it following the [installation guide](https://docs.astral.sh/uv/getting-started/installation/). Then, any Python commands can be run by appending `uv run` in front of your command which will automatically download project dependencies, e.g.
 
 ```bash
 uv run python ./scripts/prepare_dataset.py   # equivalent to running `python ./scripts/prepare_dataset.py`
 ```
 
-### Nix
+#### 2. Nix
 
 **Warning: CUDA not supported for this option, idk how to fix :'(**
 
@@ -49,7 +72,8 @@ nix --extra-experimental-features nix-command --extra-experimental-features flak
 The Nix shell comes with short-hand alises in `shell.nix` such as `pytest` for `uv run pytest .` etc.
 
 
-#### Auto-activation with Direnv (Optional)
+<details>
+<summary>Auto-activation with Direnv (Optional)</summary>
 
 **Warning: `direnv` allow the execution of any arbitrary bash code in `.envrc`, please examine `.envrc` before you proceed!**
 
@@ -59,7 +83,7 @@ The Nix shell comes with short-hand alises in `shell.nix` such as `pytest` for `
 direnv allow  # allow execution of .envrc automatically
 direnv disallow # stop automatically executing .envrc upon entering the project folder
 ```
-
+</details>
 
 ## Usage
 
@@ -77,12 +101,19 @@ The project is configured globally via `configuration.yaml` and values in it can
 | Global constants and list of ROI names to include/exclude   | `chhip_uq/constants.py`     |
 | Augmentations | In `chhip_uq/data/augmentations.py`, `augmentations()` and `batch_augmentations()` |
 | Data preprocessing | Functions in `chhip_uq/data/processing.py` |
-| Global constants | Variables in `chhip_uq/constants.py` |
 
 ### Using `chhip_uq` as a Library Module
-Just import `chhip_uq` lol.
+Just import `chhip_uq` lol. e.g.
 
-#### Logging
+```python
+from chhip_uq.data import load_patient_scan
+
+dicom_dir = "path/to/dicom/folder"
+scan = load_patient_scan(dicom_dir)
+```
+
+<details>
+<summary>Logging</summary>
 Logging is disable by default. To enable logging, add the following lines to your code.
 
 ```python
@@ -94,6 +125,7 @@ from chhip_uq.utils import config_logger
 logger.enable("chhip_uq")
 config_logger(**configuration())
 ```
+</details>
 
 ### Using the Scripts
 

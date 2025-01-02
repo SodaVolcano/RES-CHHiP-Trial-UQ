@@ -9,7 +9,7 @@ import torch
 from lightning import LightningModule
 from torch import nn
 
-from ..context import data, training, chhip_uq
+from ..context import chhip_uq, data, training
 
 auto_match_config = chhip_uq.auto_match_config
 H5Dataset = training.H5Dataset

@@ -16,7 +16,6 @@ from toolz import curried
 
 sys.path.append("..")
 sys.path.append(".")
-from scripts.__helpful_parser import HelpfulParser
 from chhip_uq.config import configuration
 from chhip_uq.data import load_scans_from_h5, torchio_augmentations
 from chhip_uq.data.h5 import save_prediction_to_h5, save_predictions_to_h5
@@ -39,6 +38,7 @@ from chhip_uq.utils import (
     star,
     transform_nth,
 )
+from scripts.__helpful_parser import HelpfulParser
 
 
 def get_parameterised_inference(
