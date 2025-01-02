@@ -105,7 +105,8 @@ def _torchmetric_wrapper(
         if label.shape[0] == 1
         else multilabel_metric(num_labels=label.shape[0], average=average)
     )
-    return metric(prediction.unsqueeze(0), label.unsqueeze(0))
+    # Need to move the CLASS to the device
+    return metric.to(prediction.device)(prediction.unsqueeze(0), label.unsqueeze(0))  # type: ignore
 
 
 def _torchmetric_wrapper_batched(
@@ -123,7 +124,8 @@ def _torchmetric_wrapper_batched(
         if label.shape[1] == 1
         else multilabel_metric(num_labels=label.shape[1], average=average)
     )
-    return metric(prediction, label)
+    # Need to move the CLASS to the device
+    return metric.to(prediction.device)(prediction, label)  # type: ignore
 
 
 def _batched_eval(
