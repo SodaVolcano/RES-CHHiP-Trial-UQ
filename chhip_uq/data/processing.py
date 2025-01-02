@@ -65,7 +65,7 @@ def ensure_min_size(
         to_torchio_subject,
         tio.CropOrPad(
             target_shape,  # type: ignore
-            padding_mode=np.min(volume),
+            padding_mode="reflect",
             mask_name="mask",
         ),
         from_torchio_subject,
