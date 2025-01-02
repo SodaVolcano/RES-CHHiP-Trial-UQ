@@ -58,18 +58,17 @@ uv run python ./scripts/prepare_dataset.py   # equivalent to running `python ./s
 
 #### 2. Nix
 
-**Warning: CUDA not supported for this option, idk how to fix :'(**
-
 [Nix](https://nixos.org/) is a purely functional programming language *and* package manager used to create isolated and reproducible development shells. A `flake.nix` file defines project dependencies and environment which activates the shell defined in `shell.nix`. First, install Nix following the [installation guide](https://nixos.org/download/). Then, start a development shell by running...
 
 ```bash
 # Enable experimental features `nix-command` and `flakes`, then run the `develop` command
 # Or if you've already enabled these features, just run `nix develop`
-nix --extra-experimental-features nix-command --extra-experimental-features flakes develop
+# Note that --impure is to allow cuda support via nixGL
+nix --extra-experimental-features nix-command --extra-experimental-features flakes develop --impure
 # you can now run `uv run python ...` etc
 ```
 
-The Nix shell comes with short-hand alises in `shell.nix` such as `pytest` for `uv run pytest .` etc.
+The Nix shell comes with short-hand alises in `shell.nix` such as `pytest` for `uv run pytest` etc.
 
 
 <details>

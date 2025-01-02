@@ -1,28 +1,31 @@
 {
   pkgs,
   LD_LIBRARY_PATH,
-}:
-pkgs.mkShellNoCC {
-  inherit LD_LIBRARY_PATH;
-  preferLocalBuild = true;
-  packages = with pkgs; [
-    git
-    uv
-    alejandra
+}: let
+  pythonCommand = "nixGL uv run python \"$@\"";
+in
+  pkgs.mkShellNoCC {
+    inherit LD_LIBRARY_PATH;
+    preferLocalBuild = true;
+    packages = with pkgs; [
+      git
+      uv
+      alejandra
+      pkgs.nixgl.auto.nixGLDefault
 
-    # aliases
-    (writeShellScriptBin "py3" "uv run python")
-    (writeShellScriptBin "py" "uv run python")
-    (writeShellScriptBin "python" "uv run python")
-    (writeShellScriptBin "python3" "uv run python")
-    (writeShellScriptBin "black" "uv run black .")
-    (writeShellScriptBin "pytest" "uv run pytest .")
-    (writeShellScriptBin "isort" "uv run isort .")
-  ];
+      # aliases
+      (writeShellScriptBin "py3" pythonCommand)
+      (writeShellScriptBin "py" pythonCommand)
+      (writeShellScriptBin "python" pythonCommand)
+      (writeShellScriptBin "python3" pythonCommand)
+      (writeShellScriptBin "black" "uv run black \"$@\"")
+      (writeShellScriptBin "pytest" "uv run pytest \"$@\"")
+      (writeShellScriptBin "isort" "uv run isort \"$@\"")
+    ];
 
-  shellHook = ''
-    python --version
-    uv sync
-    alejandra .
-  '';
-}
+    shellHook = ''
+      python --version
+      uv sync
+      alejandra .
+    '';
+  }

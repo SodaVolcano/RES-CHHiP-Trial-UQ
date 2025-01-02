@@ -3,22 +3,24 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
-    nixpkgs-python.url = "github:cachix/nixpkgs-python";
+    nixgl.url = "github:nix-community/nixGL";
   };
 
   outputs = {
     self,
     nixpkgs,
-    nixpkgs-python,
+    nixgl,
   }: let
     supportedSystems = ["x86_64-linux" "aarch64-linux"];
     forAllSystems = nixpkgs.lib.genAttrs supportedSystems;
-    pythonVersion = "3.12.4";
-    pythonVersionShort = "3.12"; # used to locate /bin/python${version}
   in {
     devShells = forAllSystems (system: let
-      python = nixpkgs-python.packages.${system}.${pythonVersion};
-      pkgs = nixpkgs.legacyPackages.${system};
+      pkgs = import nixpkgs {
+        inherit system;
+        config.allowUnfree = true;
+        overlays = [nixgl.overlay];
+        cudaSupport = true;
+      };
 
       # resolve dynamic library paths
       LD_LIBRARY_PATH = "${(with pkgs;
