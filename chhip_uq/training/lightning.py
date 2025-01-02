@@ -101,7 +101,7 @@ class LitModel(lit.LightningModule):
         if self.model.deep_supervision:
             y_pred = y_pred[-1]
 
-        dice = self.dice(y_pred, y)
+        dice = self.dice(y_pred, y).to(loss.device)
 
         self.running_dice(dice.detach())
         self.running_loss(loss.detach())
@@ -129,8 +129,8 @@ class LitModel(lit.LightningModule):
         y_pred = self.model(x, logits=True)
         loss = self.model.loss(y_pred, y, logits=True)
 
-        dice = self.dice(y_pred, y)
-        dice_classwise = self.dice_classwise(y_pred, y)
+        dice = self.dice(y_pred, y).to(loss.device)
+        dice_classwise = self.dice_classwise(y_pred, y).to(loss.device)
 
         for name, class_dice in zip(self.class_names, dice_classwise):
             self.log(f"val_dice_{name}", class_dice, sync_dist=True, prog_bar=False)
@@ -148,7 +148,7 @@ class LitModel(lit.LightningModule):
         if self.deep_supervision:
             y_pred = y_pred[-1]
 
-        dice = self.dice(y_pred, y)
+        dice = self.dice(y_pred, y).to(loss.device)
 
         self.log("test_loss", loss, sync_dist=True, prog_bar=True)
         self.log("test_dice", dice, sync_dist=True, prog_bar=True)
