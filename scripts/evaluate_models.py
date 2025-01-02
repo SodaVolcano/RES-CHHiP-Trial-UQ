@@ -38,7 +38,7 @@ from chhip_uq.utils import (
     star,
     transform_nth,
 )
-from scripts.__helpful_parser import HelpfulParser
+from __helpful_parser import HelpfulParser
 
 
 def get_parameterised_inference(
