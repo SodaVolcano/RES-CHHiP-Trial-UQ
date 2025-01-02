@@ -248,7 +248,7 @@ class SegmentationData(lit.LightningDataModule):
 
 
     Note: The test DataLoader is not implemented, use the inference functions from
-    `uncertainty.evaluation` instead.
+    `chhip_uq.evaluation` instead.
 
     Tip: It's recommended to pass most parameters using a configuration dictionary,
     i.e. `SegmentationData(**config, train_indices=..., val_indices=..., augmentations=...)`.
@@ -391,5 +391,5 @@ class SegmentationData(lit.LightningDataModule):
 
     def test_dataloader(self):
         raise NotImplementedError(
-            "Don't use the test loader, use functions from uncertainty.evaluation instead"
+            "Don't use the test loader, use functions from chhip_uq.evaluation instead"
         )

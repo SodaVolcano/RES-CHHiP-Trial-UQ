@@ -9,9 +9,9 @@ import torch
 from lightning import LightningModule
 from torch import nn
 
-from ..context import data, training, uncertainty
+from ..context import data, training, chhip_uq
 
-auto_match_config = uncertainty.auto_match_config
+auto_match_config = chhip_uq.auto_match_config
 H5Dataset = training.H5Dataset
 split_into_folds = training.split_into_folds
 write_fold_splits_file = training.write_fold_splits_file
@@ -288,7 +288,7 @@ class TestTrainModels:
         def mock_get_model(_):
             return MockTorchModel
 
-        with patch("uncertainty.training.training.get_model", mock_get_model):
+        with patch("chhip_uq.training.training.get_model", mock_get_model):
             with tempfile.NamedTemporaryFile() as tmp_file:
                 # Create test dataset
                 data = get_dataset(20)
@@ -346,7 +346,7 @@ class TestTrainModels:
             return MockTorchModel
 
         # Patch get_model function
-        with patch("uncertainty.training.training.get_model", mock_get_model):
+        with patch("chhip_uq.training.training.get_model", mock_get_model):
             test_file = tmp_path / "test.h5"
             data = get_dataset(20)
             save_scans_to_h5(data, test_file)
@@ -426,7 +426,7 @@ class TestTrainModels:
             return MockTorchModel
 
         # Patch get_model function
-        with patch("uncertainty.training.training.get_model", mock_get_model):
+        with patch("chhip_uq.training.training.get_model", mock_get_model):
             test_file = tmp_path / "test.h5"
             data = get_dataset(20)
             save_scans_to_h5(data, test_file)
@@ -650,7 +650,7 @@ class TestLoadModels:
             return MockTorchModel
 
         # Patch get_model function
-        with patch("uncertainty.training.training.get_model", mock_get_model):
+        with patch("chhip_uq.training.training.get_model", mock_get_model):
             test_file = tmp_path / "test.h5"
             data = get_dataset(20)
             save_scans_to_h5(data, test_file)
@@ -731,7 +731,7 @@ class TestLoadTrainingDir:
         )  # type: ignore
 
         # Patch get_model function
-        with patch("uncertainty.training.training.get_model", mock_get_model):
+        with patch("chhip_uq.training.training.get_model", mock_get_model):
             for fold_idx, ckpt_path in enumerate(fold_dirs):
                 res = read_fold_splits_file(folds_path, fold_idx)
                 assert not isinstance(res, dict)
@@ -774,7 +774,7 @@ class TestLoadTrainingDir:
                 )
 
         # Load training directory
-        with patch("uncertainty.training.training.configuration", mock_get_config):
+        with patch("chhip_uq.training.training.configuration", mock_get_config):
             config, fold_splits, train_test, checkpoints = load_training_dir(
                 train_dir, "epoch=001-val_loss=0.5000.ckpt"
             )

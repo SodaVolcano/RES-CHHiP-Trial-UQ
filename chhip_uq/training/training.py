@@ -509,9 +509,9 @@ def load_training_dir(
     The training directory is created by `init_training_dir` and contains:
     - `configuration.yaml`: the configuration file used for training
     - `train-test-split.pkl`: the indices for the training and test sets, produced
-        using `uncertainty.trianing.train_test_split()`
+        using `chhip_uq.trianing.train_test_split()`
     - `validation-fold-splits.pkl`: the indices for the training and validation sets for each fold,
-        produced using `uncertainty.training.split_into_folds()`
+        produced using `chhip_uq.training.split_into_folds()`
     - `fold_<int>`: directories for each validation fold, each containing directories with model checkpoints.
 
     Parameters

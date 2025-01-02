@@ -1,6 +1,6 @@
 from loguru import logger
 
-logger.disable("uncertainty")
+logger.disable("chhip_uq")
 
 from . import constants, data, evaluation, metrics, models, training, utils
 from .config import (

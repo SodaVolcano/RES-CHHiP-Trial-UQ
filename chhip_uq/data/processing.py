@@ -11,7 +11,7 @@ import torchio as tio
 from loguru import logger
 from toolz import curried
 
-from uncertainty.utils.sequence import transform_nth
+from chhip_uq.utils.sequence import transform_nth
 
 from .. import constants as c
 from ..utils import call_method, curry, logger_wraps, pmap

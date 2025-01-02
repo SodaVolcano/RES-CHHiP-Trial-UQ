@@ -17,21 +17,21 @@ from toolz import curried
 sys.path.append("..")
 sys.path.append(".")
 from scripts.__helpful_parser import HelpfulParser
-from uncertainty.config import configuration
-from uncertainty.data import load_scans_from_h5, torchio_augmentations
-from uncertainty.data.h5 import save_prediction_to_h5, save_predictions_to_h5
-from uncertainty.evaluation import (
+from chhip_uq.config import configuration
+from chhip_uq.data import load_scans_from_h5, torchio_augmentations
+from chhip_uq.data.h5 import save_prediction_to_h5, save_predictions_to_h5
+from chhip_uq.evaluation import (
     evaluate_prediction,
     evaluate_predictions,
     get_inference_mode,
 )
-from uncertainty.training import (
+from chhip_uq.training import (
     LitModel,
     load_training_dir,
     select_ensembles,
     select_single_models,
 )
-from uncertainty.utils import (
+from chhip_uq.utils import (
     config_logger,
     curry,
     list_files,
@@ -380,7 +380,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     config = configuration(args.config)
     if args.logging:
-        logger.enable("uncertainty")
+        logger.enable("chhip_uq")
         config_logger(**config)
 
     main(

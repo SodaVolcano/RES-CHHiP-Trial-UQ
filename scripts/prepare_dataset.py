@@ -10,14 +10,14 @@ sys.path.append("..")
 sys.path.append(".")
 from __helpful_parser import HelpfulParser
 
-from uncertainty import configuration
-from uncertainty.data import (
+from chhip_uq import configuration
+from chhip_uq.data import (
     load_all_patient_scans,
     preprocess_dataset,
     purge_dicom_dir,
     save_scans_to_h5,
 )
-from uncertainty.utils import config_logger
+from chhip_uq.utils import config_logger
 
 
 def main(
@@ -95,7 +95,7 @@ if __name__ == "__main__":
     config = configuration(args.config)
 
     if args.logging:
-        logger.enable("uncertainty")
+        logger.enable("chhip_uq")
         config_logger(**config)
 
     main(

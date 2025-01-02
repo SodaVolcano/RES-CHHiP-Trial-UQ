@@ -13,7 +13,7 @@ class MCDropout(nn.Module):
     """
     Enable dropout during inference for any model with dropout layer(s).
 
-    See also `uncertainty.evaluation.mc_dropout_inference` which uses
+    See also `chhip_uq.evaluation.mc_dropout_inference` which uses
     this class to perform Monte Carlo dropout inference.
 
     Parameters

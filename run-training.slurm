@@ -1,5 +1,5 @@
 #!/bin/bash -l
-#SBATCH --job-name=uncertainty
+#SBATCH --job-name=chhip_uq
 
 # SLURM RESOURCES
 #SBATCH --partition=gpu
@@ -80,7 +80,7 @@ echo the results directory is $RESULTS
 
 ################################################
 # declare the name of the output file or log file
-OUTPUT=uncertainty-$INPUT.log
+OUTPUT=chhip_uq-$INPUT.log
 
 #############################################
 #   Copy input files to $SCRATCH

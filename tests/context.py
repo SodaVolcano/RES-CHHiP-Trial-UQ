@@ -1,7 +1,7 @@
 """
 Path modification to resolve package name
 
-add `from .context import uncertainty` to test modules
+add `from .context import chhip_uq` to test modules
 """
 
 import os
@@ -9,24 +9,24 @@ import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-import uncertainty
+import chhip_uq
 
 # Import aliases
-MaskDict = uncertainty.data.MaskDict
-PatientScan = uncertainty.data.PatientScan
-constants = uncertainty.constants
+MaskDict = chhip_uq.data.MaskDict
+PatientScan = chhip_uq.data.PatientScan
+constants = chhip_uq.constants
 
-utils = uncertainty.utils
-training = uncertainty.training
-models = uncertainty.models
-evaluation = uncertainty.evaluation
-data = uncertainty.data
-config = uncertainty.config
-metrics = uncertainty.metrics
+utils = chhip_uq.utils
+training = chhip_uq.training
+models = chhip_uq.models
+evaluation = chhip_uq.evaluation
+data = chhip_uq.data
+config = chhip_uq.config
+metrics = chhip_uq.metrics
 
 # Patch paths
 PATCH_OS_WALK = "os.walk"
-PATCH_LIST_FILES = "uncertainty.utils.path.list_files"
+PATCH_LIST_FILES = "chhip_uq.utils.path.list_files"
 PATCH_DCMREAD = "pydicom.dcmread"
 PATCH_RT_CREATE_FROM = "rt_utils.RTStructBuilder.create_from"
 PATCH_LISTDIR = "os.listdir"

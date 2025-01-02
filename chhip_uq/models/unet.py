@@ -21,7 +21,7 @@ class UNet(nn.Module):
     A U-shaped architecture for image segmentation
 
     **Warning**: not meant to be used directly, wrap in a Lightning module
-    from `uncertainty.training.LightningModel`.
+    from `chhip_uq.training.LightningModel`.
 
     Consists of N resolution levels and divided into the Encoder
     and Decoder branches. The Encoder downsamples and convolves

@@ -8,7 +8,7 @@ Code for performing uncertainty quantification on CT prostate cancer images.
         - [Auto-activation with Direnv (Optional)](#auto-activation-with-direnv-optional)
 - [Usage](#usage)
     - [Configuring the Project](#configuring-the-project)
-    - [Using `uncertainty` as a Library Module](#using-uncertainty-as-a-library-module)
+    - [Using `chhip_uq` as a Library Module](#using-chhip_uq-as-a-library-module)
         - [Logging](#logging)
     - [Using the Scripts](#using-the-scripts)
     - [Tests](#tests)
@@ -65,22 +65,22 @@ direnv disallow # stop automatically executing .envrc upon entering the project 
 
 You can either...
 1. Run some script from `scripts/` which reads from `configuration.yaml`. If option flags are specified, those values will override values defined in `configuration.yaml`
-2. Import `uncertainty` as a module and use in your own code
+2. Import `chhip_uq` as a module and use in your own code
 
 ### Configuring the Project
-The project is configured globally via `configuration.yaml` and values in it can be automatically passed to function parameters if they are decorated with `@auto_match_config`. Preset augmentations and preprocessing are defined in `uncertainty`, but you can pass in your own function/transformations to functions/classes that uses them as well.
+The project is configured globally via `configuration.yaml` and values in it can be automatically passed to function parameters if they are decorated with `@auto_match_config`. Preset augmentations and preprocessing are defined in `chhip_uq`, but you can pass in your own function/transformations to functions/classes that uses them as well.
 
 
 | Configuration      | Defined in                  |
 | ------------------ | --------------------------- |
 | Project-wide configuration | `configuration.yaml` |
-| Global constants and list of ROI names to include/exclude   | `uncertainty/constants.py`     |
-| Augmentations | In `uncertainty/data/augmentations.py`, `augmentations()` and `batch_augmentations()` |
-| Data preprocessing | Functions in `uncertainty/data/processing.py` |
-| Global constants | Variables in `uncertainty/constants.py` |
+| Global constants and list of ROI names to include/exclude   | `chhip_uq/constants.py`     |
+| Augmentations | In `chhip_uq/data/augmentations.py`, `augmentations()` and `batch_augmentations()` |
+| Data preprocessing | Functions in `chhip_uq/data/processing.py` |
+| Global constants | Variables in `chhip_uq/constants.py` |
 
-### Using `uncertainty` as a Library Module
-Just import `uncertainty` lol.
+### Using `chhip_uq` as a Library Module
+Just import `chhip_uq` lol.
 
 #### Logging
 Logging is disable by default. To enable logging, add the following lines to your code.
@@ -88,10 +88,10 @@ Logging is disable by default. To enable logging, add the following lines to you
 ```python
 from loguru import logger
 
-from uncertainty.config import configuration
-from uncertainty.utils import config_logger
+from chhip_uq.config import configuration
+from chhip_uq.utils import config_logger
 
-logger.enable("uncertainty")
+logger.enable("chhip_uq")
 config_logger(**configuration())
 ```
 
@@ -127,9 +127,9 @@ This section is only relevant if you wish to use and maintain the codebase.
 | `devshell.nix`                                 | Nix development shell that installs VS Code with useful extensions (not updated in a while). Activate with `export NIXPKGS_ALLOW_UNFREE=1 && nix-shell ./devshell.nix`                                                                                                                                                                                                                          |
 | `run-train.slurm`                              | SLURM script for sending model training jobs to Kaya - high performance computing system at UWA (run `sbatch run-train.slurm`)                                                                                                                                                                                                                       |
 | `configuration.yaml`                           | Configuration file of the project containing settings for the data, training, and model hyperparameters                                                                                                                                                                                                               |
-| `uncertainty/`                                 | Folder containing project code, can be imported in Python code as a library module                                                                                                                                                                                                                                                                      |
-| `tests/`                                       | Tests for `uncertainty/`, run with `uv run pytest ./tests`                                                                                                                                                                                                                                                            |
-| `scripts/`                                     | Set of Python scripts using functions from `uncertainty/`, e.g. for preparing the dataset, training model(s), evaluating trained model(s)                                                                                                                                                                             |
+| `chhip_uq/`                                 | Folder containing project code, can be imported in Python code as a library module                                                                                                                                                                                                                                                                      |
+| `tests/`                                       | Tests for `chhip_uq/`, run with `uv run pytest ./tests`                                                                                                                                                                                                                                                            |
+| `scripts/`                                     | Set of Python scripts using functions from `chhip_uq/`, e.g. for preparing the dataset, training model(s), evaluating trained model(s)                                                                                                                                                                             |
 
 ### Coding Paradigm
 
@@ -163,7 +163,7 @@ Yummy.
 A function can by "curried" if it's decorated with `@curry`. A "curried" function can be called with *only some of the required arguments* (i.e. partially initialised). This is a **new function** that can be called with the remaining arguments.
 
 ```python
-from uncertainty.utils import curry
+from chhip_uq.utils import curry
 
 @curry
 def add(a, b, c=3):
@@ -183,10 +183,10 @@ add(5, c=6)  # equivalent to lambda b: 5 + b + 6
 ### Auto-wiring of Configuration Dictionary
 When `configuration.yaml` is parsed into a Python dictionary, the keys are transformed into the format `<prefix>__<param_name>` where `<prefix>__` is used to distinguish configuration arguments from normal keyword arguments.
 
-A function decorated with `uncertainty.utils.auto_match_config` can accept unpacked configuration dictionary even if the dictionary contained extra keyword arguments not needed by the function.
+A function decorated with `chhip_uq.utils.auto_match_config` can accept unpacked configuration dictionary even if the dictionary contained extra keyword arguments not needed by the function.
 
 ```python
-from uncertainty import auto_match_config
+from chhip_uq import auto_match_config
 
 config = {
     "test__a": 69,  # hehe

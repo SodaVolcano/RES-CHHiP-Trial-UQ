@@ -6,7 +6,7 @@ import torch
 from torch import nn
 from torchmetrics.aggregation import RunningMean
 
-from uncertainty.data.h5 import save_scans_to_h5
+from chhip_uq.data.h5 import save_scans_to_h5
 
 from ..context import constants as c
 from ..context import data, models, training

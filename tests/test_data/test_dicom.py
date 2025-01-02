@@ -20,16 +20,16 @@ curry = utils.curry
 compute_dataset_stats = data.compute_dataset_stats
 
 # Patch paths
-PATCH_LIST_FILES = "uncertainty.data.dicom.list_files"
+PATCH_LIST_FILES = "chhip_uq.data.dicom.list_files"
 PATCH_DCMREAD = "pydicom.dcmread"
 PATCH_RT_CREATE_FROM = "rt_utils.RTStructBuilder.create_from"
-PATCH_LOAD_RT_STRUCTS = "uncertainty.data.dicom._load_rt_structs"
-PATCH_LOAD_VOLUME = "uncertainty.data.dicom.load_volume"
-PATCH_LOAD_MASK = "uncertainty.data.dicom.load_mask"
-PATCH_GENERATE_FULL_PATHS = "uncertainty.data.dicom.generate_full_paths"
-PATCH_LOAD_PATIENT_SCAN = "uncertainty.data.dicom.load_patient_scan"
+PATCH_LOAD_RT_STRUCTS = "chhip_uq.data.dicom._load_rt_structs"
+PATCH_LOAD_VOLUME = "chhip_uq.data.dicom.load_volume"
+PATCH_LOAD_MASK = "chhip_uq.data.dicom.load_mask"
+PATCH_GENERATE_FULL_PATHS = "chhip_uq.data.dicom.generate_full_paths"
+PATCH_LOAD_PATIENT_SCAN = "chhip_uq.data.dicom.load_patient_scan"
 PATCH_LISTDIR = "os.listdir"
-PATCH_GET_DICOM_SLICES = "uncertainty.data.dicom._get_dicom_slices"
+PATCH_GET_DICOM_SLICES = "chhip_uq.data.dicom._get_dicom_slices"
 
 MOCK_DICOM = mock.Mock()
 MOCK_DICOM.PatientID = "12345"
@@ -184,7 +184,7 @@ class TestLoadMask:
 
         mocker.patch(PATCH_LOAD_RT_STRUCTS, return_value=[mock_rt_struct])
         mocker.patch(
-            "uncertainty.data.dicom._load_roi_mask", side_effect=mock_load_roi_mask
+            "chhip_uq.data.dicom._load_roi_mask", side_effect=mock_load_roi_mask
         )
 
         # Call the function under test

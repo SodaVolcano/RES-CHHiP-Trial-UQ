@@ -19,15 +19,15 @@ from loguru import logger
 sys.path.append("..")
 sys.path.append(".")
 
-from uncertainty import configuration
-from uncertainty.training import (
+from chhip_uq import configuration
+from chhip_uq.training import (
     H5Dataset,
     SegmentationData,
     init_training_dir,
     read_fold_splits_file,
     train_models,
 )
-from uncertainty.utils import config_logger
+from chhip_uq.utils import config_logger
 
 
 def train_one_fold(
@@ -154,7 +154,7 @@ if __name__ == "__main__":
     config = configuration(args.config)
 
     if args.logging:
-        logger.enable("uncertainty")
+        logger.enable("chhip_uq")
         config_logger(**config)
 
     if args.fold is not None:

@@ -108,9 +108,7 @@ def save_scans_to_h5(
 def load_scans_from_h5(
     path: str,
     indices: list[str] | None = None,
-) -> (
-    Generator[PatientScan, None, None]
-):
+) -> Generator[PatientScan, None, None]:
     """
     Load patient scan dictionaries from an h5 file
 

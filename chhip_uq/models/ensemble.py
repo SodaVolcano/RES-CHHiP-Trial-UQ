@@ -13,7 +13,7 @@ class DeepEnsemble(nn.Module):
     """
     An ensemble of models, produces multiple outputs from each member
 
-    See also uncertainty.evaluation.ensemble_inference for a fucntional
+    See also chhip_uq.evaluation.ensemble_inference for a fucntional
     version for performing ensemble inference using a list of models.
 
     Parameters
