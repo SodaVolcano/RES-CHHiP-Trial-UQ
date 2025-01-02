@@ -29,7 +29,7 @@ def _dump_tensors(
     loss: torch.Tensor,
     epoch: int,
 ):
-    name = Path(path) / f"epoch-{epoch}-dice-{dice:.4f}-loss{loss:.4f}.pt"
+    name = Path(path) / f"epoch-{epoch}.pt"
     if not name.exists():
         torch.save({"x": x, "y": y, "y_pred": y_pred, "dice": dice, "loss": loss}, name)
 
@@ -115,6 +115,7 @@ class LitModel(lit.LightningModule):
         if (
             self.dump_tensors_every_n_epoch > 0
             and self.current_epoch % self.dump_tensors_every_n_epoch == 0
+            and self.current_epoch > 0
         ):
             _dump_tensors(
                 self.dump_tensors_dir, x, y, y_pred, dice, loss, self.current_epoch
