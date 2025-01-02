@@ -33,7 +33,7 @@ unet:
   # AKA decay, how much of new mean and variance are added to running mean and variance
   instance_norm_momentum: 0.9
   # Small value added to variance to avoid division by zero
-  instance_norm_epsilon: 1e-5
+  instance_norm_epsilon: 0.00001
 
   # ------------------ Encoder-Decoder Settings ------------------
   # Channel of input volume, 1 for grayscale, 3 for RGB
@@ -64,7 +64,7 @@ unet:
   lr_scheduler: "PolynomialLR"
   # Optional arguments for learning rate scheduler
   lr_scheduler_kwargs:
-    total_iters: 750
+    total_iters: 1000
     power: 0.9
   # Loss will be weighted sum of losses from each level of the U-net decoder
   deep_supervision: true
@@ -93,12 +93,13 @@ confidnet:
   lr_scheduler: "PolynomialLR"
   # Optional arguments for learning rate scheduler
   lr_scheduler_kwargs:
-    total_iters: 750
+    total_iters: 1000
     power: 0.9
 
 training:
   # Number of epochs to train for
-  n_epochs: 750
+  # NOTE: CHANGE total_iters in lr_scheduler_kwargs to this if scheduler have that arg!!
+  n_epochs: 1000
   # Window for running loss calculation, reduce noise in loss plot
   running_loss_window: 10
   # Whether to dump x, y, and predictions from the model every n epochs
