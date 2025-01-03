@@ -81,6 +81,8 @@ class LitModel(lit.LightningModule):
         self.class_names = class_names
         self.dump_tensors_every_n_epoch = dump_tensors_every_n_epoch
         self.tensor_dump_dir = f"{tensor_dump_dir}/{self.__class__.__name__}"
+        if self.dump_tensors_every_n_epoch > 0:
+            os.makedirs(self.tensor_dump_dir, exist_ok=True)
 
         self.dice = dice_batched
         self.dice_classwise = dice_batched(average="none")

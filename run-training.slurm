@@ -105,7 +105,7 @@ ls $SCRATCH
 echo "starting job..."
 
 ########srun --export=ALL poetry run python3 ./scripts/model_training.py
-srun uv run python3 ./scripts/train_model.py unet --fold 0
+srun uv run python3 ./scripts/train_model.py unet --fold 4
 
 #############################################
 #    $OUTPUT file to the unique results dir
