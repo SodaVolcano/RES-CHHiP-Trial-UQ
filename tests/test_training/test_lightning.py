@@ -58,7 +58,7 @@ class TestLitModel:
         assert isinstance(lit_model.model, nn.Module)
         assert lit_model.class_names == list(c.ORGAN_MATCHES.keys())
         assert lit_model.dump_tensors_every_n_epoch == 0
-        assert lit_model.dump_tensors_dir == "tensor_dump"
+        assert lit_model.tensor_dump_dir == f"tensor-dump/{LitModel.__name__}"
         assert callable(lit_model.dice)
         assert callable(lit_model.dice_classwise)
         assert isinstance(lit_model.running_loss, RunningMean)

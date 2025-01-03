@@ -14,11 +14,6 @@ from .. import constants as c
 from ..config import auto_match_config
 from ..metrics.classification import dice_batched
 
-"""
-TODO: 
-- testcase for lightning.py, and add test for dumping tensors
-"""
-
 
 def _dump_tensors(
     path: str,
@@ -62,6 +57,8 @@ class LitModel(lit.LightningModule):
         Whether to save the hyperparameters as `hparams` attribute.
     dump_tensors_every_n_epoch : int
         If greater than 0, dump x, y, and predictions to disk every n epochs.
+    tensor_dump_dir: str
+        Directory to save the dumped tensors.
     """
 
     @auto_match_config(prefixes=["training"])
@@ -72,18 +69,18 @@ class LitModel(lit.LightningModule):
         running_loss_window: int = 10,
         save_hyperparams: bool = True,
         dump_tensors_every_n_epoch: int = 0,
-        dump_tensors_dir: str = "tensor_dump",
+        tensor_dump_dir: str = "tensor-dump",
     ):
         super().__init__()
         if save_hyperparams:
             self.save_hyperparameters(ignore=["model"])
         if dump_tensors_every_n_epoch > 0:
-            os.makedirs(dump_tensors_dir, exist_ok=True)
+            os.makedirs(tensor_dump_dir, exist_ok=True)
 
         self.model = model
         self.class_names = class_names
         self.dump_tensors_every_n_epoch = dump_tensors_every_n_epoch
-        self.dump_tensors_dir = dump_tensors_dir
+        self.tensor_dump_dir = f"{tensor_dump_dir}/{self.__class__.__name__}"
 
         self.dice = dice_batched
         self.dice_classwise = dice_batched(average="none")
@@ -118,7 +115,7 @@ class LitModel(lit.LightningModule):
             and self.current_epoch > 0
         ):
             _dump_tensors(
-                self.dump_tensors_dir, x, y, y_pred, dice, loss, self.current_epoch
+                self.tensor_dump_dir, x, y, y_pred, dice, loss, self.current_epoch
             )
 
         return loss

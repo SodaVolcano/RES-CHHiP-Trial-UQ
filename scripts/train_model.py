@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 
 import torch
-from __helpful_parser import HelpfulParser
+from __helpful_parser import HelpfulParser  # type: ignore
 from loguru import logger
 
 sys.path.append("..")

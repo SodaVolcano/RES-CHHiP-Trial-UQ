@@ -27,9 +27,8 @@ module list
 #  Note: SLURM_JOBID is a unique number for every job.
 #  These are generic variables
 GITREPO=https://github.com/SodaVolcano/RES-CHHiP-Trial-UQ.git
-TRAIN_DATA=$MYGROUP/data/train_preprocessed.h5
-TEST_DATA=$MYGROUP/data/test.h5
-SCRATCH=$MYSCRATCH/run_uncertainty/$SLURM_JOBID
+TRAIN_DATA=$MYGROUP/preprocessed_dataset.h5
+SCRATCH=$MYSCRATCH/run_chhip_uq/$SLURM_JOBID
 RESULTS=$MYGROUP/job_results/$SLURM_JOBID
 
 #################################################
@@ -91,30 +90,29 @@ OUTPUT=chhip_uq-$INPUT.log
 cp $MYGROUP/RES-CHHiP-Trial-UQ $SCRATCH/RES-CHHiP-Trial-UQ -r
 cd $SCRATCH/RES-CHHiP-Trial-UQ
 ls . -al
-echo "cd'ed into the directory! checking poetry..."
+echo "cd'ed into the directory! installing uv..."
 
+pip install uv
 #    poetry install
-poetry run python3 --version
-poetry run python3 -c "import torch; print(torch.cuda.is_available())"
-echo "finished initialising poetry, copying data..."
+uv poetry run python3 --version
+uv run python3 -c "import torch; print(torch.cuda.is_available())"
+echo "finished initialising uv, copying data..."
 
 
 # Copy data into $SCRATCH/RES-CHHiP-Trial-UQ
-cp $TRAIN_DATA $SCRATCH/RES-CHHiP-Trial-UQ
-cp $TEST_DATA $SCRATCH/RES-CHHiP-Trial-UQ
+cp $TRAIN_DATA $SCRATCH/RES-CHHiP-Trial-UQ/data
 echo "copied data into ${SCRATCH}"
 ls $SCRATCH
 echo "starting job..."
 
 ########srun --export=ALL poetry run python3 ./scripts/model_training.py
-srun poetry run python3 ./scripts/model_training.py
+srun uv run python3 ./scripts/train_model.py unet --fold 0
 
 #############################################
 #    $OUTPUT file to the unique results dir
 # note this can be a copy or move  
 rm $SCRATCH/RES-CHHiP-Trial-UQ/.venv -rf
-rm $SCRATCH/RES-CHHiP-Trial-UQ/train_preprocessed.h5
-rm $SCRATCH/RES-CHHiP-Trial-UQ/test.h5
+rm $SCRATCH/RES-CHHiP-Trial-UQ/data/preprocessed_dataset.h5
 mv  $SCRATCH ${RESULTS}
 
 cd $HOME

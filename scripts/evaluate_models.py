@@ -16,7 +16,7 @@ from toolz import curried
 
 sys.path.append("..")
 sys.path.append(".")
-from __helpful_parser import HelpfulParser
+from __helpful_parser import HelpfulParser  # type: ignore
 
 from chhip_uq.config import configuration
 from chhip_uq.data import load_scans_from_h5, torchio_augmentations
