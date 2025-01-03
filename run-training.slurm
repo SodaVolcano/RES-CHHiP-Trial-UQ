@@ -93,8 +93,7 @@ ls . -al
 echo "cd'ed into the directory! installing uv..."
 
 pip install uv
-#    poetry install
-uv poetry run python3 --version
+uv run python3 --version
 uv run python3 -c "import torch; print(torch.cuda.is_available())"
 echo "finished initialising uv, copying data..."
 
